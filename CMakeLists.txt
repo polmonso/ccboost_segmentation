@@ -38,22 +38,22 @@ include_directories (
 )
 
 qt4_add_resources (RCC_BUILT_SOURCES 
-  GUI/rsc/AppositionSurface.qrc
+  GUI/rsc/CcboostSegmentation.qrc
   )
 
 # Create Interface files
 qt4_wrap_ui (UI_BUILT_SOURCES
   ${ESPINA_INCLUDE}/App/Dialogs/TabularReport/TabularReportEntry.ui
-  GUI/Settings/AppositionSurfaceSettings.ui
-#  GUI/FilterInspector/AppositionSurfaceFilterInspector.ui
+  GUI/Settings/CcboostSegmentationSettings.ui
+#  GUI/FilterInspector/CcboostSegmentationFilterInspector.ui
   )
 
 QT4_WRAP_CPP(MOC_SOURCES
-  AppositionSurfacePlugin.h
-  Filter/AppositionSurfaceFilter.h
-  GUI/Settings/AppositionSurfaceSettings.h
-  GUI/AppositionSurfaceToolGroup.h
-#  GUI/FilterInspector/AppositionSurfaceFilterInspector.h
+  CcboostSegmentationPlugin.h
+  Filter/CcboostSegmentationFilter.h
+  GUI/Settings/CcboostSegmentationSettings.h
+  GUI/CcboostSegmentationToolGroup.h
+#  GUI/FilterInspector/CcboostSegmentationFilterInspector.h
 
   OPTIONS -DBOOST_TT_HAS_OPERATOR_HPP_INCLUDED
 )
@@ -62,17 +62,17 @@ set (PLUGIN_SOURCES
   ${MOC_SOURCES}
   ${RCC_BUILT_SOURCES}
   ${UI_BUILT_SOURCES}
-  AppositionSurfacePlugin.cpp
-  Core/Extensions/AppositionSurfaceExtension.cpp
+  CcboostSegmentationPlugin.cpp
+  Core/Extensions/CcboostSegmentationExtension.cpp
   Core/Extensions/ExtensionFactory.cpp
-  Filter/AppositionSurfaceFilter.cpp
+  Filter/CcboostSegmentationFilter.cpp
   Filter/SASFetchBehaviour.cpp
   GUI/Analysis/SASAnalysisDialog.cpp
   GUI/Analysis/SASTabularReport.cpp
   GUI/Analysis/SASInformationProxy.cpp
-  GUI/AppositionSurfaceToolGroup.cpp
-  GUI/Settings/AppositionSurfaceSettings.cpp
-#  GUI/FilterInspector/AppositionSurfaceFilterInspector.cpp
+  GUI/CcboostSegmentationToolGroup.cpp
+  GUI/Settings/CcboostSegmentationSettings.cpp
+#  GUI/FilterInspector/CcboostSegmentationFilterInspector.cpp
 )
 
 set (PLUGIN_LIBRARIES
@@ -93,20 +93,20 @@ if(MINGW)
   endif(DEFINED ESPINA_VERSION_MAJOR)
 endif(MINGW)
 
-add_library(AppositionSurfacePlugin SHARED ${PLUGIN_SOURCES})
+add_library(CcboostSegmentationPlugin SHARED ${PLUGIN_SOURCES})
 GENERATE_EXPORT_HEADER(
-             AppositionSurfacePlugin
-             BASE_NAME AppositionSurfacePlugin
-             EXPORT_MACRO_NAME AppositionSurfacePlugin_EXPORT
-             EXPORT_FILE_NAME AppositionSurfacePlugin_Export.h
+             CcboostSegmentationPlugin
+             BASE_NAME CcboostSegmentationPlugin
+             EXPORT_MACRO_NAME CcboostSegmentationPlugin_EXPORT
+             EXPORT_FILE_NAME CcboostSegmentationPlugin_Export.h
   )
-target_link_libraries(AppositionSurfacePlugin ${PLUGIN_LIBRARIES})
+target_link_libraries(CcboostSegmentationPlugin ${PLUGIN_LIBRARIES})
 
 if( CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" )
-  set_target_properties(AppositionSurfacePlugin PROPERTIES COMPILE_FLAGS "-fPIC")
+  set_target_properties(CcboostSegmentationPlugin PROPERTIES COMPILE_FLAGS "-fPIC")
 endif( CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" )
 
 install(
-  TARGETS AppositionSurfacePlugin
+  TARGETS CcboostSegmentationPlugin
   LIBRARY DESTINATION ${INSTALL_BIN_DIR}/plugins
   )
