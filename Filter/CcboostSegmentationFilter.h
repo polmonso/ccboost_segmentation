@@ -1,19 +1,42 @@
 /*
- * AppositionSurfaceFilter.h
+ * CcboostSegmentationFilter.h
  *
  *  Created on: Jan 18, 2013
  *      Author: Félix de las Pozas Álvarez
  */
 
-#ifndef APPOSITIONSURFACEFILTER_H_
-#define APPOSITIONSURFACEFILTER_H_
+#ifndef CCBOOSTSEGMENTATIONFILTER_H_
+#define CCBOOSTSEGMENTATIONFILTER_H_
 
-#include "AppositionSurfacePlugin_Export.h"
+#include "CcboostSegmentationPlugin_Export.h"
 
 // EspINA
 #include <Filters/BasicSegmentationFilter.h>
+#include <GUI/Representations/MeshRepresentation.h>
+
+#include <Core/Analysis/Data/Mesh/MarchingCubesMesh.hxx>
 
 // ITK
+#include <itkImageFileWriter.h>
+#include <itkBinaryBallStructuringElement.h>
+#include <itkImageToImageFilter.h>
+#include <itkImageMaskSpatialObject.h>
+#include <itkChangeInformationImageFilter.h>
+#include <itkConnectedComponentImageFilter.h>
+#include <itkImageRegionIterator.h>
+#include <itkBinaryImageToLabelMapFilter.h>
+#include <itkRelabelComponentImageFilter.h>
+#include <itkBinaryErodeImageFilter.h>
+#include <itkGradientImageFilter.h>
+#include <itkImageRegionConstIterator.h>
+#include <itkSignedMaurerDistanceMapImageFilter.h>
+#include <itkImageToVTKImageFilter.h>
+#include <itkSmoothingRecursiveGaussianImageFilter.h>
+#include <itkImageFileWriter.h>
+#include <itkPasteImageFilter.h>
+#include <itkOrImageFilter.h>
+#include <itkMultiplyImageFilter.h>
+
 #include <itkConstantPadImageFilter.h>
 #include <itkExtractImageFilter.h>
 #include <itkGradientImageFilter.h>
@@ -40,9 +63,9 @@ namespace EspINA
 {
   class SASFetchBehaviour;
 
-  const Filter::Type AS_FILTER = "AppositionSurface::AppositionSurfaceFilter";
+  const Filter::Type AS_FILTER = "CcboostSegmentation::CcboostSegmentationFilter";
 
-  class AppositionSurfacePlugin_EXPORT AppositionSurfaceFilter
+  class CcboostSegmentationPlugin_EXPORT CcboostSegmentationFilter
   : public Filter
   {
     Q_OBJECT
@@ -52,6 +75,18 @@ namespace EspINA
     static constexpr float    DISPLACEMENTSCALE         = 1;
     static constexpr float    CLIPPINGTHRESHOLD         = 0.5;
     static constexpr float    DISTANCESMOOTHSIGMAFACTOR = 0.67448; // probit(0.25)
+
+    using WriterType = itk::ImageFileWriter< itkVolumeType >;
+    using bigVolumeType = itk::Image<unsigned short, 3>;
+    using BigWriterType = itk::ImageFileWriter< bigVolumeType >;
+
+    static const unsigned int FREEMEMORYREQUIREDPROPORTIONTRAIN = 170;
+    static const unsigned int FREEMEMORYREQUIREDPROPORTIONPREDICT = 180;
+    static const unsigned int MINTRUTHSYNAPSES = 6;
+    static const unsigned int MINTRUTHMITOCHONDRIA = 2;
+    static const double       MINNUMBGPX = 100000;
+    static const unsigned int CCBOOSTBACKGROUNDLABEL = 128;
+    static const unsigned int ANNOTATEDPADDING = 30;
 
     using DistanceType = float;
     using Points = vtkSmartPointer<vtkPoints>;
@@ -83,8 +118,8 @@ namespace EspINA
     static const char * MESH_NORMAL;
 
   public:
-    explicit AppositionSurfaceFilter(InputSList inputs, Type type, SchedulerSPtr scheduler);
-    virtual ~AppositionSurfaceFilter();
+    explicit CcboostSegmentationFilter(InputSList inputs, Type type, SchedulerSPtr scheduler);
+    virtual ~CcboostSegmentationFilter();
 
   protected:
 
@@ -142,45 +177,21 @@ namespace EspINA
     virtual void inputModified();
 
   private:
-    /* \brief Returns a cloud of points representing the segmentation.
-     * Segmentations are represented by labelmap-like vtkDataImages
-     * with background pixels being 0 and foreground ones being 255.
-     * Nevertheless, non-0 pixels are also considered foreground.
-     * \param[in] seg, reference to a itk::image<unsigned char, 3>
-     *
-     */
-    Points segmentationPoints(const itkVolumeType::Pointer &seg) const;
+    itkVolumeType::Pointer mergeSegmentations(const itkVolumeType::Pointer channelItk,
+                                              const SegmentationAdapterList segList,
+                                              const SegmentationAdapterList backgroundSegList);
+    void splitSegmentations(const itkVolumeType::Pointer outputSegmentation,
+                            std::vector<itkVolumeType::Pointer>& outSegList);
 
-    /* \brief Returns the 8 corners of an OBB.
-     * \param[in] corner
-     * \param[in] max
-     * \param[in] mid
-     * \param[in] min
-     */
-    Points corners(const double corner[3], const double max[3], const double mid[3], const double min[3]) const;
+    //TODO add const-correctness
+    itkVolumeType::Pointer core(const itkVolumeType::Pointer normalizedChannelItk,
+                                std::vector<itkVolumeType::Pointer> segmentedGroundTruthVector);
 
-    /* \brief Returns a distance map of the volume passed as parameter.
-     * \param[in] volume, itk::Image<unsigned char, 3>::Pointer.
-     * \param[in] sigma
-     */
-    DistanceMapType::Pointer computeDistanceMap(const itkVolumeType::Pointer &volume, const float sigma) const;
-
-    void maxDistancePoint(const DistanceMapType::Pointer &map, double avgMaxDistPoint[3], double & maxDist) const;
-    void computeResolution(const double *max, const double *mid, const double *spacing, int & xResolution, int & yResolution) const;
-    void computeIterationLimits(const double *min, const double *spacing, int & iterations, double & thresholdError) const;
-
-    /* \brief Find the projection of A on B.
-     *
-     */
-    void project(const double *A, const double *B, double *Projection) const;
-    void projectVectors(vtkImageData* vectors_image, double *unitary) const;
-
-    void vectorImageToVTKImage(const CovariantVectorImageType::Pointer vectorImage, vtkSmartPointer<vtkImageData> image) const;
-
-    bool hasConverged(vtkPoints * lastPlanePoints, PointsListType & pointsList, double threshold) const;
-    int computeMeanEuclideanError(vtkPoints * pointsA, vtkPoints * pointsB, double & euclideanError) const;
-    PolyData clipPlane(vtkPolyData *plane, vtkImageData* image) const;
-    PolyData triangulate(PolyData plane) const;
+  public:
+    //TODO espina2. this is a hack to get the segmentations in the filter.
+    //Find out how to do it properly
+    SegmentationAdapterList m_groundTruthSegList;
+    SegmentationAdapterList m_backgroundGroundTruthSegList;
 
   private:
     int m_resolution;
@@ -188,7 +199,8 @@ namespace EspINA
     bool m_converge;
     mutable PolyData m_ap;
 
-    itkVolumeType::Pointer m_input;
+    itkVolumeType::Pointer m_inputSegmentation;
+    itkVolumeType::Pointer m_inputChannel;
 
     bool m_alreadyFetchedData;
     TimeStamp m_lastModifiedMesh;
@@ -196,8 +208,8 @@ namespace EspINA
     friend class SASFetchBehaviour;
   };
 
-  using AppositionSurfaceFilterPtr  = AppositionSurfaceFilter *;
-  using AppositionSurfaceFilterSPtr = std::shared_ptr<AppositionSurfaceFilter>;
+  using CcboostSegmentationFilterPtr  = CcboostSegmentationFilter *;
+  using CcboostSegmentationFilterSPtr = std::shared_ptr<CcboostSegmentationFilter>;
 
 } /* namespace EspINA */
-#endif /* APPOSITIONSURFACEFILTER_H_ */
+#endif /* CCBOOSTSEGMENTATIONFILTER_H_ */

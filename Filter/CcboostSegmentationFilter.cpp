@@ -1,12 +1,12 @@
 /*
- * AppositionSurfaceFilter.cpp
+ * CcboostSegmentationFilter.cpp
  *
  *  Created on: Jan 18, 2013
  *      Author: Felix de las Pozas Alvarez
  */
 
 // Plugin
-#include "AppositionSurfaceFilter.h"
+#include "CcboostSegmentationFilter.h"
 
 // EspINA
 #include <Core/Analysis/Segmentation.h>
@@ -45,11 +45,11 @@ using namespace EspINA;
 
 const QString SAS = "SAS";
 
-const char * AppositionSurfaceFilter::MESH_NORMAL = "Normal";
-const char * AppositionSurfaceFilter::MESH_ORIGIN = "Origin";
+const char * CcboostSegmentationFilter::MESH_NORMAL = "Normal";
+const char * CcboostSegmentationFilter::MESH_ORIGIN = "Origin";
 
 //----------------------------------------------------------------------------
-AppositionSurfaceFilter::AppositionSurfaceFilter(InputSList inputs, Type type, SchedulerSPtr scheduler)
+CcboostSegmentationFilter::CcboostSegmentationFilter(InputSList inputs, Type type, SchedulerSPtr scheduler)
 : Filter(inputs, type, scheduler)
 , m_resolution        {50}
 , m_iterations        {10}
@@ -62,7 +62,7 @@ AppositionSurfaceFilter::AppositionSurfaceFilter(InputSList inputs, Type type, S
 }
 
 //----------------------------------------------------------------------------
-AppositionSurfaceFilter::~AppositionSurfaceFilter()
+CcboostSegmentationFilter::~CcboostSegmentationFilter()
 {
   if (m_ap != nullptr)
   {
@@ -72,15 +72,15 @@ AppositionSurfaceFilter::~AppositionSurfaceFilter()
 }
 
 //----------------------------------------------------------------------------
-bool AppositionSurfaceFilter::needUpdate() const
+bool CcboostSegmentationFilter::needUpdate() const
 {
   return needUpdate(0);
 }
 
 //----------------------------------------------------------------------------
-bool AppositionSurfaceFilter::needUpdate(Output::Id oId) const
+bool CcboostSegmentationFilter::needUpdate(Output::Id oId) const
 {
-  Q_ASSERT(oId == 0);
+ // Q_ASSERT(oId == 0);
 
   bool update = true;
 
@@ -103,597 +103,308 @@ bool AppositionSurfaceFilter::needUpdate(Output::Id oId) const
 }
 
 //----------------------------------------------------------------------------
-void AppositionSurfaceFilter::execute(Output::Id oId)
+void CcboostSegmentationFilter::execute(Output::Id oId)
 {
   Q_ASSERT(oId == 0);
   execute();
 }
 
 //----------------------------------------------------------------------------
-void AppositionSurfaceFilter::execute()
+void CcboostSegmentationFilter::execute()
 {
   emit progress(0);
   if (!canExecute()) return;
 
-  m_input = volumetricData(m_inputs[0]->output())->itkImage();
-  m_input->SetBufferedRegion(m_input->GetLargestPossibleRegion());
+  m_inputChannel = volumetricData(m_inputs[0]->output())->itkImage();
+  itkVolumeType::Pointer channelItk = m_inputChannel;
 
-  itkVolumeType::SizeType bounds;
-  bounds[0] = bounds[1] = bounds[2] = 1;
-  PadFilterType::Pointer padder = PadFilterType::New();
-  padder->SetInput(m_input);
-  padder->SetPadLowerBound(bounds);
-  padder->SetPadUpperBound(bounds);
-  padder->SetConstant(0); // extend with black pixels
-  padder->Update();
-  itkVolumeType::Pointer padImage = padder->GetOutput();
+  m_inputSegmentation = volumetricData(m_inputs[1]->output())->itkImage();
+
+  typedef itk::ChangeInformationImageFilter< itkVolumeType > ChangeInformationFilterType;
+  ChangeInformationFilterType::Pointer normalizeFilter = ChangeInformationFilterType::New();
+  normalizeFilter->SetInput(channelItk);
+  itkVolumeType::SpacingType spacing = channelItk->GetSpacing();
+  spacing[2] = 2*channelItk->GetSpacing()[2]/(channelItk->GetSpacing()[0]
+               + channelItk->GetSpacing()[1]);
+  spacing[0] = 1;
+  spacing[1] = 1;
+  normalizeFilter->SetOutputSpacing( spacing );
+  normalizeFilter->ChangeSpacingOn();
+  normalizeFilter->Update();
+  std::cout << "Using spacing: " << spacing << std::endl;
+  itkVolumeType::Pointer normalizedChannelItk = normalizeFilter->GetOutput();
 
   emit progress(20);
   if (!canExecute()) return;
 
-  itkVolumeType::RegionType region = padImage->GetLargestPossibleRegion();
-  region.SetIndex(region.GetIndex() + bounds);
-  padImage->SetRegions(region);
+  itkVolumeType::Pointer segmentedGroundTruth = mergeSegmentations(normalizedChannelItk, m_groundTruthSegList, m_groundTruthSegList);
+  //save itk image (volume) as binary/classed volume here
+  WriterType::Pointer writer = WriterType::New();
+//TODO espina2
+//    if(ccboostconfig.saveIntermediateVolumes){
+//      writer->SetFileName(ccboostconfig.train.cacheDir + "labelmap.tif");
+    writer->SetFileName("labelmap2.tif");
+    writer->SetInput(segmentedGroundTruth);
+    writer->Update();
 
-  ItkToVtkFilterType::Pointer itk2vtk_filter = ItkToVtkFilterType::New();
-  itk2vtk_filter->SetInput(padImage);
-  itk2vtk_filter->Update();
-  vtkSmartPointer<vtkImageData> vtk_padImage = itk2vtk_filter->GetOutput();
+    //CCBOOST here
+    //TODO add const-correctness
+   std::vector<itkVolumeType::Pointer> segmentedGroundTruthVector;
+   segmentedGroundTruthVector.push_back(segmentedGroundTruth);
+   itkVolumeType::Pointer coreOutputSegmentation = core(normalizedChannelItk, segmentedGroundTruthVector);
+    //CCBOOST finished
 
-  double *spacing = vtk_padImage->GetSpacing();
-
-  //qDebug() << "Computing Distance Map";
-  Points points = segmentationPoints(padImage);
-  //qDebug() << points->GetNumberOfPoints() << " segmentation points");
-
-  double corner[3], max[3], mid[3], min[3], size[3];
-  OBBTreeType obbTree = OBBTreeType::New();
-  obbTree->ComputeOBB(points, corner, max, mid, min, size);
-  Points obbCorners = corners(corner, max, mid, min);
-  DistanceMapType::Pointer distanceMap = computeDistanceMap(padImage, DISTANCESMOOTHSIGMAFACTOR);
-
-  //   qDebug() << "Build and move the plane to Avg Max Distance";
-  double avgMaxDistPoint[3];
-  double maxDistance;
-  maxDistancePoint(distanceMap, avgMaxDistPoint, maxDistance);
-
-  int xResolution = m_resolution;
-  int yResolution = m_resolution;
-
-  computeResolution(max, mid, vtk_padImage->GetSpacing(), xResolution, yResolution);
-
-  PlaneSourceType planeSource = PlaneSourceType::New();
-  planeSource->SetOrigin(obbCorners->GetPoint(0));
-  planeSource->SetPoint1(obbCorners->GetPoint(1));
-  planeSource->SetPoint2(obbCorners->GetPoint(2));
-  planeSource->SetResolution(xResolution, yResolution);
-  planeSource->Update();
-
-  double *normal = planeSource->GetNormal();
-  vtkMath::Normalize(normal);
-
-  emit progress(40);
+  emit progress(50);
   if (!canExecute()) return;
 
-  vtkSmartPointer<vtkDoubleArray> originArray = vtkSmartPointer<vtkDoubleArray>::New();
-  vtkSmartPointer<vtkDoubleArray> normalArray = vtkSmartPointer<vtkDoubleArray>::New();
+  typedef itk::BinaryThresholdImageFilter <itkVolumeType, itkVolumeType>
+         BinaryThresholdImageFilterType;
 
-  originArray->SetName(MESH_ORIGIN);
-  originArray->SetNumberOfValues(3);
-  normalArray->SetName(MESH_NORMAL);
-  normalArray->SetNumberOfValues(3);
+  BinaryThresholdImageFilterType::Pointer thresholdFilter
+    = BinaryThresholdImageFilterType::New();
+  thresholdFilter->SetInput(coreOutputSegmentation);
+  thresholdFilter->SetLowerThreshold(128);
+  thresholdFilter->SetUpperThreshold(255);
+  thresholdFilter->SetInsideValue(255);
+  thresholdFilter->SetOutsideValue(0);
+  thresholdFilter->Update();
 
-  double v[3], displacement[3];
-  for(auto i: {0,1,2})
-  {
-    v[i] = avgMaxDistPoint[i] - obbCorners->GetPoint(0)[i];
-    originArray->SetValue(i, obbCorners->GetPoint(0)[i]);
-    normalArray->SetValue(i, normal[i]);
+  if(true) {
+      writer->SetFileName( "thresholded-segmentation.tif");
+      writer->SetInput(thresholdFilter->GetOutput());
+      writer->Update();
   }
 
-  project(v, normal, displacement);
-
-  if (vtkMath::Dot(displacement, normal) > 0)
-    planeSource->Push(vtkMath::Norm(displacement));
-  else
-    planeSource->Push(- vtkMath::Norm(displacement));
-
-  PolyData sourcePlane = planeSource->GetOutput();
-
-  // Plane is only transformed in its normal direction
-  //   qDebug() << "Compute transformation matrix from distance map gradient";
-
-  GradientFilterType::Pointer gradientFilter = GradientFilterType::New();
-  gradientFilter->SetInput(distanceMap);
-  gradientFilter->SetUseImageSpacingOn();
-  gradientFilter->Update();
-
-  emit progress(60);
+  emit progress(70);
   if (!canExecute()) return;
 
-  vtkSmartPointer<vtkImageData> gradientVectorGrid = vtkSmartPointer<vtkImageData>::New();
-  vectorImageToVTKImage(gradientFilter->GetOutput(), gradientVectorGrid);
-  //gradientVectorGrid->Print(std::cout);
+  std::vector<itkVolumeType::Pointer> outSegList;
+  splitSegmentations(thresholdFilter->GetOutput(), outSegList);
 
-  projectVectors(gradientVectorGrid, normal);
+  qDebug() << outSegList.size();
 
-  GridTransform grid_transform = GridTransform::New();
-  grid_transform->SetDisplacementGridData(gradientVectorGrid);
-  grid_transform->SetInterpolationModeToCubic();
-  grid_transform->SetDisplacementScale(DISPLACEMENTSCALE);
-
-  TransformPolyDataFilter transformer = TransformPolyDataFilter::New();
-  PolyData auxPlane = sourcePlane;
-
-  int numIterations = m_iterations;
-  double thresholdError = 0;
-  if (m_converge)
-  {
-    computeIterationLimits(min, spacing, numIterations, thresholdError);
-  }
-
-  //   qDebug() << "Number of iterations:" << m_iterations;
-
-  transformer->SetTransform(grid_transform);
-  PointsListType pointsList;
-  for (int i =0; i <= numIterations; i++)
-  {
-    transformer->SetInputData(auxPlane);
-    transformer->Modified();
-    transformer->Update();
-
-    auxPlane->DeepCopy(transformer->GetOutput());
-    if (m_converge)
-    {
-      if (hasConverged(auxPlane->GetPoints(), pointsList, thresholdError))
+  //TODO add as many outputs as segmentations
+  for(int i = 0; i < outSegList.size(); i++){
+      if (!m_outputs.contains(i))
       {
-        //   qDebug() << "Total iterations: " << i << std::endl;
-        break;
+          m_outputs[i] = OutputSPtr(new Output(this, i));
       }
-      else
-      {
-        pointsList.push_front(auxPlane->GetPoints());
-        if (pointsList.size() > MAXSAVEDSTATUSES)
-          pointsList.pop_back();
-      }
-    }
+
+      itkVolumeType::Pointer output = outSegList.at(i);
+
+      Bounds bounds = minimalBounds<itkVolumeType>(output, SEG_BG_VALUE);
+
+      //m_input[0] is the channel
+      NmVector3 newspacing = m_inputs[0]->output()->spacing();
+
+      DefaultVolumetricDataSPtr volume{new SparseVolume<itkVolumeType>(bounds, newspacing)};
+      volume->draw(output, bounds);
+
+      MeshDataSPtr mesh{new MarchingCubesMesh<itkVolumeType>(volume)};
+
+      m_outputs[i]->setData(volume);
+      m_outputs[i]->setData(mesh);
+
+      m_outputs[i]->setSpacing(newspacing);
   }
-  pointsList.clear();
-
-  emit progress(80);
-  if (!canExecute()) return;
-
-  PolyData clippedPlane = clipPlane(transformer->GetOutput(), vtk_padImage);
-  //ESPINA_DEBUG(clippedPlane->GetNumberOfCells() << " cells after clip");
-
-  /**
-   * Traslate
-   */
-  vtkSmartPointer<vtkTransformPolyDataFilter> transformFilter = vtkSmartPointer<vtkTransformPolyDataFilter>::New();
-  vtkSmartPointer<vtkTransform> transform = vtkSmartPointer<vtkTransform>::New();
-  transform->Translate (-spacing[0]*bounds[0], -spacing[1]*bounds[0], -spacing[2]*bounds[0]);
-  transformFilter->SetTransform(transform);
-  transformFilter->SetInputData(clippedPlane);
-  transformFilter->Update();
-
-  PolyData appositionSurface = transformFilter->GetOutput();
-  // PolyData appositionSurface = clippedPlane;
-  //ESPINA_DEBUG(appositionSurface->GetNumberOfCells() << " cells in apppositionPlane");
-
-  // qDebug() << "Create Mesh";
-  //m_ap->DeepCopy(appositionSurface);
-  m_ap = PolyData::New();
-  m_ap->Initialize();
-  m_ap->SetPoints(appositionSurface->GetPoints());
-  m_ap->SetPolys(appositionSurface->GetPolys());
-  m_ap->SetLines(appositionSurface->GetLines());
-  m_ap->GetPointData()->AddArray(originArray);
-  m_ap->GetPointData()->AddArray(normalArray);
-  m_ap->Modified();
-
-  auto inputSpacing = m_input->GetSpacing();
-  RawMeshSPtr meshOutput{new RawMesh{m_ap, inputSpacing}};
-
-  m_lastModifiedMesh = meshOutput->lastModified();
-
-  double meshVTKBounds[6];
-  m_ap->GetBounds(meshVTKBounds);
-
-  Bounds meshBounds{meshVTKBounds[0], meshVTKBounds[1], meshVTKBounds[2], meshVTKBounds[3], meshVTKBounds[4], meshVTKBounds[5]};
-  NmVector3 vectorSpacing{inputSpacing[0], inputSpacing[1], inputSpacing[2]};
-
-  DefaultVolumetricDataSPtr volumeOutput{new RasterizedVolume<itkVolumeType>{meshOutput, meshBounds, vectorSpacing}};
-
-  if(!m_outputs.contains(0))
-    m_outputs[0] = OutputSPtr(new Output(this, 0));
-
-  m_outputs[0]->setData(meshOutput);
-  m_outputs[0]->setData(volumeOutput);
-  m_outputs[0]->setSpacing(NmVector3{inputSpacing[0], inputSpacing[1], inputSpacing[2]});
-
   emit progress(100);
   if (!canExecute()) return;
 }
 
-//----------------------------------------------------------------------------
-AppositionSurfaceFilter::Points AppositionSurfaceFilter::segmentationPoints(const itkVolumeType::Pointer &seg) const
-{
-  itkVolumeType::PointType   origin  = seg->GetOrigin();
-  itkVolumeType::SpacingType spacing = seg->GetSpacing();
+itkVolumeType::Pointer CcboostSegmentationFilter::mergeSegmentations(const itkVolumeType::Pointer channelItk,
+                                                                    const SegmentationAdapterList segList,
+                                                                     const SegmentationAdapterList backgroundSegList){
 
-  Points points = Points::New();
-  points->SetDataTypeToDouble();
+    itkVolumeType::IndexType start;
+    start[0] = start[1] = start[2] = 0;
 
-  itkVolumeIterator it(seg, seg->GetLargestPossibleRegion());
-  while (!it.IsAtEnd())
-  {
-    itkVolumeType::PixelType val = it.Get();
-    itkVolumeType::IndexType index = it.GetIndex();
-    if (val != 0)
-    {
-      double segPoint[3];
-      for (int i=0; i<3; i++)
-        segPoint[i] = origin[i]+index[i]*spacing[i];
-      points->InsertNextPoint(segPoint);
+    itkVolumeType::Pointer segmentedGroundTruth = itkVolumeType::New();
+    itkVolumeType::RegionType regionVolume;
+    regionVolume.SetSize(channelItk->GetLargestPossibleRegion().GetSize());
+    regionVolume.SetIndex(start);
+
+    segmentedGroundTruth->SetSpacing(channelItk->GetSpacing());
+    segmentedGroundTruth->SetRegions(regionVolume);
+    segmentedGroundTruth->Allocate();
+    segmentedGroundTruth->FillBuffer(100);
+
+    /*saving the segmentations*/
+    for(auto seg: segList){
+
+        DefaultVolumetricDataSPtr volume = volumetricData(seg->output());
+        itkVolumeType::Pointer segVolume = volume->itkImage();
+
+      typedef itk::PasteImageFilter <itkVolumeType > PasteImageFilterType;
+
+      itkVolumeType::IndexType destinationIndex = segVolume->GetLargestPossibleRegion().GetIndex();
+
+      //FIXME instead of pasting the image, pad it.
+      PasteImageFilterType::Pointer pasteFilter  = PasteImageFilterType::New ();
+      pasteFilter->SetDestinationImage(segmentedGroundTruth);
+      pasteFilter->SetSourceImage(segVolume);
+      pasteFilter->SetSourceRegion(segVolume->GetLargestPossibleRegion());
+      pasteFilter->SetDestinationIndex(destinationIndex);
+      pasteFilter->Update();
+
+      typedef itk::OrImageFilter< itkVolumeType >  ProcessImageFilterType;
+
+      ProcessImageFilterType::Pointer processFilter = ProcessImageFilterType::New ();
+      processFilter->SetInput(1,pasteFilter->GetOutput());
+      processFilter->SetInput(0,segmentedGroundTruth);
+      processFilter->Update();
+
+      segmentedGroundTruth = processFilter->GetOutput();
+
+      //TODO instead of providing a binary image, use the segmentations map.
+   }
+
+   typedef itk::MultiplyImageFilter<itkVolumeType, itkVolumeType, itkVolumeType> MultiplyImageFilterType;
+   MultiplyImageFilterType::Pointer multiplyImageFilter = MultiplyImageFilterType::New();
+
+   for(auto seg: backgroundSegList){
+
+       DefaultVolumetricDataSPtr volume = volumetricData(seg->output());
+       itkVolumeType::Pointer segVolume = volume->itkImage();
+
+        typedef itk::PasteImageFilter <itkVolumeType > PasteImageFilterType;
+
+        itkVolumeType::IndexType destinationIndex = segVolume->GetLargestPossibleRegion().GetIndex();
+
+        multiplyImageFilter->SetInput(segVolume);
+        multiplyImageFilter->SetConstant(CCBOOSTBACKGROUNDLABEL);
+        multiplyImageFilter->UpdateLargestPossibleRegion();
+
+        //FIXME instead of pasting the image, pad it.
+        PasteImageFilterType::Pointer pasteFilter = PasteImageFilterType::New ();
+        pasteFilter->SetDestinationImage(segmentedGroundTruth);
+        pasteFilter->SetSourceImage(multiplyImageFilter->GetOutput());
+        pasteFilter->SetSourceRegion(multiplyImageFilter->GetOutput()->GetLargestPossibleRegion());
+        pasteFilter->SetDestinationIndex(destinationIndex);
+        pasteFilter->Update();
+
+        typedef itk::OrImageFilter< itkVolumeType >  ProcessImageFilterType;
+
+        ProcessImageFilterType::Pointer processFilter  = ProcessImageFilterType::New ();
+        processFilter->SetInput(1,pasteFilter->GetOutput());
+        processFilter->SetInput(0,segmentedGroundTruth);
+        processFilter->Update();
+
+        segmentedGroundTruth = processFilter->GetOutput();
+
+        //TODO instead of providing a binary image, use the segmentations map.
     }
-    ++it;
-  }
-  points->Squeeze();
-  points->Modified();
 
-  return points;
+    //save itk image (volume) as binary/classed volume here
+    WriterType::Pointer writer = WriterType::New();
+//TODO espina2
+//    if(ccboostconfig.saveIntermediateVolumes){
+//      writer->SetFileName(ccboostconfig.train.cacheDir + "labelmap.tif");
+      writer->SetFileName("labelmap.tif");
+      writer->SetInput(segmentedGroundTruth);
+      writer->Update();
+      qDebug() << "labelmap.tif created";
+//    }
+
+    return segmentedGroundTruth;
+
 }
 
-//----------------------------------------------------------------------------
-AppositionSurfaceFilter::Points AppositionSurfaceFilter::corners(const double corner[3], const double max[3], const double mid[3], const double min[3]) const
-{
-  Points points = Points::New();
-  points->SetDataTypeToDouble();
+void CcboostSegmentationFilter::splitSegmentations(const itkVolumeType::Pointer outputSegmentation,
+                                                std::vector<itkVolumeType::Pointer>& outSegList){
 
-  double x[3];
-  
-  // {0,0,0}  <- in a cube
-  x[0] = corner[0];
-  x[1] = corner[1];
-  x[2] = corner[2];
-  points->InsertNextPoint(x);
-  // {1,0,0}  <- in a cube
-  x[0] = corner[0] + mid[0];
-  x[1] = corner[1] + mid[1];
-  x[2] = corner[2] + mid[2];
-  points->InsertNextPoint(x);
-  // {0,1,0}  <- in a cube
-  x[0] = corner[0] + max[0];
-  x[1] = corner[1] + max[1];
-  x[2] = corner[2] + max[2];
-  points->InsertNextPoint(x);
-  // {1,1,0}  <- in a cube
-  x[0] = corner[0] + max[0] + mid[0];
-  x[1] = corner[1] + max[1] + mid[1];
-  x[2] = corner[2] + max[2] + mid[2];
-  points->InsertNextPoint(x);
-  // {0,0,1}  <- in a cube
-  x[0] = corner[0] + min[0];
-  x[1] = corner[1] + min[1];
-  x[2] = corner[2] + min[2];
-  points->InsertNextPoint(x);
-  // {1,0,1}  <- in a cube
-  x[0] = corner[0] + mid[0] + min[0];
-  x[1] = corner[1] + mid[1] + min[1];
-  x[2] = corner[2] + mid[2] + min[2];
-  points->InsertNextPoint(x);
-  // {0,1,1}  <- in a cube
-  x[0] = corner[0] + max[0] + min[0];
-  x[1] = corner[1] + max[1] + min[1];
-  x[2] = corner[2] + max[2] + min[2];
-  points->InsertNextPoint(x);
-  // {1,1,1}  <- in a cube
-  x[0] = corner[0] + max[0] + mid[0] + min[0];
-  x[1] = corner[1] + max[1] + mid[1] + min[1];
-  x[2] = corner[2] + max[2] + mid[2] + min[2];
-  points->InsertNextPoint(x);
-  
-  points->Squeeze();
-  points->Modified();
+//    //If 255 components is not enough as output, switch to unsigned short
+//    typedef itk::ImageToImageFilter <itkVolumeType, bigVolumeType > ConvertFilterType;
 
-  return points;
-}
+//    ConvertFilterType::Pointer convertFilter = (ConvertFilterType::New()).GetPointer();
+//    convertFilter->SetInput(outputSegmentation);
+//    convertFilter->Update();
 
-//----------------------------------------------------------------------------
-AppositionSurfaceFilter::DistanceMapType::Pointer AppositionSurfaceFilter::computeDistanceMap(const itkVolumeType::Pointer &volume, const float sigma) const
-{
-  SMDistanceMapFilterType::Pointer smdm_filter = SMDistanceMapFilterType::New();
-  smdm_filter->InsideIsPositiveOn();
-  smdm_filter->UseImageSpacingOn();
-  smdm_filter->SquaredDistanceOff();
-  smdm_filter->SetInput(volume);
-  smdm_filter->Update();
-  
-  double avgMaxDistPoint[3];
-  double max_distance;
-  maxDistancePoint(smdm_filter->GetOutput(), avgMaxDistPoint, max_distance);
-  
-  SmoothingFilterType::Pointer smoothingRecursiveGaussianImageFilter = SmoothingFilterType::New();
-  smoothingRecursiveGaussianImageFilter->SetSigma(sigma * max_distance);
-  smoothingRecursiveGaussianImageFilter->SetInput(smdm_filter->GetOutput());
-  
-  SmoothingFilterType::OutputImageRegionType::SizeType regionSize = smdm_filter->GetOutput()->GetLargestPossibleRegion().GetSize();
-  if (((sigma * max_distance) > 0) && (regionSize[0] >= 4) && (regionSize[1] >= 4) && (regionSize[2] >= 4))
-  {
-    smoothingRecursiveGaussianImageFilter->Update();
-    return smoothingRecursiveGaussianImageFilter->GetOutput();
-  }
-  else
-  {
-    return smdm_filter->GetOutput();
-  }
-}
+    /*split the output into several segmentations*/
+    typedef itk::ConnectedComponentImageFilter <itkVolumeType, bigVolumeType >
+      ConnectedComponentImageFilterType;
 
-//----------------------------------------------------------------------------
-void AppositionSurfaceFilter::maxDistancePoint(const DistanceMapType::Pointer &map,
-                                               double avgMaxDistPoint[3],
-                                               double & maxDist) const
-{
-  maxDist = 0;
-  DistanceMapType::PointType origin = map->GetOrigin();
-  DistanceMapType::SpacingType spacing = map->GetSpacing();
-  Points points = Points::New();
-  
-  DistanceIterator it(map, map->GetLargestPossibleRegion());
-  
-  // #ifdef DEBUG_AP_FILES
-  //     ofstream distanceFile;
-  //     distanceFile.open("decDistFile");
-  // #endif
-  
-  while (!it.IsAtEnd())
-  {
-    DistanceType dist = it.Get();
-    // #ifdef DEBUG_AP_FILES
-    //     distanceFile << dist << std::endl;
-    // #endif
-    if (dist > maxDist)
-    {
-      DistanceMapType::IndexType index = it.GetIndex();
-      maxDist = dist;
-      for (unsigned int i = 0; i < 3; i++)
-        avgMaxDistPoint[i] = origin[i] + index[i]*spacing[i];
-      
-      points->Initialize();
-      points->InsertNextPoint(avgMaxDistPoint);
+    ConnectedComponentImageFilterType::Pointer connected = ConnectedComponentImageFilterType::New ();
+    connected->SetInput(outputSegmentation);
+
+    connected->Update();
+
+    //save itk image (volume) as binary/classed volume here
+    WriterType::Pointer writer = WriterType::New();
+//TODO espina2
+//    if(ccboostconfig.saveIntermediateVolumes){
+//      writer->SetFileName(ccboostconfig.train.cacheDir + "labelmap.tif");
+      writer->SetFileName("labelmap3.tif");
+      writer->SetInput(outputSegmentation);
+      writer->Update();
+      qDebug() << "labelmap.tif created";
+
+    std::cout << "Number of objects: " << connected->GetObjectCount() << std::endl;
+
+    qDebug("Connected components segmentation");
+    BigWriterType::Pointer bigwriter = BigWriterType::New();
+    //TODO espina2
+//    if(ccboostconfig.saveIntermediateVolumes){
+    if(true) {
+        bigwriter->SetFileName(/*ccboostconfig.train.cacheDir + */"connected-segmentation.tif");
+        bigwriter->SetInput(connected->GetOutput());
+        bigwriter->Update();
     }
-    else if (dist == maxDist)
-    {
-      DistanceMapType::IndexType index = it.GetIndex();
-      for (unsigned int i = 0; i < 3; i++)
-        avgMaxDistPoint[i] += origin[i] + index[i]*spacing[i];
-      
-      points->InsertNextPoint(origin[0] + index[0]*spacing[0],
-                              origin[1] + index[1]*spacing[1],
-                              origin[2] + index[2]*spacing[2]);
+
+    typedef itk::RelabelComponentImageFilter<bigVolumeType, bigVolumeType> RelabelFilterType;
+    RelabelFilterType::Pointer relabelFilter = RelabelFilterType::New();
+    relabelFilter->SetInput(connected->GetOutput());
+    relabelFilter->Update();
+//TODO espina2
+//    if(ccboostconfig.saveIntermediateVolumes) {
+    if(true) {
+        qDebug("Save relabeled segmentation");
+        bigwriter->SetFileName(/*ccboostconfig.train.cacheDir + */"relabeled-segmentation.tif");
+        bigwriter->SetInput(relabelFilter->GetOutput());
+        bigwriter->Update();
     }
-    ++it;
-  }
-  //   #ifdef DEBUG_AP_FILES
-  //   distanceFile.close();
-  //   #endif
-  
-  for (unsigned int i = 0; i < 3; i++)
-    avgMaxDistPoint[i] /= points->GetNumberOfPoints();
+
+    //create Espina Segmentation
+    typedef itk::BinaryThresholdImageFilter <bigVolumeType, itkVolumeType>
+      BinaryThresholdImageFilterType;
+
+    BinaryThresholdImageFilterType::Pointer labelThresholdFilter
+        = BinaryThresholdImageFilterType::New();
+
+    labelThresholdFilter->SetInsideValue(255);
+    labelThresholdFilter->SetOutsideValue(0);
+
+    qDebug("Create ESPina segmentations");
+
+    //TODO espina2 ccboostconfig
+//    for(int i=1; i < connected->GetObjectCount() && i < ccboostconfig.maxNumObjects; i++){
+    for(int i=1; i < connected->GetObjectCount(); i++){
+        labelThresholdFilter->SetInput(relabelFilter->GetOutput());
+        labelThresholdFilter->SetLowerThreshold(i);
+        labelThresholdFilter->SetUpperThreshold(i);
+        labelThresholdFilter->Update();
+
+        //TODO espina2 this probably doesn't work if the pointer points the same memory at every iteration
+        //TODO espina2 create the outputs here?
+        itkVolumeType::Pointer outSeg = labelThresholdFilter->GetOutput();
+        outSeg->DisconnectPipeline();
+        outSegList.push_back(outSeg);
+
+    }
 }
 
-//----------------------------------------------------------------------------
-void AppositionSurfaceFilter::computeResolution(const double *max, const double *mid, const double *spacing, int & xResolution, int & yResolution) const
-{
-  double max_in_pixels[3] = {0,0,0};
-  double mid_in_pixels[3] = {0,0,0};
-  for (unsigned int i=0; i < 3; i++)
-  {
-    max_in_pixels[i] = max[i] / spacing[i];
-    mid_in_pixels[i] = mid[i] / spacing[i];
-  }
-  yResolution = vtkMath::Norm(max_in_pixels);  // Heads up: Max - y
-  xResolution = vtkMath::Norm(mid_in_pixels);  // Heads up: Mid - x
+itkVolumeType::Pointer CcboostSegmentationFilter::core(const itkVolumeType::Pointer normalizedChannelItk,
+                                                       std::vector<itkVolumeType::Pointer> segmentedGroundTruthVector){
+
+
+
+    itkVolumeType::Pointer coreOutputSegmentation = segmentedGroundTruthVector.at(0);
+    return coreOutputSegmentation;
+
 }
 
-//----------------------------------------------------------------------------
-void AppositionSurfaceFilter::project(const double *A, const double *B, double *projection) const
-{
-  double scale = vtkMath::Dot(A,B)/pow(vtkMath::Norm(B), 2);
-  for(unsigned int i = 0; i < 3; i++)
-    projection[i] = scale * B[i];
-}
 
 //----------------------------------------------------------------------------
-void AppositionSurfaceFilter::vectorImageToVTKImage(const CovariantVectorImageType::Pointer vectorImage,
-                                                    vtkSmartPointer<vtkImageData> image) const
-{
-  CovariantVectorImageType::PointType origin = vectorImage->GetOrigin();
-  // ESPINA_DEBUG("CovariantVectorMap Origin " << origin[0] << " " << origin[1] << " " << origin[2]);
-  CovariantVectorImageType::RegionType region = vectorImage->GetLargestPossibleRegion();
-  // region.Print(std::cout);
-  CovariantVectorImageType::SpacingType spacing = vectorImage->GetSpacing();
-  CovariantVectorImageType::SizeType imageSize = region.GetSize();
-  CovariantVectorImageType::IndexType originIndex = region.GetIndex();
-  
-  image->SetOrigin(origin[0], origin[1], origin[2]);
-  image->SetExtent(originIndex[0], originIndex[0] + imageSize[0] - 1,
-                   originIndex[1], originIndex[1] + imageSize[1] - 1,
-                   originIndex[2], originIndex[2] + imageSize[2] - 1);
-  image->SetSpacing(spacing[0], spacing[1], spacing[2]);
-  // image->SetSpacing(vectorImage->GetSpacing()[0], vectorImage->GetSpacing()[1], vectorImage->GetSpacing()[2]);
-  
-  // image->Print(std::cout);
-  vtkSmartPointer<vtkFloatArray> vectors = vtkSmartPointer<vtkFloatArray>::New();
-  vectors->SetNumberOfComponents(3);
-  vectors->SetNumberOfTuples(imageSize[0] * imageSize[1] * imageSize[2]);
-  vectors->SetName("GradientVectors");
-  
-  // #ifdef DEBUG_AP_FILES
-  //   std::ofstream covarianceFile;
-  //   covarianceFile.open("decCovarianceFile");
-  // #endif
-  
-  int counter = 0;
-  for (unsigned int k = originIndex[2]; k < originIndex[2] + imageSize[2]; k++)
-    for (unsigned int j = originIndex[1]; j < originIndex[1] + imageSize[1]; j++)
-      for (unsigned int i = originIndex[0]; i < originIndex[0] + imageSize[0]; i++)
-      {
-        CovariantVectorImageType::IndexType index;
-        index[0] = i;
-        index[1] = j;
-        index[2] = k;
-        
-        CovariantVectorType pixel = vectorImage->GetPixel(index);
-        float val[3];
-        val[0] = pixel[0];
-        val[1] = pixel[1];
-        val[2] = pixel[2];
-        
-        // #ifdef DEBUG_AP_FILES
-        //  covarianceFile << val[0] << " " << val[1] << " " << val[2] << std::endl;
-        // #endif
-        vectors->InsertTupleValue(counter, val);
-        counter++;
-      }
-      
-      // #ifdef DEBUG_AP_FILES
-      //   covarianceFile.close();
-      // #endif
-      
-      image->GetPointData()->SetVectors(vectors);
-      image->GetPointData()->SetScalars(vectors);
-}
-
-//----------------------------------------------------------------------------
-void AppositionSurfaceFilter::projectVectors(vtkImageData* vectors_image, double *unitary) const
-{
-  vtkSmartPointer<vtkDataArray> vectors = vectors_image->GetPointData()->GetVectors();
-  int numTuples = vectors->GetNumberOfTuples();
-  
-  // #ifdef DEBUG_AP_FILES
-  //   std::ofstream gradientFile;
-  //   gradientFile.open("decGradientFile");
-  //   gradientFile << "Unitary: " << unitary[0] << " " << unitary[1] << " " << unitary[2] << std::endl;
-  // #endif
-  
-  double projv[3];
-  for (int i = 0; i < numTuples; i++)
-  {
-    double *v = vectors->GetTuple(i);
-    project(v, unitary, projv);
-    vectors->SetTuple(i, projv);
-    
-    // #ifdef DEBUG_AP_FILES
-    //     gradientFile << projv[0] << " " << projv[1] << " " << projv[2] << std::endl;
-    // #endif
-  }
-  
-  // #ifdef DEBUG_AP_FILES
-  //   gradientFile.close();
-  // #endif
-}
-
-//----------------------------------------------------------------------------
-void AppositionSurfaceFilter::computeIterationLimits(const double *min, const double *spacing, int & iterations, double & thresholdError) const
-{
-  double min_in_pixels[3] = { 0, 0, 0 };
-  double step[3] = { 0, 0, 0 };
-  
-  for (unsigned int i = 0; i < 3; i++)
-    step[i] = min[i];
-  
-  vtkMath::Normalize(step);
-  for (unsigned int i = 0; i < 3; i++)
-  {
-    min_in_pixels[i] = min[i] / spacing[i];
-    step[i] = step[i] * spacing[i];
-  }
-  
-  iterations = MAXITERATIONSFACTOR * std::max(1, int(floor(vtkMath::Norm(min_in_pixels))));
-  thresholdError = THRESHOLDFACTOR * vtkMath::Norm(step);
-}
-
-//----------------------------------------------------------------------------
-bool AppositionSurfaceFilter::hasConverged(vtkPoints * lastPlanePoints, PointsListType & pointsList, double threshold) const
-{
-  double error = 0;
-  
-  for (PointsListType::iterator it = pointsList.begin();
-       it != pointsList.end(); ++it) {
-    computeMeanEuclideanError(lastPlanePoints, *it, error);
-  if (error <= threshold) return true;
-       }
-       return false;
-}
-
-//----------------------------------------------------------------------------
-int AppositionSurfaceFilter::computeMeanEuclideanError(vtkPoints * pointsA, vtkPoints * pointsB, double & euclideanError) const
-{
-  double pointA[3], pointB[3];
-  euclideanError = 0;
-  int pointsCount = 0;
-  
-  if (pointsA->GetNumberOfPoints() != pointsB->GetNumberOfPoints())
-    return -1;
-  
-  pointsCount = pointsA->GetNumberOfPoints();
-  
-  for (int i = 0; i < pointsCount; i++)
-  {
-    pointsA->GetPoint(i, pointA);
-    pointsB->GetPoint(i, pointB);
-    euclideanError += sqrt(vtkMath::Distance2BetweenPoints(pointA, pointB));
-  }
-  
-  euclideanError /= pointsCount;
-  return 0;
-}
-
-//----------------------------------------------------------------------------
-AppositionSurfaceFilter::PolyData AppositionSurfaceFilter::clipPlane(vtkPolyData *plane, vtkImageData* image) const
-{
-  vtkSmartPointer<vtkImplicitVolume> implicitVolFilter = vtkSmartPointer<vtkImplicitVolume>::New();
-  implicitVolFilter->SetVolume(image);
-  implicitVolFilter->SetOutValue(0);
-  
-  double inValue = 255.0;
-  inValue = image->GetScalarRange()[1];
-  
-  vtkSmartPointer<vtkClipPolyData> clipper = vtkSmartPointer<vtkClipPolyData>::New();
-  clipper->SetClipFunction(implicitVolFilter);
-  clipper->SetInputData(plane);
-  clipper->SetValue(inValue*CLIPPINGTHRESHOLD);
-  clipper->Update();
-  
-  PolyData clippedPlane; // = PolyData::New();
-  
-  // qDebug() << "Correct Plane's visualization and cell area's computation";
-  clippedPlane = triangulate(clipper->GetOutput());
-  
-  return clippedPlane;
-}
-
-//----------------------------------------------------------------------------
-AppositionSurfaceFilter::PolyData AppositionSurfaceFilter::triangulate(PolyData plane) const
-{
-  vtkSmartPointer<vtkTriangleFilter> triangle_filter = vtkSmartPointer<vtkTriangleFilter>::New();
-  triangle_filter->SetInputData(plane);
-  triangle_filter->Update();
-  
-  vtkSmartPointer<vtkPolyDataNormals> normals = vtkSmartPointer<vtkPolyDataNormals>::New();
-  normals->SetInputData(triangle_filter->GetOutput());
-  normals->SplittingOff();
-  normals->Update();
-  
-  PolyData resultPlane = PolyData::New();
-  resultPlane->DeepCopy(normals->GetOutput());
-  
-  return resultPlane;
-}
-
-//----------------------------------------------------------------------------
-void AppositionSurfaceFilter::inputModified()
+void CcboostSegmentationFilter::inputModified()
 {
   run();
 }

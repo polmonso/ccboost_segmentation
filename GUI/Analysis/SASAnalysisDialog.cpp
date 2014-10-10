@@ -24,7 +24,7 @@
 #include "SASTabularReport.h"
 
 // EspINA
-#include <Core/Extensions/AppositionSurfaceExtension.h>
+#include <Core/Extensions/CcboostSegmentationExtension.h>
 #include <GUI/Model/SegmentationAdapter.h>
 #include <Core/Factory/CoreFactory.h>
 #include <Support/Settings/EspinaSettings.h>
@@ -51,8 +51,8 @@ SASAnalysisDialog::SASAnalysisDialog(SegmentationAdapterList segmentations,
                                      QWidget                *parent)
 : QDialog(parent)
 {
-  setObjectName("Synaptic Apposition Surfaces Analysis");
-  setWindowTitle(tr("Synaptic Apposition Surfaces Analysis"));
+  setObjectName("Synaptic ccboost segmentations Analysis");
+  setWindowTitle(tr("Synaptic ccboost segmentations Analysis"));
   setWindowIcon(QIcon(":/AppSurface.svg"));
 
   SASTabularReport *report = new SASTabularReport(model, factory, viewManager, this);
@@ -69,7 +69,7 @@ SASAnalysisDialog::SASAnalysisDialog(SegmentationAdapterList segmentations,
 
   QSettings settings(CESVIMA, ESPINA);
 
-  settings.beginGroup("Synaptic Apposition Surface Information Analysis");
+  settings.beginGroup("Synaptic ccboost segmentation Information Analysis");
   resize(settings.value("size", QSize (200, 200)).toSize());
   move  (settings.value("pos",  QPoint(200, 200)).toPoint());
   settings.endGroup();
@@ -80,7 +80,7 @@ void SASAnalysisDialog::closeEvent(QCloseEvent *event)
 {
   QSettings settings(CESVIMA, ESPINA);
 
-  settings.beginGroup("Synaptic Apposition Surface Information Analysis");
+  settings.beginGroup("Synaptic ccboost segmentation Information Analysis");
   settings.setValue("size", size());
   settings.setValue("pos", pos());
   settings.endGroup();

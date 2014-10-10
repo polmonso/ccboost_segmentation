@@ -19,8 +19,8 @@
  */
 
 // Plugin
-#include "AppositionSurfaceExtension.h"
-#include <Filter/AppositionSurfaceFilter.h>
+#include "CcboostSegmentationExtension.h"
+#include <Filter/CcboostSegmentationFilter.h>
 
 // EspINA
 #include <Core/Analysis/Segmentation.h>
@@ -51,15 +51,15 @@ using PolyDataNormals = vtkSmartPointer<vtkPolyDataNormals>;
 using namespace EspINA;
 
 ///-----------------------------------------------------------------------
-/// APPOSITION SURFACE EXTENSION-
+/// CCBOOST SEGMENTATION EXTENSION-
 ///-----------------------------------------------------------------------
 /// Information Provided:
-/// - Sinaptic Apposition Surface Area
-/// - Sinaptic Apposition Surface Perimeter
-/// - Sinaptic Apposition Surface Tortuosity (aka Area Ratio)
-/// - Synapse from which the Sinaptic Apposition Surface was obtained
+/// - Sinaptic ccboost segmentation Area
+/// - Sinaptic ccboost segmentation Perimeter
+/// - Sinaptic ccboost segmentation Tortuosity (aka Area Ratio)
+/// - Synapse from which the Sinaptic ccboost segmentation was obtained
 
-const SegmentationExtension::Type AppositionSurfaceExtension::TYPE = "AppositionSurfaceExtensionInformation";
+const SegmentationExtension::Type CcboostSegmentationExtension::TYPE = "CcboostSegmentationExtensionInformation";
 
 const SegmentationExtension::InfoTag AREA                   = "Area";
 const SegmentationExtension::InfoTag PERIMETER              = "Perimeter";
@@ -77,19 +77,19 @@ const SegmentationExtension::InfoTag STD_DEV_MAX_CURVATURE  = "Std Deviation Max
 const double UNDEFINED = -1.;
 
 //------------------------------------------------------------------------
-AppositionSurfaceExtension::AppositionSurfaceExtension(const SegmentationExtension::InfoCache &cache)
+CcboostSegmentationExtension::CcboostSegmentationExtension(const SegmentationExtension::InfoCache &cache)
 : SegmentationExtension{cache}
 , m_originSegmentation {nullptr}
 {
 }
 
 //------------------------------------------------------------------------
-AppositionSurfaceExtension::~AppositionSurfaceExtension()
+CcboostSegmentationExtension::~CcboostSegmentationExtension()
 {
 }
 
 //------------------------------------------------------------------------
-SegmentationExtension::InfoTagList AppositionSurfaceExtension::availableInformations() const
+SegmentationExtension::InfoTagList CcboostSegmentationExtension::availableInformations() const
 {
   SegmentationExtension::InfoTagList tags;
 
@@ -109,7 +109,7 @@ SegmentationExtension::InfoTagList AppositionSurfaceExtension::availableInformat
   return tags;
 }
 
-QVariant AppositionSurfaceExtension::cacheFail(const SegmentationExtension::InfoTag &tag) const
+QVariant CcboostSegmentationExtension::cacheFail(const SegmentationExtension::InfoTag &tag) const
 {
   if(availableInformations().contains(tag))
   {
@@ -121,20 +121,20 @@ QVariant AppositionSurfaceExtension::cacheFail(const SegmentationExtension::Info
 }
 
 //------------------------------------------------------------------------
-bool AppositionSurfaceExtension::validCategory(const QString &classificationName) const
+bool CcboostSegmentationExtension::validCategory(const QString &classificationName) const
 {
   return classificationName.contains(tr("SAS"));
 }
 
 //------------------------------------------------------------------------
-void AppositionSurfaceExtension::onExtendedItemSet(Segmentation *item)
+void CcboostSegmentationExtension::onExtendedItemSet(Segmentation *item)
 {
   connect(item, SIGNAL(outputModified()),
           this, SLOT(invalidate()));
 }
 
 //------------------------------------------------------------------------
-Nm AppositionSurfaceExtension::computeArea(const vtkSmartPointer<vtkPolyData> &asMesh) const
+Nm CcboostSegmentationExtension::computeArea(const vtkSmartPointer<vtkPolyData> &asMesh) const
 {
   int nc = asMesh->GetNumberOfCells();
   Nm totalArea = nc ? 0.0 : UNDEFINED;
@@ -146,7 +146,7 @@ Nm AppositionSurfaceExtension::computeArea(const vtkSmartPointer<vtkPolyData> &a
 }
 
 //----------------------------------------------------------------------------
-bool AppositionSurfaceExtension::isPerimeter(const vtkSmartPointer<vtkPolyData> &asMesh, vtkIdType cellId, vtkIdType p1, vtkIdType p2) const
+bool CcboostSegmentationExtension::isPerimeter(const vtkSmartPointer<vtkPolyData> &asMesh, vtkIdType cellId, vtkIdType p1, vtkIdType p2) const
 {
   IdList neighborCellIds = IdList::New();
   asMesh->GetCellEdgeNeighbors(cellId, p1, p2, neighborCellIds);
@@ -155,7 +155,7 @@ bool AppositionSurfaceExtension::isPerimeter(const vtkSmartPointer<vtkPolyData> 
 }
 
 //------------------------------------------------------------------------
-Nm AppositionSurfaceExtension::computePerimeter(const vtkSmartPointer<vtkPolyData> &asMesh) const
+Nm CcboostSegmentationExtension::computePerimeter(const vtkSmartPointer<vtkPolyData> &asMesh) const
 {
   Nm totalPerimeter = 0.0;
 
@@ -266,13 +266,13 @@ Nm AppositionSurfaceExtension::computePerimeter(const vtkSmartPointer<vtkPolyDat
 }
 
 //------------------------------------------------------------------------
-vtkSmartPointer<vtkPolyData> AppositionSurfaceExtension::projectPolyDataToPlane(const vtkSmartPointer<vtkPolyData> &mesh) const
+vtkSmartPointer<vtkPolyData> CcboostSegmentationExtension::projectPolyDataToPlane(const vtkSmartPointer<vtkPolyData> &mesh) const
 {
   double origin[3];
   double normal[3]; // Normal's magnitude is 1
 
-  vtkDoubleArray *originArray = dynamic_cast<vtkDoubleArray *>(mesh->GetPointData()->GetArray(AppositionSurfaceFilter::MESH_ORIGIN));
-  vtkDoubleArray *normalArray = dynamic_cast<vtkDoubleArray *>(mesh->GetPointData()->GetArray(AppositionSurfaceFilter::MESH_NORMAL));
+  vtkDoubleArray *originArray = dynamic_cast<vtkDoubleArray *>(mesh->GetPointData()->GetArray(CcboostSegmentationFilter::MESH_ORIGIN));
+  vtkDoubleArray *normalArray = dynamic_cast<vtkDoubleArray *>(mesh->GetPointData()->GetArray(CcboostSegmentationFilter::MESH_NORMAL));
 
   for (int i = 0; i < 3; ++i)
   {
@@ -314,7 +314,7 @@ vtkSmartPointer<vtkPolyData> AppositionSurfaceExtension::projectPolyDataToPlane(
 }
 
 //------------------------------------------------------------------------
-double AppositionSurfaceExtension::computeTortuosity(const vtkSmartPointer<vtkPolyData> &asMesh, Nm asArea) const
+double CcboostSegmentationExtension::computeTortuosity(const vtkSmartPointer<vtkPolyData> &asMesh, Nm asArea) const
 {
   vtkSmartPointer<vtkPolyData> projectedAS = projectPolyDataToPlane(asMesh);
 
@@ -324,7 +324,7 @@ double AppositionSurfaceExtension::computeTortuosity(const vtkSmartPointer<vtkPo
 }
 
 //------------------------------------------------------------------------
-void AppositionSurfaceExtension::computeCurvatures(const vtkSmartPointer<vtkPolyData> &asMesh,
+void CcboostSegmentationExtension::computeCurvatures(const vtkSmartPointer<vtkPolyData> &asMesh,
 						                                       vtkSmartPointer<vtkDoubleArray> gaussCurvature,
 						                                       vtkSmartPointer<vtkDoubleArray> meanCurvature,
 						                                       vtkSmartPointer<vtkDoubleArray> minCurvature,
@@ -385,7 +385,7 @@ double stdDev(const vtkSmartPointer<vtkDoubleArray> dataArray, const double mean
 }
 
 //------------------------------------------------------------------------
-bool AppositionSurfaceExtension::computeInformation() const
+bool CcboostSegmentationExtension::computeInformation() const
 {
   bool validInformation = false;
   auto segMesh = meshData(m_extendedItem->output());

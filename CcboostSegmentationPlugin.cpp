@@ -19,16 +19,16 @@
  */
 
 // plugin
-#include "AppositionSurfacePlugin.h"
-#include <Filter/AppositionSurfaceFilter.h>
+#include "CcboostSegmentationPlugin.h"
+#include <Filter/CcboostSegmentationFilter.h>
 #include <Filter/SASFetchBehaviour.h>
 #include <GUI/Analysis/SASAnalysisDialog.h>
-#include <GUI/AppositionSurfaceToolGroup.h>
-#include <GUI/Settings/AppositionSurfaceSettings.h>
+#include <GUI/CcboostSegmentationToolGroup.h>
+#include <GUI/Settings/CcboostSegmentationSettings.h>
 #include <Core/Extensions/ExtensionFactory.h>
 
 // TODO: no filter inspectors yet
-// #include <GUI/FilterInspector/AppositionSurfaceFilterInspector.h>
+// #include <GUI/FilterInspector/CcboostSegmentationFilterInspector.h>
 
 // EspINA
 #include <GUI/Model/ModelAdapter.h>
@@ -55,7 +55,7 @@ const QString SASTAG_PREPEND = QObject::tr("SAS ");
 using namespace EspINA;
 
 //-----------------------------------------------------------------------------
-FilterTypeList AppositionSurfacePlugin::ASFilterFactory::providedFilters() const
+FilterTypeList CcboostSegmentationPlugin::ASFilterFactory::providedFilters() const
 {
   FilterTypeList filters;
 
@@ -65,27 +65,27 @@ FilterTypeList AppositionSurfacePlugin::ASFilterFactory::providedFilters() const
 }
 
 //-----------------------------------------------------------------------------
-FilterSPtr AppositionSurfacePlugin::ASFilterFactory::createFilter(InputSList          inputs,
+FilterSPtr CcboostSegmentationPlugin::ASFilterFactory::createFilter(InputSList          inputs,
                                                             const Filter::Type& type,
                                                             SchedulerSPtr       scheduler) const throw (Unknown_Filter_Exception)
 {
 
   if (type != AS_FILTER) throw Unknown_Filter_Exception();
 
-  auto filter = FilterSPtr{new AppositionSurfaceFilter(inputs, type, scheduler)};
+  auto filter = FilterSPtr{new CcboostSegmentationFilter(inputs, type, scheduler)};
   filter->setFetchBehaviour(FetchBehaviourSPtr{new SASFetchBehaviour()});
 
   return filter;
 }
 
 //-----------------------------------------------------------------------------
-AppositionSurfacePlugin::AppositionSurfacePlugin()
+CcboostSegmentationPlugin::CcboostSegmentationPlugin()
 : m_model           {nullptr}
 , m_factory         {nullptr}
 , m_viewManager     {nullptr}
 , m_scheduler       {nullptr}
 , m_undoStack       {nullptr}
-, m_settings        {SettingsPanelSPtr(new AppositionSurfaceSettings())}
+, m_settings        {SettingsPanelSPtr(new CcboostSegmentationSettings())}
 , m_extensionFactory{SegmentationExtensionFactorySPtr(new ASExtensionFactory())}
 , m_toolGroup       {nullptr}
 , m_filterFactory   {FilterFactorySPtr{new ASFilterFactory()}}
@@ -94,7 +94,7 @@ AppositionSurfacePlugin::AppositionSurfacePlugin()
   QStringList hierarchy;
   hierarchy << "Analysis";
 
-  QAction *action = new QAction(tr("Synaptic Apposition Surface"), this);
+  QAction *action = new QAction(tr("Synaptic ccboost segmentation"), this);
   connect(action, SIGNAL(triggered(bool)),
           this, SLOT(createSASAnalysis()));
 
@@ -102,15 +102,15 @@ AppositionSurfacePlugin::AppositionSurfacePlugin()
 }
 
 //-----------------------------------------------------------------------------
-AppositionSurfacePlugin::~AppositionSurfacePlugin()
+CcboostSegmentationPlugin::~CcboostSegmentationPlugin()
 {
 //   qDebug() << "********************************************************";
-//   qDebug() << "              Destroying Apposition Surface Plugin";
+//   qDebug() << "              Destroying ccboost segmentation Plugin";
 //   qDebug() << "********************************************************";
 }
 
 //-----------------------------------------------------------------------------
-void AppositionSurfacePlugin::init(ModelAdapterSPtr model,
+void CcboostSegmentationPlugin::init(ModelAdapterSPtr model,
                              ViewManagerSPtr  viewManager,
                              ModelFactorySPtr factory,
                              SchedulerSPtr    scheduler,
@@ -126,7 +126,7 @@ void AppositionSurfacePlugin::init(ModelAdapterSPtr model,
   m_scheduler = scheduler;
   m_undoStack = undoStack;
 
-  m_toolGroup = new AppositionSurfaceToolGroup{m_model, m_undoStack, m_factory, m_viewManager, this};
+  m_toolGroup = new CcboostSegmentationToolGroup{m_model, m_undoStack, m_factory, m_viewManager, this};
 
   // for automatic computation of SAS
   connect(m_model.get(), SIGNAL(segmentationsAdded(SegmentationAdapterSList)),
@@ -134,13 +134,13 @@ void AppositionSurfacePlugin::init(ModelAdapterSPtr model,
 }
 
 //-----------------------------------------------------------------------------
-ChannelExtensionFactorySList AppositionSurfacePlugin::channelExtensionFactories() const
+ChannelExtensionFactorySList CcboostSegmentationPlugin::channelExtensionFactories() const
 {
   return ChannelExtensionFactorySList();
 }
 
 //-----------------------------------------------------------------------------
-SegmentationExtensionFactorySList AppositionSurfacePlugin::segmentationExtensionFactories() const
+SegmentationExtensionFactorySList CcboostSegmentationPlugin::segmentationExtensionFactories() const
 {
   SegmentationExtensionFactorySList extensionFactories;
 
@@ -150,7 +150,7 @@ SegmentationExtensionFactorySList AppositionSurfacePlugin::segmentationExtension
 }
 
 //-----------------------------------------------------------------------------
-FilterFactorySList AppositionSurfacePlugin::filterFactories() const
+FilterFactorySList CcboostSegmentationPlugin::filterFactories() const
 {
   FilterFactorySList factories;
 
@@ -160,13 +160,13 @@ FilterFactorySList AppositionSurfacePlugin::filterFactories() const
 }
 
 //-----------------------------------------------------------------------------
-NamedColorEngineSList AppositionSurfacePlugin::colorEngines() const
+NamedColorEngineSList CcboostSegmentationPlugin::colorEngines() const
 {
   return NamedColorEngineSList();
 }
 
 //-----------------------------------------------------------------------------
-QList<ToolGroup *> AppositionSurfacePlugin::toolGroups() const
+QList<ToolGroup *> CcboostSegmentationPlugin::toolGroups() const
 {
   QList<ToolGroup *> tools;
 
@@ -176,19 +176,19 @@ QList<ToolGroup *> AppositionSurfacePlugin::toolGroups() const
 }
 
 //-----------------------------------------------------------------------------
-QList<DockWidget *> AppositionSurfacePlugin::dockWidgets() const
+QList<DockWidget *> CcboostSegmentationPlugin::dockWidgets() const
 {
   return QList<DockWidget *>();
 }
 
 //-----------------------------------------------------------------------------
-RendererSList AppositionSurfacePlugin::renderers() const
+RendererSList CcboostSegmentationPlugin::renderers() const
 {
   return RendererSList();
 }
 
 //-----------------------------------------------------------------------------
-SettingsPanelSList AppositionSurfacePlugin::settingsPanels() const
+SettingsPanelSList CcboostSegmentationPlugin::settingsPanels() const
 {
   SettingsPanelSList settingsPanels;
 
@@ -198,7 +198,7 @@ SettingsPanelSList AppositionSurfacePlugin::settingsPanels() const
 }
 
 //-----------------------------------------------------------------------------
-QList<MenuEntry> AppositionSurfacePlugin::menuEntries() const
+QList<MenuEntry> CcboostSegmentationPlugin::menuEntries() const
 {
   QList<MenuEntry> entries;
 
@@ -208,163 +208,165 @@ QList<MenuEntry> AppositionSurfacePlugin::menuEntries() const
 }
 
 //-----------------------------------------------------------------------------
-AnalysisReaderSList AppositionSurfacePlugin::analysisReaders() const
+AnalysisReaderSList CcboostSegmentationPlugin::analysisReaders() const
 {
   return AnalysisReaderSList();
 }
 
 //-----------------------------------------------------------------------------
-void AppositionSurfacePlugin::createSASAnalysis()
+void CcboostSegmentationPlugin::createSASAnalysis()
 {
   // if not initialized just return
   if(m_model == nullptr)
     return;
 
-  SegmentationAdapterList synapsis;
+  //TODO when is that called and what's the difference with CcboostSegmentationToolGroup.cpp:117 createSAS
+//  SegmentationAdapterList synapsis;
 
-  auto selection = m_viewManager->selection()->segmentations();
-  if (selection.isEmpty())
-  {
-    for(auto segmentation: m_model->segmentations())
-    {
-      if (isSynapse(segmentation.get()))
-      {
-        synapsis << segmentation.get();
-      }
-    }
-  }
-  else
-  {
-    for(auto segmentation: selection)
-    {
-      if (isSynapse(segmentation))
-      {
-        synapsis << segmentation;
-      }
-    }
-  }
+//  auto selection = m_viewManager->selection()->segmentations();
+//  if (selection.isEmpty())
+//  {
+//    for(auto segmentation: m_model->segmentations())
+//    {
+//      if (isSynapse(segmentation.get()))
+//      {
+//        synapsis << segmentation.get();
+//      }
+//    }
+//  }
+//  else
+//  {
+//    for(auto segmentation: selection)
+//    {
+//      if (isSynapse(segmentation))
+//      {
+//        synapsis << segmentation;
+//      }
+//    }
+//  }
 
-  if (!synapsis.isEmpty())
-  {
-    if (m_model->classification()->category(SAS) == nullptr)
-    {
-      m_undoStack->beginMacro(tr("Apposition Surface"));
-      m_undoStack->push(new AddCategoryCommand(m_model->classification()->root(), SAS, m_model, QColor(255,255,0)));
-      m_undoStack->endMacro();
+//  if (!synapsis.isEmpty())
+//  {
+//    if (m_model->classification()->category(SAS) == nullptr)
+//    {
+//      m_undoStack->beginMacro(tr("ccboost segmentation"));
+//      m_undoStack->push(new AddCategoryCommand(m_model->classification()->root(), SAS, m_model, QColor(255,255,0)));
+//      m_undoStack->endMacro();
 
-      m_model->classification()->category(SAS)->addProperty(QString("Dim_X"), QVariant("500"));
-      m_model->classification()->category(SAS)->addProperty(QString("Dim_Y"), QVariant("500"));
-      m_model->classification()->category(SAS)->addProperty(QString("Dim_Z"), QVariant("500"));
-    }
+//      m_model->classification()->category(SAS)->addProperty(QString("Dim_X"), QVariant("500"));
+//      m_model->classification()->category(SAS)->addProperty(QString("Dim_Y"), QVariant("500"));
+//      m_model->classification()->category(SAS)->addProperty(QString("Dim_Z"), QVariant("500"));
+//    }
 
-    // check segmentations for SAS and create it if needed
-    for(auto segmentation: synapsis)
-    {
-      auto sasItems = m_model->relatedItems(segmentation, RelationType::RELATION_OUT, SAS);
-      if(sasItems.empty())
-      {
-        if(!m_delayedAnalysis)
-        {
-          m_delayedAnalysis = true;
-          m_analysisSynapses = synapsis;
-          QApplication::setOverrideCursor(Qt::WaitCursor);
-        }
+//    // check segmentations for SAS and create it if needed
+//    for(auto segmentation: synapsis)
+//    {
+//      auto sasItems = m_model->relatedItems(segmentation, RelationType::RELATION_OUT, SAS);
+//      if(sasItems.empty())
+//      {
+//        if(!m_delayedAnalysis)
+//        {
+//          m_delayedAnalysis = true;
+//          m_analysisSynapses = synapsis;
+//          QApplication::setOverrideCursor(Qt::WaitCursor);
+//        }
 
-        InputSList inputs;
-        inputs << segmentation->asInput();
+//        InputSList inputs;
+//        inputs << segmentation->asInput();
 
-        auto adapter = m_factory->createFilter<AppositionSurfaceFilter>(inputs, AS_FILTER);
+//        auto adapter = m_factory->createFilter<CcboostSegmentationFilter>(inputs, AS_FILTER);
 
-        struct Data data(adapter, m_model->smartPointer(segmentation));
-        m_executingTasks.insert(adapter.get(), data);
+//        struct Data data(adapter,segmentation);
+//        m_executingTasks.insert(adapter.get(), data);
 
-        connect(adapter.get(), SIGNAL(finished()), this, SLOT(finishedTask()));
-        adapter->submit();
-      }
-      else
-      {
-        Q_ASSERT(sasItems.size() == 1);
-        auto sas = std::dynamic_pointer_cast<SegmentationAdapter>(sasItems.first());
-        if(!sas->hasExtension(AppositionSurfaceExtension::TYPE))
-        {
-          auto extension = m_factory->createSegmentationExtension(AppositionSurfaceExtension::TYPE);
-          std::dynamic_pointer_cast<AppositionSurfaceExtension>(extension)->setOriginSegmentation(m_model->smartPointer(segmentation));
-          sas->addExtension(extension);
-        }
-      }
-    }
+//        connect(adapter.get(), SIGNAL(finished()), this, SLOT(finishedTask()));
+//        adapter->submit();
+//      }
+//      else
+//      {
+//        Q_ASSERT(sasItems.size() == 1);
+//        auto sas = std::dynamic_pointer_cast<SegmentationAdapter>(sasItems.first());
+//        if(!sas->hasExtension(CcboostSegmentationExtension::TYPE))
+//        {
+//          auto extension = m_factory->createSegmentationExtension(CcboostSegmentationExtension::TYPE);
+//          std::dynamic_pointer_cast<CcboostSegmentationExtension>(extension)->setOriginSegmentation(m_model->smartPointer(segmentation));
+//          sas->addExtension(extension);
+//        }
+//      }
+//    }
 
-    if(!m_delayedAnalysis)
-    {
-      SASAnalysisDialog *analysis = new SASAnalysisDialog(synapsis, m_model, m_undoStack, m_factory, m_viewManager, nullptr);
-      analysis->exec();
+//    if(!m_delayedAnalysis)
+//    {
+//      SASAnalysisDialog *analysis = new SASAnalysisDialog(synapsis, m_model, m_undoStack, m_factory, m_viewManager, nullptr);
+//      analysis->exec();
 
-      delete analysis;
-    }
-  }
-  else
-  {
-    QMessageBox::warning(nullptr, tr("EspINA"), tr("Current analysis does not contain any synapses"));
-  }
+//      delete analysis;
+//    }
+//  }
+//  else
+//  {
+//    QMessageBox::warning(nullptr, tr("EspINA"), tr("Current analysis does not contain any synapses"));
+//  }
 }
 
 //-----------------------------------------------------------------------------
-bool AppositionSurfacePlugin::isSynapse(SegmentationAdapterPtr segmentation)
+bool CcboostSegmentationPlugin::isSynapse(SegmentationAdapterPtr segmentation)
 {
   return segmentation->category()->classificationName().contains(tr("Synapse"));
 }
 
 //-----------------------------------------------------------------------------
-void AppositionSurfacePlugin::segmentationsAdded(SegmentationAdapterSList segmentations)
+void CcboostSegmentationPlugin::segmentationsAdded(SegmentationAdapterSList segmentations)
 {
   QSettings settings(CESVIMA, ESPINA);
-  settings.beginGroup("Apposition Surface");
+  settings.beginGroup("ccboost segmentation");
   if (!settings.contains("Automatic Computation For Synapses") || !settings.value("Automatic Computation For Synapses").toBool())
     return;
 
-  SegmentationAdapterList validSegmentations;
-  for(auto segmentation: segmentations)
-  {
-    bool valid = true;
-    if(isSynapse(segmentation.get()) && segmentation->filter()->hasFinished())
-    {
-      // must check if the segmentation already has a SAS, as this call
-      // could be the result of a redo() in a UndoCommand
-      for(auto item: m_model->relatedItems(segmentation.get(), RELATION_OUT))
-        if (item->type() == ItemAdapter::Type::SEGMENTATION)
-        {
-          SegmentationAdapterSPtr segmentation = std::dynamic_pointer_cast<SegmentationAdapter>(item);
-          if (segmentation->category()->classificationName().startsWith("SAS/") || segmentation->category()->classificationName().compare("SAS") == 0)
-          {
-            valid = false;
-            break;
-          }
-        }
+  //TODO espina2 automatic computation
+//  SegmentationAdapterList validSegmentations;
+//  for(auto segmentation: segmentations)
+//  {
+//    bool valid = true;
+//    if(isSynapse(segmentation.get()) && segmentation->filter()->hasFinished())
+//    {
+//      // must check if the segmentation already has a SAS, as this call
+//      // could be the result of a redo() in a UndoCommand
+//      for(auto item: m_model->relatedItems(segmentation.get(), RELATION_OUT))
+//        if (item->type() == ItemAdapter::Type::SEGMENTATION)
+//        {
+//          SegmentationAdapterSPtr segmentation = std::dynamic_pointer_cast<SegmentationAdapter>(item);
+//          if (segmentation->category()->classificationName().startsWith("SAS/") || segmentation->category()->classificationName().compare("SAS") == 0)
+//          {
+//            valid = false;
+//            break;
+//          }
+//        }
 
-      if (!valid)
-        continue;
-      else
-        validSegmentations << segmentation.get();
-    }
-  }
+//      if (!valid)
+//        continue;
+//      else
+//        validSegmentations << segmentation.get();
+//    }
+//  }
 
-  for(auto seg: validSegmentations)
-  {
-    InputSList inputs;
-    inputs << seg->asInput();
+//  for(auto seg: validSegmentations)
+//  {
+//    InputSList inputs;
+//    inputs << seg->asInput();
 
-    auto adapter = m_factory->createFilter<AppositionSurfaceFilter>(inputs, AS_FILTER);
+//    auto adapter = m_factory->createFilter<CcboostSegmentationFilter>(inputs, AS_FILTER);
 
-    struct Data data(adapter, m_model->smartPointer(seg));
-    m_executingTasks.insert(adapter.get(), data);
+//    struct Data data(adapter, m_model->smartPointer(seg));
+//    m_executingTasks.insert(adapter.get(), data);
 
-    connect(adapter.get(), SIGNAL(finished()), this, SLOT(finishedTask()));
-    adapter->submit();
-  }
+//    connect(adapter.get(), SIGNAL(finished()), this, SLOT(finishedTask()));
+//    adapter->submit();
+//  }
 }
 
 //-----------------------------------------------------------------------------
-void AppositionSurfacePlugin::finishedTask()
+void CcboostSegmentationPlugin::finishedTask()
 {
   auto filter = qobject_cast<FilterAdapterPtr>(sender());
   disconnect(filter, SIGNAL(finished()), this, SLOT(finishedTask()));
@@ -381,7 +383,7 @@ void AppositionSurfacePlugin::finishedTask()
   if(m_finishedTasks.empty())
     return;
 
-  m_undoStack->beginMacro("Create Synaptic Apposition Surfaces");
+  m_undoStack->beginMacro("Create Synaptic ccboost segmentations");
 
   auto classification = m_model->classification();
   if (classification->category(SAS) == nullptr)
@@ -398,21 +400,24 @@ void AppositionSurfacePlugin::finishedTask()
 
   for(auto filter: m_finishedTasks.keys())
   {
-    auto segmentation = m_factory->createSegmentation(m_finishedTasks.value(filter).adapter, 0);
-    segmentation->setCategory(category);
-    segmentation->setData(SASTAG_PREPEND + QString::number(m_finishedTasks[filter].segmentation->number()), Qt::EditRole);
+    FilterAdapterSPtr adapter = m_finishedTasks.value(filter).adapter;
 
-    auto extension = m_factory->createSegmentationExtension(AppositionSurfaceExtension::TYPE);
-    std::dynamic_pointer_cast<AppositionSurfaceExtension>(extension)->setOriginSegmentation(m_finishedTasks[filter].segmentation);
-    segmentation->addExtension(extension);
+    for(int i = 0; i < adapter->numberOfOutputs(); i++){
 
-    auto samples = QueryAdapter::samples(m_finishedTasks.value(filter).segmentation);
-    Q_ASSERT(!samples.empty());
+        auto segmentation = m_factory->createSegmentation(m_finishedTasks.value(filter).adapter, i);
+        segmentation->setCategory(category);
 
-    m_undoStack->push(new AddSegmentations(segmentation, samples, m_model));
-    m_undoStack->push(new AddRelationCommand(m_finishedTasks[filter].segmentation, segmentation, SAS, m_model));
+        // TODO: what does that mean:
+        // samples es la lista de SampleAdapters al que pertenece/donde se origina la segmentación.
+        // and how does it relate to we not caring from which segmentations our outputs were born from?
+        auto samples = QueryAdapter::samples(m_finishedTasks.value(filter).segmentation);
+        Q_ASSERT(!samples.empty());
 
-    createdSegmentations << segmentation.get();
+        m_undoStack->push(new AddSegmentations(segmentation, samples, m_model));
+        //m_undoStack->push(new AddRelationCommand(m_finishedTasks[filter].segmentation, segmentation, SAS, m_model));
+
+        createdSegmentations << segmentation.get();
+    }
   }
   m_undoStack->endMacro();
 
@@ -434,5 +439,5 @@ void AppositionSurfacePlugin::finishedTask()
   }
 }
 
-Q_EXPORT_PLUGIN2(AppositionSurfacePlugin, EspINA::AppositionSurfacePlugin)
+Q_EXPORT_PLUGIN2(CcboostSegmentationPlugin, EspINA::CcboostSegmentationPlugin)
 

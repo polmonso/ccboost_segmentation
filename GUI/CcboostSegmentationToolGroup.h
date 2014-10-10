@@ -18,14 +18,14 @@
  *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef APPOSITIONSURFACETOOLBAR_H
-#define APPOSITIONSURFACETOOLBAR_H
+#ifndef CCBOOSTSEGMENTATIONTOOLBAR_H
+#define CCBOOSTSEGMENTATIONTOOLBAR_H
 
 // Plugin
 #include <Core/MultiTasking/Task.h>
 #include <GUI/Model/ModelAdapter.h>
-#include "AppositionSurfacePlugin_Export.h"
-#include "Core/Extensions/AppositionSurfaceExtension.h"
+#include "CcboostSegmentationPlugin_Export.h"
+#include "Core/Extensions/CcboostSegmentationExtension.h"
 
 // EspINA
 #include <Support/ViewManager.h>
@@ -38,31 +38,31 @@ class QString;
 
 namespace EspINA
 {
-  class AppositionSurfacePlugin;
+  class CcboostSegmentationPlugin;
 
-  class AppositionSurfaceTool;
-  using SASToolPtr   = AppositionSurfaceTool *;
-  using SASToolSPtr  = std::shared_ptr<AppositionSurfaceTool>;
+  class CcboostSegmentationTool;
+  using SASToolPtr   = CcboostSegmentationTool *;
+  using SASToolSPtr  = std::shared_ptr<CcboostSegmentationTool>;
 
   //-----------------------------------------------------------------------------
-  class AppositionSurfacePlugin_EXPORT AppositionSurfaceToolGroup
+  class CcboostSegmentationPlugin_EXPORT CcboostSegmentationToolGroup
   : public ToolGroup
   {
     Q_OBJECT
   public:
-    /* \brief AppositionSurfaceToolGroup class constructor.
+    /* \brief CcboostSegmentationToolGroup class constructor.
      *
      */
-    explicit AppositionSurfaceToolGroup(ModelAdapterSPtr model,
+    explicit CcboostSegmentationToolGroup(ModelAdapterSPtr model,
                                         QUndoStack *undoStack,
                                         ModelFactorySPtr factory,
                                         ViewManagerSPtr viewManager,
-                                        AppositionSurfacePlugin *plugin);
+                                        CcboostSegmentationPlugin *plugin);
 
-    /* \brief AppositionSurfaceToolGroup class virtual destructor.
+    /* \brief CcboostSegmentationToolGroup class virtual destructor.
      *
      */
-    virtual ~AppositionSurfaceToolGroup();
+    virtual ~CcboostSegmentationToolGroup();
 
     /* \brief Implements ToolGroup::setEnabled().
      *
@@ -96,26 +96,26 @@ namespace EspINA
     QUndoStack              *m_undoStack;
     SASToolSPtr              m_tool;
     bool                     m_enabled;
-    AppositionSurfacePlugin *m_plugin;
+    CcboostSegmentationPlugin *m_plugin;
   };
 
   //-----------------------------------------------------------------------------
-  class AppositionSurfacePlugin_EXPORT AppositionSurfaceTool
+  class CcboostSegmentationPlugin_EXPORT CcboostSegmentationTool
   : public Tool
   {
     Q_OBJECT
     public:
-      /* \brief AppositionSurfaceTool class constructor.
+      /* \brief CcboostSegmentationTool class constructor.
        * \param[in] icon, icon for the QAction.
        * \param[in] text, text to use as the QAction tooltip.
        *
        */
-      explicit AppositionSurfaceTool(const QIcon& icon, const QString& text);
+      explicit CcboostSegmentationTool(const QIcon& icon, const QString& text);
 
-      /* \brief AppositionSurfaceTool class virtual destructor.
+      /* \brief CcboostSegmentationTool class virtual destructor.
        *
        */
-      virtual ~AppositionSurfaceTool();
+      virtual ~CcboostSegmentationTool();
 
       /* \brief Implements Tool::setEnabled().
        *
@@ -159,4 +159,4 @@ namespace EspINA
 
 } // namespace EspINA
 
-#endif// APPOSITIONSURFACETOOLBAR_H
+#endif// CCBOOSTSEGMENTATIONTOOLBAR_H

@@ -120,15 +120,15 @@ namespace EspINA
 
     for (auto type : m_factory->availableSegmentationExtensions())
     {
-      if(type == AppositionSurfaceExtension::TYPE)
+      if(type == CcboostSegmentationExtension::TYPE)
         continue;
 
       auto extension = m_factory->createSegmentationExtension(type);
       info[type] << extension->availableInformations();
     }
 
-    for(auto tag: m_factory->createSegmentationExtension(AppositionSurfaceExtension::TYPE)->availableInformations())
-        info[QString(AppositionSurfaceExtension::TYPE).prepend(SASTAG_PREPEND)] << QString(tag).prepend(SASTAG_PREPEND);
+    for(auto tag: m_factory->createSegmentationExtension(CcboostSegmentationExtension::TYPE)->availableInformations())
+        info[QString(CcboostSegmentationExtension::TYPE).prepend(SASTAG_PREPEND)] << QString(tag).prepend(SASTAG_PREPEND);
 
     // in case we have extensions not registered in the factory add them too. Will be read-only extensions.
     for (auto item : m_proxy->displayedItems())

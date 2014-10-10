@@ -1,35 +1,35 @@
 /*
- * AppositionSurfaceSettings.h
+ * CcboostSegmentationSettings.h
  *
  *  Created on: Jan 16, 2013
  *      Author: Felix de las Pozas Alvarez
  */
 
-#ifndef APPOSITIONSURFACESETTINGS_H_
-#define APPOSITIONSURFACESETTINGS_H_
+#ifndef CCBOOSTSEGMENTATIONSETTINGS_H_
+#define CCBOOSTSEGMENTATIONSETTINGS_H_
 
-#include "AppositionSurfacePlugin_Export.h"
+#include "CcboostSegmentationPlugin_Export.h"
 
 // EspINA
 #include <Support/Settings/SettingsPanel.h>
-#include "ui_AppositionSurfaceSettings.h"
+#include "ui_CcboostSegmentationSettings.h"
 
 // Qt
 #include <QColor>
 
 namespace EspINA
 {
-  class AppositionSurfacePlugin_EXPORT AppositionSurfaceSettings
+  class CcboostSegmentationPlugin_EXPORT CcboostSegmentationSettings
   : public SettingsPanel
-  , public Ui::AppositionSurfaceSettings
+  , public Ui::CcboostSegmentationSettings
   {
     Q_OBJECT
   public:
-    explicit AppositionSurfaceSettings();
-    virtual ~AppositionSurfaceSettings() {};
+    explicit CcboostSegmentationSettings();
+    virtual ~CcboostSegmentationSettings() {};
 
-    virtual const QString shortDescription() { return tr("Synaptic Apposition Surface"); }
-    virtual const QString longDescription()  { return tr("Synaptic Apposition Surface"); }
+    virtual const QString shortDescription() { return tr("Synaptic ccboost segmentation"); }
+    virtual const QString longDescription()  { return tr("Synaptic ccboost segmentation"); }
     virtual const QIcon icon()               { return QIcon(":/AppSurface.svg"); }
 
     virtual void acceptChanges();
@@ -47,4 +47,4 @@ namespace EspINA
   };
 } /* namespace EspINA */
 
-#endif /* APPOSITIONSURFACESETTINGS_H_ */
+#endif /* CCBOOSTSEGMENTATIONSETTINGS_H_ */

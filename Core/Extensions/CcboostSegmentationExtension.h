@@ -21,7 +21,7 @@
 #ifndef APPOSITION_SURFAC_EXTENSION_H
 #define APPOSITION_SURFAC_EXTENSION_H
 
-#include "AppositionSurfacePlugin_Export.h"
+#include "CcboostSegmentationPlugin_Export.h"
 
 // EspINA
 #include <Core/Analysis/Extension.h>
@@ -37,15 +37,15 @@ namespace EspINA
 {
   const QString SAS = QObject::tr("SAS");
 
-  class AppositionSurfacePlugin_EXPORT AppositionSurfaceExtension
+  class CcboostSegmentationPlugin_EXPORT CcboostSegmentationExtension
   : public SegmentationExtension
   {
     public:
       static const Type TYPE;
 
     public:
-      explicit AppositionSurfaceExtension(const SegmentationExtension::InfoCache &cache);
-      virtual ~AppositionSurfaceExtension();
+      explicit CcboostSegmentationExtension(const SegmentationExtension::InfoCache &cache);
+      virtual ~CcboostSegmentationExtension();
 
       /* \brief Implements Extension:type().
        *
@@ -159,8 +159,8 @@ namespace EspINA
 
   };
 
-  using AppositionSurfaceExtensionPtr  = AppositionSurfaceExtension *;
-  using AppositionSurfaceExtensionSPtr = std::shared_ptr<AppositionSurfaceExtension>;
+  using CcboostSegmentationExtensionPtr  = CcboostSegmentationExtension *;
+  using CcboostSegmentationExtensionSPtr = std::shared_ptr<CcboostSegmentationExtension>;
 
 } // namespace EspINA
 

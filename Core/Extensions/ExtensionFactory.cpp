@@ -19,7 +19,7 @@
  */
 
 #include "ExtensionFactory.h"
-#include "AppositionSurfaceExtension.h"
+#include "CcboostSegmentationExtension.h"
 
 //-----------------------------------------------------------------------------
 ASExtensionFactory::ASExtensionFactory()
@@ -36,10 +36,10 @@ SegmentationExtensionSPtr ASExtensionFactory::createSegmentationExtension(const 
                                                                           const SegmentationExtension::InfoCache &cache,
                                                                           const State& state) const
 {
-  if (type != AppositionSurfaceExtension::TYPE)
+  if (type != CcboostSegmentationExtension::TYPE)
     throw Extension_Not_Provided_Exception();
 
-  return SegmentationExtensionSPtr{new AppositionSurfaceExtension(cache)};
+  return SegmentationExtensionSPtr{new CcboostSegmentationExtension(cache)};
 }
 
 //-----------------------------------------------------------------------------
@@ -47,7 +47,7 @@ SegmentationExtensionTypeList ASExtensionFactory::providedExtensions() const
 {
   SegmentationExtensionTypeList extensions;
 
-  extensions << AppositionSurfaceExtension::TYPE;
+  extensions << CcboostSegmentationExtension::TYPE;
 
   return extensions;
 }

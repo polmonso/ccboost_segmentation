@@ -18,13 +18,13 @@
  *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef APPOSITIONSURFACE_H
-#define APPOSITIONSURFACE_H
+#ifndef CCBOOSTSEGMENTATION_H
+#define CCBOOSTSEGMENTATION_H
 
-#include "AppositionSurfacePlugin_Export.h"
+#include "CcboostSegmentationPlugin_Export.h"
 
 // Plugin
-#include "Core/Extensions/AppositionSurfaceExtension.h"
+#include "Core/Extensions/CcboostSegmentationExtension.h"
 
 // EspINA
 #include <Support/ViewManager.h>
@@ -36,7 +36,7 @@
 
 namespace EspINA
 {
-  class AppositionSurfacePlugin_EXPORT AppositionSurfacePlugin
+  class CcboostSegmentationPlugin_EXPORT CcboostSegmentationPlugin
   : public Plugin
   {
     Q_OBJECT
@@ -50,8 +50,8 @@ namespace EspINA
     };
 
   public:
-    explicit AppositionSurfacePlugin();
-    virtual ~AppositionSurfacePlugin();
+    explicit CcboostSegmentationPlugin();
+    virtual ~CcboostSegmentationPlugin();
 
     virtual void init(ModelAdapterSPtr model,
                       ViewManagerSPtr  viewManager,
@@ -143,9 +143,9 @@ namespace EspINA
     QMap<FilterAdapterPtr, struct Data> m_executingTasks;
     QMap<FilterAdapterPtr, struct Data> m_finishedTasks;
 
-    friend class AppositionSurfaceToolGroup;
+    friend class CcboostSegmentationToolGroup;
   };
 
 } // namespace EspINA
 
-#endif// APPOSITIONSURFACE_H
+#endif// CCBOOSTSEGMENTATION_H

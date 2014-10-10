@@ -1,4 +1,4 @@
-project(APPOSITION_PLANE_PLUGIN)
+project(CCBOOST_SEGMENTATION_PLUGIN)
 
 include (GenerateExportHeader)
 

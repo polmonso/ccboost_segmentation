@@ -19,7 +19,7 @@
 
 // Plugin
 #include "SASFetchBehaviour.h"
-#include "AppositionSurfaceFilter.h"
+#include "CcboostSegmentationFilter.h"
 
 // EspINA
 #include <Core/Analysis/Data/Volumetric/RasterizedVolume.h>
@@ -45,7 +45,7 @@ namespace EspINA
         output->setData(data);
 
         // update filter values to avoid unnecessary calls to update().
-        auto filter = dynamic_cast<AppositionSurfaceFilter *>(output->filter());
+        auto filter = dynamic_cast<CcboostSegmentationFilter *>(output->filter());
         Q_ASSERT(filter != nullptr);
         filter->m_alreadyFetchedData = true;
         filter->m_lastModifiedMesh = data->lastModified();

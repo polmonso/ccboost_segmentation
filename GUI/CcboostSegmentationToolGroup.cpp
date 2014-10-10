@@ -19,15 +19,16 @@
  */
 
 // plugin
-#include "AppositionSurfaceToolGroup.h"
-#include "AppositionSurfacePlugin.h"
-#include <Filter/AppositionSurfaceFilter.h>
+#include "CcboostSegmentationToolGroup.h"
+#include "CcboostSegmentationPlugin.h"
+#include <Filter/CcboostSegmentationFilter.h>
 
 // EspINA
 #include <GUI/Model/Utils/QueryAdapter.h>
 #include <Undo/AddCategoryCommand.h>
 #include <Undo/AddRelationCommand.h>
 #include <Undo/AddSegmentations.h>
+#include <Core/Utils/AnalysisUtils.h>
 
 // Qt
 #include <QApplication>
@@ -41,47 +42,47 @@
 using namespace EspINA;
 
 //-----------------------------------------------------------------------------
-AppositionSurfaceToolGroup::AppositionSurfaceToolGroup(ModelAdapterSPtr model,
+CcboostSegmentationToolGroup::CcboostSegmentationToolGroup(ModelAdapterSPtr model,
                                                        QUndoStack      *undoStack,
                                                        ModelFactorySPtr factory,
                                                        ViewManagerSPtr viewManager,
-                                                       AppositionSurfacePlugin *plugin)
-: ToolGroup(viewManager, QIcon(":/AppSurface.svg"), tr("Apposition Surface Tools"), nullptr)
+                                                       CcboostSegmentationPlugin *plugin)
+: ToolGroup(viewManager, QIcon(":/AppSurface.svg"), tr("ccboost synapse segmentation"), nullptr)
 , m_model    {model}
 , m_factory  {factory}
 , m_undoStack{undoStack}
-, m_tool     {SASToolSPtr{new AppositionSurfaceTool{QIcon(":/AppSurface.svg"), tr("Create a synaptic apposition surface from selected segmentations.")}}}
+, m_tool     {SASToolSPtr{new CcboostSegmentationTool{QIcon(":/AppSurface.svg"), tr("Create a synaptic ccboost segmentation from selected segmentations.")}}}
 , m_enabled  {true}
 , m_plugin   {plugin}
 {
-  m_tool->setToolTip("Create a synaptic apposition surface from selected segmentations.");
+  m_tool->setToolTip("Create a synaptic ccboost segmentation from selected segmentations.");
   connect(m_tool.get(), SIGNAL(triggered()), this, SLOT(createSAS()));
 
   connect(viewManager->selection().get(), SIGNAL(selectionChanged()), this, SLOT(selectionChanged()));
 }
 
 //-----------------------------------------------------------------------------
-AppositionSurfaceToolGroup::~AppositionSurfaceToolGroup()
+CcboostSegmentationToolGroup::~CcboostSegmentationToolGroup()
 {
   disconnect(m_tool.get(), SIGNAL(triggered()), this, SLOT(createSAS()));
   disconnect(m_viewManager->selection().get(), SIGNAL(selectionChanged()), this, SLOT(selectionChanged()));
 }
 
 //-----------------------------------------------------------------------------
-void AppositionSurfaceToolGroup::setEnabled(bool enable)
+void CcboostSegmentationToolGroup::setEnabled(bool enable)
 {
   m_enabled = enable;
   selectionChanged();
 }
 
 //-----------------------------------------------------------------------------
-bool AppositionSurfaceToolGroup::enabled() const
+bool CcboostSegmentationToolGroup::enabled() const
 {
   return m_enabled;
 }
 
 //-----------------------------------------------------------------------------
-ToolSList AppositionSurfaceToolGroup::tools()
+ToolSList CcboostSegmentationToolGroup::tools()
 {
   ToolSList tools;
 
@@ -91,9 +92,9 @@ ToolSList AppositionSurfaceToolGroup::tools()
 }
 
 //-----------------------------------------------------------------------------
-void AppositionSurfaceToolGroup::selectionChanged()
+void CcboostSegmentationToolGroup::selectionChanged()
 {
-  QString toolTip("Create a synaptic apposition surface from selected segmentations.");
+  QString toolTip("Create a synaptic ccboost segmentation from selected segmentations.");
   bool enabled = false;
 
   for(auto segmentation: m_viewManager->selection()->segmentations())
@@ -113,67 +114,82 @@ void AppositionSurfaceToolGroup::selectionChanged()
 }
 
 //-----------------------------------------------------------------------------
-void AppositionSurfaceToolGroup::createSAS()
+void CcboostSegmentationToolGroup::createSAS()
 {
-  auto segmentations = m_viewManager->selection()->segmentations();
+  auto segmentations = m_model->segmentations();
   SegmentationAdapterList validSegmentations;
   for(auto seg: segmentations)
   {
-    if (m_plugin->isSynapse(seg))
-    {
-      bool valid = true;
-      for (auto item : m_model->relatedItems(seg, RELATION_OUT))
-        if (item->type() == ItemAdapter::Type::SEGMENTATION)
-        {
-          SegmentationAdapterSPtr sasCandidate = std::dynamic_pointer_cast<SegmentationAdapter>(item);
-          if (sasCandidate->category()->classificationName().startsWith("SAS/") ||
-              sasCandidate->category()->classificationName().compare("SAS") == 0)
-          {
-            valid = false;
-          }
-        }
-
-      if (valid)
-        validSegmentations << seg;
-    }
+          //TODO espina2
+//      QStringList tags = SegmentationTags::extension(seg.get())->tags();
+//          if(tags.contains(SynapseDetectionFilter::POSITIVETAG + SynapseDetectionFilter::ELEMENT, Qt::CaseInsensitive) ||
+//             tags.contains(SynapseDetectionFilter::NEGATIVETAG + SynapseDetectionFilter::ELEMENT, Qt::CaseInsensitive)){
+//              validSegmentations << seg;
+//          }
   }
 
-  if(validSegmentations.empty())
-  {
-    QMessageBox::information(nullptr, tr("EspINA"), tr("Selected Synapses already have an associated Apposittion Surface."));
-    return;
+  if(validSegmentations.isEmpty()){
+//TODO espina2
+//      qDebug() << "No tags named " << SynapseDetectionFilter::POSITIVETAG << SynapseDetectionFilter::ELEMENT << " and "
+//               << SynapseDetectionFilter::NEGATIVETAG << SynapseDetectionFilter::ELEMENT << " found, using category name "
+//               << SynapseDetectionFilter::ELEMENT << " and " << SynapseDetectionFilter::BACKGROUND;
+
+      //TODO add tag automatically
+      for(auto seg: segmentations) {
+          //TODO espina2 const the string
+//          if (seg->taxonomy()->qualifiedName().contains(SynapseDetectionFilter::ELEMENT, Qt::CaseInsensitive)
+        if (seg->category()->classificationName().contains("Synapse", Qt::CaseInsensitive)
+         || seg->category()->classificationName().contains("Background", Qt::CaseInsensitive))
+          validSegmentations << seg.get(); //invalid if the shared pointer goes out of scope
+      }
   }
+
+  InputSPtr channelInput;
+  InputSList inputs;
+
+  if(m_viewManager->activeChannel() != NULL)
+      channelInput = m_viewManager->activeChannel()->asInput();
+  else
+      channelInput = m_model->channels().at(0)->asInput();
+
+  qDebug() << "Using channel " << m_viewManager->activeChannel()->data(Qt::DisplayRole);
+
+  inputs << channelInput;
 
   for(auto seg: validSegmentations)
   {
-    InputSList inputs;
     inputs << seg->asInput();
-
-    auto adapter = m_factory->createFilter<AppositionSurfaceFilter>(inputs, AS_FILTER);
-
-    struct AppositionSurfacePlugin::Data data(adapter, m_model->smartPointer(seg));
-    m_plugin->m_executingTasks.insert(adapter.get(), data);
-
-    connect(adapter.get(), SIGNAL(finished()), m_plugin, SLOT(finishedTask()));
-    adapter->submit();
   }
+  auto adapter = m_factory->createFilter<CcboostSegmentationFilter>(inputs, AS_FILTER);
+
+  //TODO espina2. this is a überdirty hack to get the segmentations inside the filter
+  //TODO find out how to do it properly
+  auto filter = adapter.get()->get().get();
+  filter->m_groundTruthSegList = validSegmentations;
+  filter->m_backgroundGroundTruthSegList = validSegmentations;
+  struct CcboostSegmentationPlugin::Data data(adapter, m_model->smartPointer(validSegmentations.at(0)));
+  m_plugin->m_executingTasks.insert(adapter.get(), data);
+
+  connect(adapter.get(), SIGNAL(finished()), m_plugin, SLOT(finishedTask()));
+  adapter->submit();
+
 }
 
 //-----------------------------------------------------------------------------
-AppositionSurfaceTool::AppositionSurfaceTool(const QIcon& icon, const QString& text)
+CcboostSegmentationTool::CcboostSegmentationTool(const QIcon& icon, const QString& text)
 : m_action {new QAction{icon, text, nullptr}}
 {
   connect(m_action, SIGNAL(triggered()), this, SLOT(activated()));
 }
 
 //-----------------------------------------------------------------------------
-AppositionSurfaceTool::~AppositionSurfaceTool()
+CcboostSegmentationTool::~CcboostSegmentationTool()
 {
   disconnect(m_action, SIGNAL(triggered()), this, SLOT(activated()));
 }
 
 //-----------------------------------------------------------------------------
-QList<QAction *> AppositionSurfaceTool::actions() const
+QList<QAction *> CcboostSegmentationTool::actions() const
 {
   QList<QAction *> actions;
   actions << m_action;

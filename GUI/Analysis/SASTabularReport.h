@@ -22,7 +22,7 @@
 #define SAS_TABULAR_REPORT_H_
 
 // Plugin
-#include <Core/Extensions/AppositionSurfaceExtension.h>
+#include <Core/Extensions/CcboostSegmentationExtension.h>
 
 // EspINA
 #include <App/Dialogs/TabularReport/TabularReport.h>
@@ -51,7 +51,7 @@ namespace EspINA
                        Qt::WindowFlags  flags = Qt::WindowFlags{Qt::WindowNoState})
       : TabularReport(factory, viewManager, parent, flags)
       , m_model{model}
-      , m_sasTags{factory->createSegmentationExtension(AppositionSurfaceExtension::TYPE)->availableInformations()}
+      , m_sasTags{factory->createSegmentationExtension(CcboostSegmentationExtension::TYPE)->availableInformations()}
       {};
 
       protected slots:

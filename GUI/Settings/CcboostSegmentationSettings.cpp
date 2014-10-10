@@ -1,12 +1,12 @@
 /*
- * AppositionSurfaceSettings.cpp
+ * CcboostSegmentationSettings.cpp
  *
  *  Created on: Jan 16, 2013
  *      Author: Felix de las Pozas Alvarez
  */
 
 // EspINA
-#include "AppositionSurfaceSettings.h"
+#include "CcboostSegmentationSettings.h"
 #include <Support/Settings/EspinaSettings.h>
 
 // Qt
@@ -17,12 +17,12 @@ namespace EspINA
 {
   
   //-----------------------------------------------------------------------------
-  AppositionSurfaceSettings::AppositionSurfaceSettings()
+  CcboostSegmentationSettings::CcboostSegmentationSettings()
   {
     setupUi(this);
 
     QSettings settings(CESVIMA, ESPINA);
-    settings.beginGroup("Apposition Surface");
+    settings.beginGroup("ccboost segmentation");
 
     if (settings.contains("Automatic Computation For Synapses"))
       m_automaticComputation = settings.value("Automatic Computation For Synapses").toBool();
@@ -40,39 +40,39 @@ namespace EspINA
   }
 
   //-----------------------------------------------------------------------------
-  void AppositionSurfaceSettings::changeDefaultComputation(int value)
+  void CcboostSegmentationSettings::changeDefaultComputation(int value)
   {
     m_automaticComputation = (Qt::Checked == value ? true : false);
     m_modified = true;
   }
 
   //-----------------------------------------------------------------------------
-  void AppositionSurfaceSettings::acceptChanges()
+  void CcboostSegmentationSettings::acceptChanges()
   {
     if (!m_modified)
       return;
 
     QSettings settings(CESVIMA, ESPINA);
-    settings.beginGroup("Apposition Surface");
+    settings.beginGroup("ccboost segmentation");
     settings.setValue("Automatic Computation For Synapses", m_automaticComputation);
     settings.sync();
   }
 
   //-----------------------------------------------------------------------------
-  void AppositionSurfaceSettings::rejectChanges()
+  void CcboostSegmentationSettings::rejectChanges()
   {
   }
 
   //-----------------------------------------------------------------------------
-  bool AppositionSurfaceSettings::modified() const
+  bool CcboostSegmentationSettings::modified() const
   {
     return m_modified;
   }
 
   //-----------------------------------------------------------------------------
-  SettingsPanelPtr AppositionSurfaceSettings::clone()
+  SettingsPanelPtr CcboostSegmentationSettings::clone()
   {
-    return new AppositionSurfaceSettings();
+    return new CcboostSegmentationSettings();
   }
 
 } /* namespace EspINA */
