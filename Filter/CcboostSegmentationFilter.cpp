@@ -8,6 +8,23 @@
 // Plugin
 #include "CcboostSegmentationFilter.h"
 
+//ccboost
+#include "ROIData.h"
+#include "BoosterInputData.h"
+#include "ContextFeatures/ContextRelativePoses.h"
+
+#include "Booster.h"
+#include "utils/TimerRT.h"
+
+#include "EigenOfStructureTensorImageFilter2.h"
+#include "GradientMagnitudeImageFilter2.h"
+#include "SingleEigenVectorOfHessian2.h"
+#include "RepolarizeYVersorWithGradient2.h"
+#include "AllEigenVectorsOfHessian2.h"
+#include <itkTestingHashImageFilter.h>
+
+#include "SplitterImageFilter.h"
+
 // EspINA
 #include <Core/Analysis/Segmentation.h>
 #include <Core/Analysis/Data/MeshData.h>
@@ -42,6 +59,7 @@
 const double UNDEFINED = -1.;
 
 using namespace EspINA;
+using namespace std;
 
 const QString SAS = "SAS";
 
@@ -115,6 +133,9 @@ void CcboostSegmentationFilter::execute()
   emit progress(0);
   if (!canExecute()) return;
 
+  //TODO do I have to put back the original locale?
+  std::setlocale(LC_NUMERIC, "C");
+
   m_inputChannel = volumetricData(m_inputs[0]->output())->itkImage();
   itkVolumeType::Pointer channelItk = m_inputChannel;
 
@@ -137,21 +158,38 @@ void CcboostSegmentationFilter::execute()
   emit progress(20);
   if (!canExecute()) return;
 
-  itkVolumeType::Pointer segmentedGroundTruth = mergeSegmentations(normalizedChannelItk, m_groundTruthSegList, m_groundTruthSegList);
-  //save itk image (volume) as binary/classed volume here
+  itkVolumeType::Pointer segmentedGroundTruth = mergeSegmentations(normalizedChannelItk, m_groundTruthSegList, m_backgroundGroundTruthSegList);
+
   WriterType::Pointer writer = WriterType::New();
-//TODO espina2
-//    if(ccboostconfig.saveIntermediateVolumes){
-//      writer->SetFileName(ccboostconfig.train.cacheDir + "labelmap.tif");
-    writer->SetFileName("labelmap2.tif");
-    writer->SetInput(segmentedGroundTruth);
-    writer->Update();
 
     //CCBOOST here
     //TODO add const-correctness
-   std::vector<itkVolumeType::Pointer> segmentedGroundTruthVector;
-   segmentedGroundTruthVector.push_back(segmentedGroundTruth);
-   itkVolumeType::Pointer coreOutputSegmentation = core(normalizedChannelItk, segmentedGroundTruthVector);
+
+    std::vector<itkVolumeType::Pointer> channels;
+    channels.push_back(normalizedChannelItk);
+   std::vector<itkVolumeType::Pointer> groundTruths;
+   groundTruths.push_back(segmentedGroundTruth);
+   itkVolumeType::Pointer coreOutputSegmentation;
+   try {
+       std::string cacheDir("./");
+       std::vector<std::string> featuresList{"hessOrient-s3.5-repolarized.nrrd",
+                                             "gradient-magnitude-s1.0.nrrd",
+                                             "gradient-magnitude-s1.6.nrrd",
+                                             "gradient-magnitude-s3.5.nrrd",
+                                             "gradient-magnitude-s5.0.nrrd",
+                                             "stensor-s0.5-r1.0.nrrd",
+                                             "stensor-s0.8-r1.6.nrrd",
+                                             "stensor-s1.8-r3.5.nrrd",
+                                             "stensor-s2.5-r5.0.nrrd"
+                                            };
+
+       MultipleROIData allROIs = preprocess(channels, groundTruths, cacheDir, featuresList);
+        coreOutputSegmentation = core(allROIs);
+   } catch( itk::ExceptionObject & err ) {
+       std::cerr << "ExceptionObject caught !" << std::endl;
+       std::cerr << err << std::endl;
+       return; // Since the goal of the example is to catch the exception, we declare this a success.
+   }
     //CCBOOST finished
 
   emit progress(50);
@@ -226,7 +264,7 @@ itkVolumeType::Pointer CcboostSegmentationFilter::mergeSegmentations(const itkVo
     segmentedGroundTruth->SetSpacing(channelItk->GetSpacing());
     segmentedGroundTruth->SetRegions(regionVolume);
     segmentedGroundTruth->Allocate();
-    segmentedGroundTruth->FillBuffer(100);
+    segmentedGroundTruth->FillBuffer(0);
 
     /*saving the segmentations*/
     for(auto seg: segList){
@@ -258,41 +296,42 @@ itkVolumeType::Pointer CcboostSegmentationFilter::mergeSegmentations(const itkVo
       //TODO instead of providing a binary image, use the segmentations map.
    }
 
-   typedef itk::MultiplyImageFilter<itkVolumeType, itkVolumeType, itkVolumeType> MultiplyImageFilterType;
-   MultiplyImageFilterType::Pointer multiplyImageFilter = MultiplyImageFilterType::New();
+    typedef itk::MultiplyImageFilter<itkVolumeType, itkVolumeType, itkVolumeType> MultiplyImageFilterType;
+    MultiplyImageFilterType::Pointer multiplyImageFilter = MultiplyImageFilterType::New();
 
-   for(auto seg: backgroundSegList){
+    for(auto seg: backgroundSegList){
 
-       DefaultVolumetricDataSPtr volume = volumetricData(seg->output());
-       itkVolumeType::Pointer segVolume = volume->itkImage();
+        DefaultVolumetricDataSPtr volume = volumetricData(seg->output());
+        itkVolumeType::Pointer segVolume = volume->itkImage();
 
-        typedef itk::PasteImageFilter <itkVolumeType > PasteImageFilterType;
+         typedef itk::PasteImageFilter <itkVolumeType > PasteImageFilterType;
 
-        itkVolumeType::IndexType destinationIndex = segVolume->GetLargestPossibleRegion().GetIndex();
+         itkVolumeType::IndexType destinationIndex = segVolume->GetLargestPossibleRegion().GetIndex();
 
-        multiplyImageFilter->SetInput(segVolume);
-        multiplyImageFilter->SetConstant(CCBOOSTBACKGROUNDLABEL);
-        multiplyImageFilter->UpdateLargestPossibleRegion();
+         multiplyImageFilter->SetInput(segVolume);
+         //multiplyImageFilter->SetConstant(CCBOOSTBACKGROUNDLABEL);
+         multiplyImageFilter->SetConstant(128);
+         multiplyImageFilter->UpdateLargestPossibleRegion();
 
-        //FIXME instead of pasting the image, pad it.
-        PasteImageFilterType::Pointer pasteFilter = PasteImageFilterType::New ();
-        pasteFilter->SetDestinationImage(segmentedGroundTruth);
-        pasteFilter->SetSourceImage(multiplyImageFilter->GetOutput());
-        pasteFilter->SetSourceRegion(multiplyImageFilter->GetOutput()->GetLargestPossibleRegion());
-        pasteFilter->SetDestinationIndex(destinationIndex);
-        pasteFilter->Update();
+         //FIXME instead of pasting the image, pad it.
+         PasteImageFilterType::Pointer pasteFilter = PasteImageFilterType::New ();
+         pasteFilter->SetDestinationImage(segmentedGroundTruth);
+         pasteFilter->SetSourceImage(multiplyImageFilter->GetOutput());
+         pasteFilter->SetSourceRegion(multiplyImageFilter->GetOutput()->GetLargestPossibleRegion());
+         pasteFilter->SetDestinationIndex(destinationIndex);
+         pasteFilter->Update();
 
-        typedef itk::OrImageFilter< itkVolumeType >  ProcessImageFilterType;
+         typedef itk::OrImageFilter< itkVolumeType >  ProcessImageFilterType;
 
-        ProcessImageFilterType::Pointer processFilter  = ProcessImageFilterType::New ();
-        processFilter->SetInput(1,pasteFilter->GetOutput());
-        processFilter->SetInput(0,segmentedGroundTruth);
-        processFilter->Update();
+         ProcessImageFilterType::Pointer processFilter  = ProcessImageFilterType::New ();
+         processFilter->SetInput(1,pasteFilter->GetOutput());
+         processFilter->SetInput(0,segmentedGroundTruth);
+         processFilter->Update();
 
-        segmentedGroundTruth = processFilter->GetOutput();
+         segmentedGroundTruth = processFilter->GetOutput();
 
-        //TODO instead of providing a binary image, use the segmentations map.
-    }
+         //TODO instead of providing a binary image, use the segmentations map.
+     }
 
     //save itk image (volume) as binary/classed volume here
     WriterType::Pointer writer = WriterType::New();
@@ -392,12 +431,176 @@ void CcboostSegmentationFilter::splitSegmentations(const itkVolumeType::Pointer 
     }
 }
 
-itkVolumeType::Pointer CcboostSegmentationFilter::core(const itkVolumeType::Pointer normalizedChannelItk,
-                                                       std::vector<itkVolumeType::Pointer> segmentedGroundTruthVector){
+void CcboostSegmentationFilter::computeFeatures(const itkVolumeType::Pointer volume,
+                                                const std::string cacheDir,
+                                                std::vector<std::string> featuresList,
+                                                float zAnisotropyFactor,
+                                                bool forceRecomputeFeatures){
+
+
+    //TODO can we give message with?
+    //setDescription();
+    emit progress(10);
+    if(!canExecute())
+        return;
+
+    stringstream strstream;
+
+    int featureNum = 0;
+    for( std::string featureFile: featuresList ) {
+
+       strstream.str(std::string());
+       featureNum++;
+       strstream << "Computing " << featureNum << "/" << featuresList.size()+1 << " features";
+       std::cout << strstream.str() << std::endl;
+       //stateDescription->setTime(strstream.str());
+
+       emit progress(10 + featureNum*50/(featuresList.size()+1));
+       if(!canExecute())
+           return;
+
+       std::string featureFilepath(cacheDir + featureFile);
+       ifstream featureStream(featureFilepath.c_str());
+       //TODO check hash to prevent recomputing
+       if(!featureStream.good() || forceRecomputeFeatures){
+           //TODO do this in a more flexible way
+           int stringPos;
+           if( (stringPos = featureFile.find(string("hessOrient-"))) != std::string::npos){
+               float sigma;
+               string filename(featureFile.substr(stringPos));
+               int result = sscanf(filename.c_str(),"hessOrient-s%f-repolarized.nrrd",&sigma);
+              //FIXME break if error
+               if(result < 0)
+                   qDebug() << "Error scanning feature name " << featureFile.c_str();
+
+               qDebug() << QString("Either you requested recomputing the features, "
+                                   "the current channel is new or has changed or "
+                                   "Hessian Orient Estimate feature not found at "
+                                   "path: %2. Creating with sigma %1").arg(sigma).arg(QString::fromStdString(featureFilepath));
+
+                                                                                                                                                                                            AllEigenVectorsOfHessian2Execute(sigma, volume, featureFilepath, EByMagnitude, zAnisotropyFactor);
+
+               RepolarizeYVersorWithGradient2Execute(sigma, volume, featureFilepath, featureFilepath, zAnisotropyFactor);
+
+          } else if ( (stringPos = featureFile.find(std::string("gradient-magnitude"))) != std::string::npos ) {
+               float sigma;
+               string filename(featureFile.substr(stringPos));
+               int result = sscanf(filename.c_str(),"gradient-magnitude-s%f.nrrd",&sigma);
+               if(result < 0)
+                   qDebug() << "Error scanning feature name " << featureFile.c_str();
+
+               qDebug() << QString("Current  or channel is new or has changed or gradient magnitude feature not found at path: %2. Creating with sigma %1").arg(sigma).arg(QString::fromStdString(featureFilepath));
+
+               GradientMagnitudeImageFilter2Execute(sigma, volume, featureFilepath, zAnisotropyFactor);
+
+           } else if( (stringPos = featureFile.find(std::string("stensor"))) != std::string::npos ) {
+               float rho,sigma;
+               string filename(featureFile.substr(stringPos));
+               int result = sscanf(filename.c_str(),"stensor-s%f-r%f.nrrd",&sigma,&rho);
+               if(result < 0)
+                   qDebug() << "Error scanning feature name" << featureFile.c_str();
+
+               qDebug() << QString("Current channel is new or has changed or tensor feature not found at path %3. Creating with rho %1 and sigma %2").arg(rho).arg(sigma).arg(QString::fromStdString(featureFilepath));
+
+               bool sortByMagnitude = true;
+               EigenOfStructureTensorImageFilter2Execute(sigma, rho, volume, featureFilepath, sortByMagnitude, zAnisotropyFactor );
+
+           } else {
+               qDebug() << QString("feature %1 is not recognized.").arg(featureFile.c_str()).toUtf8();
+           }
+       }
+    }
+
+//    stateDescription->setMessage("Features computed");
+//    stateDescription->setTime("");
+}
+
+MultipleROIData CcboostSegmentationFilter::preprocess(std::vector<itkVolumeType::Pointer> channels,
+                                                      std::vector<itkVolumeType::Pointer> groundTruths,
+                                                      std::string cacheDir,
+                                                      std::vector<std::string> featuresList){
+
+    MultipleROIData allROIs;
+
+//    for(auto imgItk: channels) {
+//        for(auto gtItk: groundTruths) {
+    {
+            Matrix3D<ImagePixelType> img, gt;
+
+            img.loadItkImage(channels.at(0), true);
+
+            gt.loadItkImage(groundTruths.at(0), true);
+
+            ROIData roi;
+            roi.init( img.data(), gt.data(), 0, 0, img.width(), img.height(), img.depth() );
+
+            // raw image integral image
+            ROIData::IntegralImageType ii;
+            ii.compute( img );
+            roi.addII( ii.internalImage().data() );
+
+            //features
+            //check hash
+            int zAnisotropyFactor = 1;
+            computeFeatures(channels.at(0), cacheDir, featuresList, zAnisotropyFactor, false);
+            for(std::string featureItk: featuresList){
+                Matrix3D<ImagePixelType> feature;
+                feature.load(cacheDir + featureItk);
+
+                // raw image integral image
+                ROIData::IntegralImageType ii;
+                ii.compute( feature );
+                roi.addII( ii.internalImage().data() );
+            }
+
+            allROIs.add( &roi );
+
+    }
+
+//        }
+//    }
 
 
 
-    itkVolumeType::Pointer coreOutputSegmentation = segmentedGroundTruthVector.at(0);
+            return allROIs;
+}
+
+itkVolumeType::Pointer CcboostSegmentationFilter::core(MultipleROIData allROIs) {
+    qDebug() << "running core plugin";
+
+    BoosterInputData bdata;
+    bdata.init( &allROIs );
+    bdata.showInfo();
+
+    Booster adaboost;
+
+    qDebug() << "training";
+
+    adaboost.train( bdata, 100 );
+
+    qDebug() << "predict";
+
+    // predict
+    Matrix3D<float> predImg;
+    TimerRT timer; timer.reset();
+    adaboost.predict( &allROIs, &predImg );
+    qDebug("Elapsed: %f", timer.elapsed());
+    predImg.save("/tmp/test.nrrd");
+
+    // save JSON model
+    if (!adaboost.saveModelToFile( "/tmp/model.json" ))
+        std::cout << "Error saving JSON model" << std::endl;
+
+    auto outputSegmentation = predImg.asItkImage();
+
+    //TODO not sure why the types are different
+        typedef itk::ImageToImageFilter < Matrix3D<float>::ItkImageType, itkVolumeType > ConvertFilterType;
+
+        ConvertFilterType::Pointer convertFilter = (ConvertFilterType::New()).GetPointer();
+        convertFilter->SetInput(outputSegmentation);
+        convertFilter->Update();
+
+    itkVolumeType::Pointer coreOutputSegmentation = convertFilter->GetOutput();
     return coreOutputSegmentation;
 
 }

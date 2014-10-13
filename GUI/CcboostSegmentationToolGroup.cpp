@@ -118,6 +118,7 @@ void CcboostSegmentationToolGroup::createSAS()
 {
   auto segmentations = m_model->segmentations();
   SegmentationAdapterList validSegmentations;
+  SegmentationAdapterList validBgSegmentations;
   for(auto seg: segmentations)
   {
           //TODO espina2
@@ -138,9 +139,10 @@ void CcboostSegmentationToolGroup::createSAS()
       for(auto seg: segmentations) {
           //TODO espina2 const the string
 //          if (seg->taxonomy()->qualifiedName().contains(SynapseDetectionFilter::ELEMENT, Qt::CaseInsensitive)
-        if (seg->category()->classificationName().contains("Synapse", Qt::CaseInsensitive)
-         || seg->category()->classificationName().contains("Background", Qt::CaseInsensitive))
+        if (seg->category()->classificationName().contains("Synapse", Qt::CaseInsensitive))
           validSegmentations << seg.get(); //invalid if the shared pointer goes out of scope
+        else if(seg->category()->classificationName().contains("Background", Qt::CaseInsensitive))
+            validBgSegmentations << seg.get();
       }
   }
 
@@ -156,6 +158,8 @@ void CcboostSegmentationToolGroup::createSAS()
 
   inputs << channelInput;
 
+
+  //TODO espina2 remove this segmentation input dependency
   for(auto seg: validSegmentations)
   {
     inputs << seg->asInput();
@@ -166,7 +170,7 @@ void CcboostSegmentationToolGroup::createSAS()
   //TODO find out how to do it properly
   auto filter = adapter.get()->get().get();
   filter->m_groundTruthSegList = validSegmentations;
-  filter->m_backgroundGroundTruthSegList = validSegmentations;
+  filter->m_backgroundGroundTruthSegList = validBgSegmentations;
   struct CcboostSegmentationPlugin::Data data(adapter, m_model->smartPointer(validSegmentations.at(0)));
   m_plugin->m_executingTasks.insert(adapter.get(), data);
 

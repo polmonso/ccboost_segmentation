@@ -30,6 +30,37 @@ endif ()
 
   find_package(XLSLIB REQUIRED)
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
+
+# ccboost
+include_directories( Core/auxItk )
+
+set(auxItkFilters Core/auxItk/GradientMagnitudeImageFilter2.cxx
+                  Core/auxItk/AllEigenVectorsOfHessian2.cxx
+                  Core/auxItk/RepolarizeYVersorWithGradient2.cxx
+                  Core/auxItk/EigenOfStructureTensorImageFilter2.cxx
+#FIXME header-cpp please
+                  Core/auxItk/SplitterImageFilter.h)
+
+
+set( iiboost_SOURCE_DIR Core/iiboost )
+add_subdirectory( ${iiboost_SOURCE_DIR} )
+
+include_directories( ${iiboost_SOURCE_DIR} )
+include_directories( ${iiboost_SOURCE_DIR}/extra )
+include_directories( ${iiboost_SOURCE_DIR}/deps/eigen )
+include_directories( ${iiboost_SOURCE_DIR}/deps/rapidjson/include )
+
+# RANDOMLIB
+set(RANDOMLIB_DESTPATH "${CMAKE_BINARY_DIR}/randomlib")
+set(RANDOMLIB_LIB "${RANDOMLIB_DESTPATH}/lib/libRandom.a")
+set(RANDOMLIB_INCPATH "${RANDOMLIB_DESTPATH}/include")
+include_directories(${RANDOMLIB_INCPATH})
+# RANDOMLIB
+
+#ccboost
+
+
 include_directories (
   ${CMAKE_SOURCE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}
@@ -73,6 +104,7 @@ set (PLUGIN_SOURCES
   GUI/CcboostSegmentationToolGroup.cpp
   GUI/Settings/CcboostSegmentationSettings.cpp
 #  GUI/FilterInspector/CcboostSegmentationFilterInspector.cpp
+  ${auxItkFilters}
 )
 
 set (PLUGIN_LIBRARIES

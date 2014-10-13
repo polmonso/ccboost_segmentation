@@ -10,6 +10,10 @@
 
 #include "CcboostSegmentationPlugin_Export.h"
 
+//ccboost
+#include <QDebug>
+#include "BoosterInputData.h"
+
 // EspINA
 #include <Filters/BasicSegmentationFilter.h>
 #include <GUI/Representations/MeshRepresentation.h>
@@ -183,9 +187,20 @@ namespace EspINA
     void splitSegmentations(const itkVolumeType::Pointer outputSegmentation,
                             std::vector<itkVolumeType::Pointer>& outSegList);
 
+    MultipleROIData preprocess(std::vector<itkVolumeType::Pointer> channels,
+                               std::vector<itkVolumeType::Pointer> groundTruths,
+                               std::string cacheDir,
+                               std::vector<std::string> featuresList);
+
+
+    void computeFeatures(const itkVolumeType::Pointer volume,
+                         const std::string cacheDir,
+                         std::vector<std::string> featuresList,
+                         float zAnisotropyFactor,
+                         bool forceRecomputeFeatures);
+
     //TODO add const-correctness
-    itkVolumeType::Pointer core(const itkVolumeType::Pointer normalizedChannelItk,
-                                std::vector<itkVolumeType::Pointer> segmentedGroundTruthVector);
+    itkVolumeType::Pointer core(MultipleROIData allROIs);
 
   public:
     //TODO espina2. this is a hack to get the segmentations in the filter.
