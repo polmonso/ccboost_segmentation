@@ -15,38 +15,19 @@
 #include "BoosterInputData.h"
 
 // EspINA
+#include <Core/EspinaTypes.h>
 #include <Filters/BasicSegmentationFilter.h>
 #include <GUI/Representations/MeshRepresentation.h>
 
 #include <Core/Analysis/Data/Mesh/MarchingCubesMesh.hxx>
+#include <Filter/ConfigData.h>
 
 // ITK
 #include <itkImageFileWriter.h>
-#include <itkBinaryBallStructuringElement.h>
-#include <itkImageToImageFilter.h>
-#include <itkImageMaskSpatialObject.h>
-#include <itkChangeInformationImageFilter.h>
-#include <itkConnectedComponentImageFilter.h>
-#include <itkImageRegionIterator.h>
-#include <itkBinaryImageToLabelMapFilter.h>
-#include <itkRelabelComponentImageFilter.h>
-#include <itkBinaryErodeImageFilter.h>
-#include <itkGradientImageFilter.h>
-#include <itkImageRegionConstIterator.h>
-#include <itkSignedMaurerDistanceMapImageFilter.h>
-#include <itkImageToVTKImageFilter.h>
-#include <itkSmoothingRecursiveGaussianImageFilter.h>
-#include <itkImageFileWriter.h>
-#include <itkPasteImageFilter.h>
-#include <itkOrImageFilter.h>
-#include <itkMultiplyImageFilter.h>
 
 #include <itkConstantPadImageFilter.h>
-#include <itkExtractImageFilter.h>
 #include <itkGradientImageFilter.h>
-#include <itkImageRegionConstIterator.h>
 #include <itkSignedMaurerDistanceMapImageFilter.h>
-#include <itkImageToVTKImageFilter.h>
 #include <itkSmoothingRecursiveGaussianImageFilter.h>
 
 // VTK
@@ -66,6 +47,8 @@ class QString;
 namespace EspINA
 {
   class SASFetchBehaviour;
+  //FIXME do I have to put this here?
+  //typedef itk::Image<unsigned char, 3> itkVolumeType;
 
   const Filter::Type AS_FILTER = "CcboostSegmentation::CcboostSegmentationFilter";
 
@@ -80,7 +63,7 @@ namespace EspINA
     static constexpr float    CLIPPINGTHRESHOLD         = 0.5;
     static constexpr float    DISTANCESMOOTHSIGMAFACTOR = 0.67448; // probit(0.25)
 
-    using WriterType = itk::ImageFileWriter< itkVolumeType >;
+    typedef itk::ImageFileWriter< itkVolumeType > WriterType;
     using bigVolumeType = itk::Image<unsigned short, 3>;
     using BigWriterType = itk::ImageFileWriter< bigVolumeType >;
 
@@ -120,6 +103,14 @@ namespace EspINA
 
     static const char * MESH_ORIGIN;
     static const char * MESH_NORMAL;
+
+    static const QString MITOCHONDRIA;
+    static const QString SYNAPSE;
+    static QString ELEMENT;
+    static const QString POSITIVETAG;
+    static const QString NEGATIVETAG;
+
+    ConfigData<itkVolumeType> ccboostconfig;
 
   public:
     explicit CcboostSegmentationFilter(InputSList inputs, Type type, SchedulerSPtr scheduler);
@@ -181,26 +172,15 @@ namespace EspINA
     virtual void inputModified();
 
   private:
+
+    bool enoughGroundTruth();
+    bool enoughMemory(const itkVolumeType::Pointer channelItk, const itkVolumeType::RegionType annotatedRegion, unsigned int & numPredictRegions);
+
     itkVolumeType::Pointer mergeSegmentations(const itkVolumeType::Pointer channelItk,
-                                              const SegmentationAdapterList segList,
-                                              const SegmentationAdapterList backgroundSegList);
-    void splitSegmentations(const itkVolumeType::Pointer outputSegmentation,
-                            std::vector<itkVolumeType::Pointer>& outSegList);
+                                                const SegmentationAdapterList segList,
+                                                const SegmentationAdapterList backgroundSegList);
+    static void applyEspinaSettings(ConfigData<itkVolumeType> cfgdata);
 
-    MultipleROIData preprocess(std::vector<itkVolumeType::Pointer> channels,
-                               std::vector<itkVolumeType::Pointer> groundTruths,
-                               std::string cacheDir,
-                               std::vector<std::string> featuresList);
-
-
-    void computeFeatures(const itkVolumeType::Pointer volume,
-                         const std::string cacheDir,
-                         std::vector<std::string> featuresList,
-                         float zAnisotropyFactor,
-                         bool forceRecomputeFeatures);
-
-    //TODO add const-correctness
-    itkVolumeType::Pointer core(MultipleROIData allROIs);
 
   public:
     //TODO espina2. this is a hack to get the segmentations in the filter.
@@ -213,6 +193,8 @@ namespace EspINA
     int m_iterations;
     bool m_converge;
     mutable PolyData m_ap;
+
+    unsigned int memoryAvailableMB;
 
     itkVolumeType::Pointer m_inputSegmentation;
     itkVolumeType::Pointer m_inputChannel;

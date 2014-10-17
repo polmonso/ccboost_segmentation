@@ -40,6 +40,7 @@ set(auxItkFilters Core/auxItk/GradientMagnitudeImageFilter2.cxx
                   Core/auxItk/RepolarizeYVersorWithGradient2.cxx
                   Core/auxItk/EigenOfStructureTensorImageFilter2.cxx
 #FIXME header-cpp please
+                  #Core/auxItk/SimpleProcessing.h
                   Core/auxItk/SplitterImageFilter.h)
 
 
@@ -58,7 +59,7 @@ set(RANDOMLIB_INCPATH "${RANDOMLIB_DESTPATH}/include")
 include_directories(${RANDOMLIB_INCPATH})
 # RANDOMLIB
 
-#ccboost
+#ccboost done
 
 
 include_directories (
@@ -77,14 +78,18 @@ qt4_wrap_ui (UI_BUILT_SOURCES
   ${ESPINA_INCLUDE}/App/Dialogs/TabularReport/TabularReportEntry.ui
   GUI/Settings/CcboostSegmentationSettings.ui
 #  GUI/FilterInspector/CcboostSegmentationFilterInspector.ui
-  )
+  GUI/extras/waitform.ui
+)
 
 QT4_WRAP_CPP(MOC_SOURCES
   CcboostSegmentationPlugin.h
   Filter/CcboostSegmentationFilter.h
+  Filter/CcboostSegmentationFilterThread.h
   GUI/Settings/CcboostSegmentationSettings.h
   GUI/CcboostSegmentationToolGroup.h
 #  GUI/FilterInspector/CcboostSegmentationFilterInspector.h
+
+  GUI/extras/waitform.h
 
   OPTIONS -DBOOST_TT_HAS_OPERATOR_HPP_INCLUDED
 )
@@ -96,6 +101,7 @@ set (PLUGIN_SOURCES
   CcboostSegmentationPlugin.cpp
   Core/Extensions/CcboostSegmentationExtension.cpp
   Core/Extensions/ExtensionFactory.cpp
+  Filter/CcboostAdapter.cpp
   Filter/CcboostSegmentationFilter.cpp
   Filter/SASFetchBehaviour.cpp
   GUI/Analysis/SASAnalysisDialog.cpp
@@ -104,6 +110,7 @@ set (PLUGIN_SOURCES
   GUI/CcboostSegmentationToolGroup.cpp
   GUI/Settings/CcboostSegmentationSettings.cpp
 #  GUI/FilterInspector/CcboostSegmentationFilterInspector.cpp
+  GUI/extras/waitform.cpp
   ${auxItkFilters}
 )
 
@@ -114,6 +121,8 @@ set (PLUGIN_LIBRARIES
   EspinaSupport
   vtkInfovisCore
   ${XLSLIB_LIBRARIES}
+  ${ITK_LIBRARIES}
+  ${RANDOMLIB_LIB}
   )
 
 if(MINGW)

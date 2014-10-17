@@ -8,23 +8,12 @@
 // Plugin
 #include "CcboostSegmentationFilter.h"
 
-//ccboost
-#include "ROIData.h"
-#include "BoosterInputData.h"
-#include "ContextFeatures/ContextRelativePoses.h"
+#include "CcboostSegmentationFilterThread.h"
 
-#include "Booster.h"
-#include "utils/TimerRT.h"
-
-#include "EigenOfStructureTensorImageFilter2.h"
-#include "GradientMagnitudeImageFilter2.h"
-#include "SingleEigenVectorOfHessian2.h"
-#include "RepolarizeYVersorWithGradient2.h"
-#include "AllEigenVectorsOfHessian2.h"
 #include <itkTestingHashImageFilter.h>
 
 #include "SplitterImageFilter.h"
-
+#include "GUI/extras/waitform.h"
 // EspINA
 #include <Core/Analysis/Segmentation.h>
 #include <Core/Analysis/Data/MeshData.h>
@@ -36,6 +25,38 @@
 // Qt
 #include <QtGlobal>
 #include <QMessageBox>
+#include <QSettings>
+#include <Support/Settings/EspinaSettings.h>
+
+
+// ITK
+#include <itkImageDuplicator.h>
+#include <itkBinaryBallStructuringElement.h>
+#include <itkImageToImageFilter.h>
+#include <itkImageMaskSpatialObject.h>
+#include <itkChangeInformationImageFilter.h>
+#include <itkConnectedComponentImageFilter.h>
+#include <itkImageRegionIterator.h>
+#include <itkBinaryImageToLabelMapFilter.h>
+#include <itkRelabelComponentImageFilter.h>
+#include <itkBinaryErodeImageFilter.h>
+#include <itkGradientImageFilter.h>
+#include <itkImageRegionConstIterator.h>
+#include <itkSignedMaurerDistanceMapImageFilter.h>
+#include <itkImageToVTKImageFilter.h>
+#include <itkSmoothingRecursiveGaussianImageFilter.h>
+#include <itkImageFileWriter.h>
+#include <itkPasteImageFilter.h>
+#include <itkOrImageFilter.h>
+#include <itkMultiplyImageFilter.h>
+
+#include <itkConstantPadImageFilter.h>
+#include <itkExtractImageFilter.h>
+#include <itkGradientImageFilter.h>
+#include <itkImageRegionConstIterator.h>
+#include <itkSignedMaurerDistanceMapImageFilter.h>
+#include <itkImageToVTKImageFilter.h>
+#include <itkSmoothingRecursiveGaussianImageFilter.h>
 
 // VTK
 #include <vtkMath.h>
@@ -55,6 +76,8 @@
 #include <vtkGenericDataObjectReader.h>
 #include <vtkPlane.h>
 #include <vtkDoubleArray.h>
+
+#include <sys/sysinfo.h>
 
 const double UNDEFINED = -1.;
 
@@ -77,6 +100,25 @@ CcboostSegmentationFilter::CcboostSegmentationFilter(InputSList inputs, Type typ
 , m_lastModifiedMesh  {0}
 {
   setDescription(tr("Compute SAS"));
+
+#ifdef __unix
+  struct sysinfo info;
+  sysinfo(&info);
+  memoryAvailableMB = info.totalram/1024/1024;
+
+  //TODO FIXME quick test of limited memory resources.
+ // memoryAvailableMB = 6000;
+
+  if(memoryAvailableMB == 0){
+      memoryAvailableMB = numeric_limits<unsigned int>::max();
+      QMessageBox::warning(NULL,"RAM Memory check", QString("The amount of RAM memory couldn't be detected or very low (info.totalram = %1 Bytes). "
+                                                            "Running the Synapse Segmentation Plugin might lead to crash").arg(info.totalram));
+  }
+#else
+  memoryAvailableMB = numeric_limits<unsigned int>::max();
+  QMessageBox::warning(NULL,"RAM Memory check", "The amount of RAM memory couldn't be detected."
+                       "Running the Synapse Segmentation Plugin might lead to crash");
+#endif
 }
 
 //----------------------------------------------------------------------------
@@ -141,6 +183,9 @@ void CcboostSegmentationFilter::execute()
 
   m_inputSegmentation = volumetricData(m_inputs[1]->output())->itkImage();
 
+  if(!enoughGroundTruth())
+      return;
+
   typedef itk::ChangeInformationImageFilter< itkVolumeType > ChangeInformationFilterType;
   ChangeInformationFilterType::Pointer normalizeFilter = ChangeInformationFilterType::New();
   normalizeFilter->SetInput(channelItk);
@@ -158,71 +203,110 @@ void CcboostSegmentationFilter::execute()
   emit progress(20);
   if (!canExecute()) return;
 
-  itkVolumeType::Pointer segmentedGroundTruth = mergeSegmentations(normalizedChannelItk, m_groundTruthSegList, m_backgroundGroundTruthSegList);
+  itkVolumeType::Pointer segmentedGroundTruth = mergeSegmentations(normalizedChannelItk,
+                                                                   m_groundTruthSegList,
+                                                                   m_backgroundGroundTruthSegList);
+
+  //Get bounding box of annotated data
+    typedef itk::ImageMaskSpatialObject< 3 > ImageMaskSpatialObjectType;
+    ImageMaskSpatialObjectType::Pointer
+      imageMaskSpatialObject  = ImageMaskSpatialObjectType::New();
+    imageMaskSpatialObject->SetImage ( segmentedGroundTruth );
+    itkVolumeType::RegionType annotatedRegion = imageMaskSpatialObject->GetAxisAlignedBoundingBoxRegion();
+    itkVolumeType::OffsetValueType offset(CcboostSegmentationFilter::ANNOTATEDPADDING);
+    annotatedRegion.PadByRadius(offset);
+
+    unsigned int numPredictRegions;
+    if(!enoughMemory(channelItk, annotatedRegion, numPredictRegions))
+        return;
+
+    //Create config object and retrieve settings from espina
+     ConfigData<itkVolumeType>::setDefault(ccboostconfig);
+
+     ccboostconfig.numPredictRegions = numPredictRegions;
+
+     applyEspinaSettings(ccboostconfig);
+
+     if(CcboostSegmentationFilter::ELEMENT == CcboostSegmentationFilter::MITOCHONDRIA)
+       ccboostconfig.preset = ConfigData<itkVolumeType>::MITOCHONDRIA;
+     else if(CcboostSegmentationFilter::ELEMENT == CcboostSegmentationFilter::SYNAPSE)
+       ccboostconfig.preset = ConfigData<itkVolumeType>::SYNAPSE;
+     else {
+       qWarning() << "Error! Preset is not set. Using default: " << CcboostSegmentationFilter::SYNAPSE;
+       ccboostconfig.preset = ConfigData<itkVolumeType>::SYNAPSE;
+     }
+
+
+     //FIXME use channel filename instead of supervoxelcache
+     ccboostconfig.originalVolumeImage = normalizedChannelItk;
+     SetConfigData<itkVolumeType> trainData;
+     trainData.rawVolume = "supervoxelcache-";
+     trainData.rawVolumeImage = normalizedChannelItk;
+     trainData.groundTruthImage = segmentedGroundTruth;
+     trainData.zAnisotropyFactor = 2*channelItk->GetSpacing()[2]/(channelItk->GetSpacing()[0]
+                                                                          + channelItk->GetSpacing()[1]);
+     ccboostconfig.train.push_back(trainData);
+
+
+     annotatedRegion.Crop(channelItk->GetLargestPossibleRegion());
+     ccboostconfig.train.at(0).annotatedRegion = annotatedRegion;
+
+     //FIXME computing the hash on cfgData.train.rawVolumeImage provokes a segFault
+     typedef itk::ImageDuplicator< itkVolumeType > DuplicatorType;
+     DuplicatorType::Pointer duplicator = DuplicatorType::New();
+     duplicator->SetInputImage(ccboostconfig.train.at(0).rawVolumeImage);
+     duplicator->Update();
+     itkVolumeType::Pointer inpImg = duplicator->GetOutput();
+     inpImg->DisconnectPipeline();
+     typedef itk::Testing::HashImageFilter<itkVolumeType> HashImageFilterType;
+     HashImageFilterType::Pointer hashImageFilter = HashImageFilterType::New();
+     hashImageFilter->SetInput(inpImg);
+     hashImageFilter->Update();
+     string hash = hashImageFilter->GetHash();
+
+     qDebug("%s", ccboostconfig.train.at(0).cacheDir.c_str());
+
+     ccboostconfig.train.at(0).cacheDir = ccboostconfig.train.at(0).cacheDir
+              + ccboostconfig.train.at(0).rawVolume  + hash + QString::number(spacing[2]).toStdString() + "/";
+
+     qDebug("%s", ccboostconfig.train.at(0).cacheDir.c_str());
+
+     qDebug("%s", ccboostconfig.train.at(0).orientEstimate.c_str());
+
+     // Test
+     //FIXME test should get the whole volume or pieces, it is not a copy of train.
+     SetConfigData<itkVolumeType> testData = trainData;
+     testData.rawVolumeImage = normalizedChannelItk;
+     testData.zAnisotropyFactor = trainData.zAnisotropyFactor;
+     ccboostconfig.test.push_back(testData);
+
+     QDir dir(QString::fromStdString(ccboostconfig.train.at(0).cacheDir));
+     dir.mkpath(QString::fromStdString(ccboostconfig.train.at(0).cacheDir));
+
+     qDebug("%s", "cc boost segmentation");
+
 
   WriterType::Pointer writer = WriterType::New();
 
     //CCBOOST here
     //TODO add const-correctness
+  CcboostSegmentationFilterThread *thread = new CcboostSegmentationFilterThread( ccboostconfig );
+  std::vector<itkVolumeType::Pointer> outSegList = thread->outputSegmentations;
 
-    std::vector<itkVolumeType::Pointer> channels;
-    channels.push_back(normalizedChannelItk);
-   std::vector<itkVolumeType::Pointer> groundTruths;
-   groundTruths.push_back(segmentedGroundTruth);
-   itkVolumeType::Pointer coreOutputSegmentation;
-   try {
-       std::string cacheDir("./");
-       std::vector<std::string> featuresList{"hessOrient-s3.5-repolarized.nrrd",
-                                             "gradient-magnitude-s1.0.nrrd",
-                                             "gradient-magnitude-s1.6.nrrd",
-                                             "gradient-magnitude-s3.5.nrrd",
-                                             "gradient-magnitude-s5.0.nrrd",
-                                             "stensor-s0.5-r1.0.nrrd",
-                                             "stensor-s0.8-r1.6.nrrd",
-                                             "stensor-s1.8-r3.5.nrrd",
-                                             "stensor-s2.5-r5.0.nrrd"
-                                            };
+  WaitForm::runThreadWithProgress( thread );
 
-       MultipleROIData allROIs = preprocess(channels, groundTruths, cacheDir, featuresList);
-        coreOutputSegmentation = core(allROIs);
-   } catch( itk::ExceptionObject & err ) {
-       std::cerr << "ExceptionObject caught !" << std::endl;
-       std::cerr << err << std::endl;
-       return; // Since the goal of the example is to catch the exception, we declare this a success.
-   }
-    //CCBOOST finished
-
-  emit progress(50);
-  if (!canExecute()) return;
-
-  typedef itk::BinaryThresholdImageFilter <itkVolumeType, itkVolumeType>
-         BinaryThresholdImageFilterType;
-
-  BinaryThresholdImageFilterType::Pointer thresholdFilter
-    = BinaryThresholdImageFilterType::New();
-  thresholdFilter->SetInput(coreOutputSegmentation);
-  thresholdFilter->SetLowerThreshold(128);
-  thresholdFilter->SetUpperThreshold(255);
-  thresholdFilter->SetInsideValue(255);
-  thresholdFilter->SetOutsideValue(0);
-  thresholdFilter->Update();
-
-  if(true) {
-      writer->SetFileName( "thresholded-segmentation.tif");
-      writer->SetInput(thresholdFilter->GetOutput());
-      writer->Update();
+  if(thread->threadStateDescription.getAbort()){
+      qDebug() << "Thread was aborted";
+      thread->threadStateDescription.setAbort(false );
+      return;
   }
 
-  emit progress(70);
-  if (!canExecute()) return;
-
-  std::vector<itkVolumeType::Pointer> outSegList;
-  splitSegmentations(thresholdFilter->GetOutput(), outSegList);
+    //CCBOOST finished
 
   qDebug() << outSegList.size();
 
   //TODO add as many outputs as segmentations
-  for(int i = 0; i < outSegList.size(); i++){
+  for(int i = 0; i < outSegList.size() && i < 250; i++){
       if (!m_outputs.contains(i))
       {
           m_outputs[i] = OutputSPtr(new Output(this, i));
@@ -247,6 +331,95 @@ void CcboostSegmentationFilter::execute()
   }
   emit progress(100);
   if (!canExecute()) return;
+}
+
+bool CcboostSegmentationFilter::enoughMemory(const itkVolumeType::Pointer channelItk, const itkVolumeType::RegionType annotatedRegion, unsigned int & numPredictRegions){
+    itkVolumeType::SizeType channelItkSize = channelItk->GetLargestPossibleRegion().GetSize();
+    double channelSize = channelItkSize[0] * channelItkSize[1] * channelItkSize[2] /1024/1024;
+
+    itkVolumeType::SizeType gtItkSize = annotatedRegion.GetSize();
+    double gtSize = gtItkSize[0] * gtItkSize[1] * gtItkSize[2] /1024/1024;
+
+    unsigned int memoryNeededMB = FREEMEMORYREQUIREDPROPORTIONTRAIN*gtSize;
+
+    qDebug() << QString("The estimated amount of memory required has an upper bound of %1 Mb (%2 * %3 (ground truth size))"
+                        "and you have %4 Mb").arg(memoryNeededMB).arg(FREEMEMORYREQUIREDPROPORTIONTRAIN).arg(gtSize).arg(memoryAvailableMB);
+
+    unsigned int memoryNeededMBpredict = FREEMEMORYREQUIREDPROPORTIONPREDICT*channelSize;
+    numPredictRegions = memoryNeededMBpredict/memoryAvailableMB + 1;
+    unsigned int pieceSize = channelSize/numPredictRegions;
+
+    qDebug() << QString("The volume will be splitted in %1 / %2 = %3 regions of size %4 MB on prediction").arg(memoryNeededMBpredict).arg(memoryAvailableMB).arg(numPredictRegions).arg(pieceSize);
+
+    if(memoryAvailableMB < memoryNeededMB){
+       if(QMessageBox::critical(NULL, "Synapse Segmentation Memory check",
+                         QString("The estimated amount of memory required has an upper bound of %1 Mb"
+                                 "and you have %2 Mb. We will process by pieces and ESPina might crash."
+                                 "(You should reduce it by constraining the Ground truth to a smaller 3d Cube)."
+                                 "Continue anyway?").arg(memoryNeededMB).arg(memoryAvailableMB), QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) == QMessageBox::Cancel)
+           return false;
+    }
+    return true;
+}
+
+//FIXME Pass necessary parameters more cleanly
+bool CcboostSegmentationFilter::enoughGroundTruth(){
+    int numBgPx = 0;
+
+    for(auto bgSeg: m_backgroundGroundTruthSegList){
+
+      itkVolumeType::Pointer bgSegItk = volumetricData(bgSeg->output())->itkImage();
+
+      itk::ImageRegionConstIterator<itkVolumeType> imageIterator(bgSegItk, bgSegItk->GetLargestPossibleRegion());
+      while(!imageIterator.IsAtEnd() && numBgPx < MINNUMBGPX) {
+        if(imageIterator.Get() != 0)
+            numBgPx++;
+        ++imageIterator;
+      }
+      if(numBgPx >= MINNUMBGPX)
+         break;
+    }
+
+    int mintruth;
+    if(CcboostSegmentationFilter::ELEMENT == CcboostSegmentationFilter::MITOCHONDRIA){
+        mintruth = MINTRUTHMITOCHONDRIA;
+    }else{
+        mintruth = MINTRUTHSYNAPSES;
+    }
+
+    if(m_groundTruthSegList.size() == 0){
+
+                QMessageBox::critical(NULL, CcboostSegmentationFilter::ELEMENT + " Segmentation Annotation Check",
+                                      QString("Insufficient positive examples provided. Found none."
+                                              " Make sure the %1 category exists in the model taxonomy"
+                                              " or that you are using the tags 'positive' and 'negative'."
+                                              " Aborting.").arg(CcboostSegmentationFilter::ELEMENT));
+        return false;
+    }else if(numBgPx == 0){
+
+                QMessageBox::critical(NULL, CcboostSegmentationFilter::ELEMENT +  " Segmentation Annotation Check",
+                                      QString("Insufficient background examples provided. Found none."
+                                              " Make sure the Background category exists in the model taxonomy."
+                                              " or that you are using the tags 'yes%1' and 'no%1'."
+                                              " Aborting.").arg(CcboostSegmentationFilter::ELEMENT));
+        return false;
+    }else if(m_groundTruthSegList.size() < mintruth || numBgPx < MINNUMBGPX){
+
+        QMessageBox::StandardButton reply
+                = QMessageBox::question(NULL, CcboostSegmentationFilter::ELEMENT +  " Segmentation Annotation Check",
+                                      QString("Not enough annotations were provided "
+                                              "(%1 positive elements %2 background pixels while %3 and %4 are recommended)."
+                                              " Increase the background or positive annotation provided."
+                                              " Continue anyway?").arg(m_groundTruthSegList.size()).arg(numBgPx).arg(mintruth).arg(MINNUMBGPX),
+                                              QMessageBox::Yes|QMessageBox::No);
+        if (reply == QMessageBox::No)
+            return false;
+    }
+
+    qDebug() << QString("Annotation provided: "
+                      "%1 elements > %2 background pixels (%3 and %4 are required). "
+                      ).arg(m_groundTruthSegList.size()).arg(numBgPx).arg(mintruth).arg(MINNUMBGPX);
+    return true;
 }
 
 itkVolumeType::Pointer CcboostSegmentationFilter::mergeSegmentations(const itkVolumeType::Pointer channelItk,
@@ -348,262 +521,55 @@ itkVolumeType::Pointer CcboostSegmentationFilter::mergeSegmentations(const itkVo
 
 }
 
-void CcboostSegmentationFilter::splitSegmentations(const itkVolumeType::Pointer outputSegmentation,
-                                                std::vector<itkVolumeType::Pointer>& outSegList){
 
-//    //If 255 components is not enough as output, switch to unsigned short
-//    typedef itk::ImageToImageFilter <itkVolumeType, bigVolumeType > ConvertFilterType;
+void CcboostSegmentationFilter::applyEspinaSettings(ConfigData<itkVolumeType> cfgdata){
 
-//    ConvertFilterType::Pointer convertFilter = (ConvertFilterType::New()).GetPointer();
-//    convertFilter->SetInput(outputSegmentation);
-//    convertFilter->Update();
+    QSettings settings(CESVIMA, ESPINA);
+    settings.beginGroup("Synapse Segmentation");
 
-    /*split the output into several segmentations*/
-    typedef itk::ConnectedComponentImageFilter <itkVolumeType, bigVolumeType >
-      ConnectedComponentImageFilterType;
+    if (settings.contains("Channel Hash")){
+        for(auto setcfg: cfgdata.train)
+            setcfg.featuresRawVolumeImageHash = settings.value("Channel Hash").toString().toStdString();
+    }
+    if (settings.contains("Number of Stumps"))
+        cfgdata.numStumps = settings.value("Number of Stumps").toInt();
 
-    ConnectedComponentImageFilterType::Pointer connected = ConnectedComponentImageFilterType::New ();
-    connected->SetInput(outputSegmentation);
+    if (settings.contains("Super Voxel Seed"))
+        cfgdata.svoxSeed = settings.value("Super Voxel Seed").toInt();
 
-    connected->Update();
+    if (settings.contains("Super Voxel Cubeness"))
+        cfgdata.svoxCubeness = settings.value("Super Voxel Cubeness").toInt();
 
-    //save itk image (volume) as binary/classed volume here
-    WriterType::Pointer writer = WriterType::New();
-//TODO espina2
-//    if(ccboostconfig.saveIntermediateVolumes){
-//      writer->SetFileName(ccboostconfig.train.cacheDir + "labelmap.tif");
-      writer->SetFileName("labelmap3.tif");
-      writer->SetInput(outputSegmentation);
-      writer->Update();
-      qDebug() << "labelmap.tif created";
-
-    std::cout << "Number of objects: " << connected->GetObjectCount() << std::endl;
-
-    qDebug("Connected components segmentation");
-    BigWriterType::Pointer bigwriter = BigWriterType::New();
-    //TODO espina2
-//    if(ccboostconfig.saveIntermediateVolumes){
-    if(true) {
-        bigwriter->SetFileName(/*ccboostconfig.train.cacheDir + */"connected-segmentation.tif");
-        bigwriter->SetInput(connected->GetOutput());
-        bigwriter->Update();
+    if (settings.contains("Synapse Features Directory")) {
+        for(auto setcfg: cfgdata.train)
+            setcfg.cacheDir = settings.value("Synapse Features Directory").toString().toStdString();
+        //FIXME config data setdefault is overwritten and ignored
     }
 
-    typedef itk::RelabelComponentImageFilter<bigVolumeType, bigVolumeType> RelabelFilterType;
-    RelabelFilterType::Pointer relabelFilter = RelabelFilterType::New();
-    relabelFilter->SetInput(connected->GetOutput());
-    relabelFilter->Update();
-//TODO espina2
-//    if(ccboostconfig.saveIntermediateVolumes) {
-    if(true) {
-        qDebug("Save relabeled segmentation");
-        bigwriter->SetFileName(/*ccboostconfig.train.cacheDir + */"relabeled-segmentation.tif");
-        bigwriter->SetInput(relabelFilter->GetOutput());
-        bigwriter->Update();
-    }
+    if (settings.contains("TP Quantile"))
+        cfgdata.TPQuantile = settings.value("TP Quantile").toFloat();
 
-    //create Espina Segmentation
-    typedef itk::BinaryThresholdImageFilter <bigVolumeType, itkVolumeType>
-      BinaryThresholdImageFilterType;
+    if (settings.contains("FP Quantile"))
+        cfgdata.FPQuantile = settings.value("FP Quantile").toFloat();
 
-    BinaryThresholdImageFilterType::Pointer labelThresholdFilter
-        = BinaryThresholdImageFilterType::New();
+    if (settings.contains("Force Recompute Features"))
+        cfgdata.forceRecomputeFeatures = settings.value("Force Recompute Features").toBool();
 
-    labelThresholdFilter->SetInsideValue(255);
-    labelThresholdFilter->SetOutsideValue(0);
+    if (settings.contains("Save Intermediate Volumes"))
+        cfgdata.saveIntermediateVolumes = settings.value("Save Intermediate Volumes").toBool();
 
-    qDebug("Create ESPina segmentations");
+    if (settings.contains("Minimum synapse size (voxels)"))
+        cfgdata.minComponentSize = settings.value("Minimum synapse size (voxels)").toInt();
 
-    //TODO espina2 ccboostconfig
-//    for(int i=1; i < connected->GetObjectCount() && i < ccboostconfig.maxNumObjects; i++){
-    for(int i=1; i < connected->GetObjectCount(); i++){
-        labelThresholdFilter->SetInput(relabelFilter->GetOutput());
-        labelThresholdFilter->SetLowerThreshold(i);
-        labelThresholdFilter->SetUpperThreshold(i);
-        labelThresholdFilter->Update();
+    if (settings.contains("Number of objects limit"))
+        cfgdata.maxNumObjects = settings.value("Number of objects limit").toInt();
 
-        //TODO espina2 this probably doesn't work if the pointer points the same memory at every iteration
-        //TODO espina2 create the outputs here?
-        itkVolumeType::Pointer outSeg = labelThresholdFilter->GetOutput();
-        outSeg->DisconnectPipeline();
-        outSegList.push_back(outSeg);
-
-    }
 }
 
-void CcboostSegmentationFilter::computeFeatures(const itkVolumeType::Pointer volume,
-                                                const std::string cacheDir,
-                                                std::vector<std::string> featuresList,
-                                                float zAnisotropyFactor,
-                                                bool forceRecomputeFeatures){
-
-
-    //TODO can we give message with?
-    //setDescription();
-    emit progress(10);
-    if(!canExecute())
-        return;
-
-    stringstream strstream;
-
-    int featureNum = 0;
-    for( std::string featureFile: featuresList ) {
-
-       strstream.str(std::string());
-       featureNum++;
-       strstream << "Computing " << featureNum << "/" << featuresList.size()+1 << " features";
-       std::cout << strstream.str() << std::endl;
-       //stateDescription->setTime(strstream.str());
-
-       emit progress(10 + featureNum*50/(featuresList.size()+1));
-       if(!canExecute())
-           return;
-
-       std::string featureFilepath(cacheDir + featureFile);
-       ifstream featureStream(featureFilepath.c_str());
-       //TODO check hash to prevent recomputing
-       if(!featureStream.good() || forceRecomputeFeatures){
-           //TODO do this in a more flexible way
-           int stringPos;
-           if( (stringPos = featureFile.find(string("hessOrient-"))) != std::string::npos){
-               float sigma;
-               string filename(featureFile.substr(stringPos));
-               int result = sscanf(filename.c_str(),"hessOrient-s%f-repolarized.nrrd",&sigma);
-              //FIXME break if error
-               if(result < 0)
-                   qDebug() << "Error scanning feature name " << featureFile.c_str();
-
-               qDebug() << QString("Either you requested recomputing the features, "
-                                   "the current channel is new or has changed or "
-                                   "Hessian Orient Estimate feature not found at "
-                                   "path: %2. Creating with sigma %1").arg(sigma).arg(QString::fromStdString(featureFilepath));
-
-                                                                                                                                                                                            AllEigenVectorsOfHessian2Execute(sigma, volume, featureFilepath, EByMagnitude, zAnisotropyFactor);
-
-               RepolarizeYVersorWithGradient2Execute(sigma, volume, featureFilepath, featureFilepath, zAnisotropyFactor);
-
-          } else if ( (stringPos = featureFile.find(std::string("gradient-magnitude"))) != std::string::npos ) {
-               float sigma;
-               string filename(featureFile.substr(stringPos));
-               int result = sscanf(filename.c_str(),"gradient-magnitude-s%f.nrrd",&sigma);
-               if(result < 0)
-                   qDebug() << "Error scanning feature name " << featureFile.c_str();
-
-               qDebug() << QString("Current  or channel is new or has changed or gradient magnitude feature not found at path: %2. Creating with sigma %1").arg(sigma).arg(QString::fromStdString(featureFilepath));
-
-               GradientMagnitudeImageFilter2Execute(sigma, volume, featureFilepath, zAnisotropyFactor);
-
-           } else if( (stringPos = featureFile.find(std::string("stensor"))) != std::string::npos ) {
-               float rho,sigma;
-               string filename(featureFile.substr(stringPos));
-               int result = sscanf(filename.c_str(),"stensor-s%f-r%f.nrrd",&sigma,&rho);
-               if(result < 0)
-                   qDebug() << "Error scanning feature name" << featureFile.c_str();
-
-               qDebug() << QString("Current channel is new or has changed or tensor feature not found at path %3. Creating with rho %1 and sigma %2").arg(rho).arg(sigma).arg(QString::fromStdString(featureFilepath));
-
-               bool sortByMagnitude = true;
-               EigenOfStructureTensorImageFilter2Execute(sigma, rho, volume, featureFilepath, sortByMagnitude, zAnisotropyFactor );
-
-           } else {
-               qDebug() << QString("feature %1 is not recognized.").arg(featureFile.c_str()).toUtf8();
-           }
-       }
-    }
-
-//    stateDescription->setMessage("Features computed");
-//    stateDescription->setTime("");
-}
-
-MultipleROIData CcboostSegmentationFilter::preprocess(std::vector<itkVolumeType::Pointer> channels,
-                                                      std::vector<itkVolumeType::Pointer> groundTruths,
-                                                      std::string cacheDir,
-                                                      std::vector<std::string> featuresList){
-
-    MultipleROIData allROIs;
-
-//    for(auto imgItk: channels) {
-//        for(auto gtItk: groundTruths) {
-    {
-            Matrix3D<ImagePixelType> img, gt;
-
-            img.loadItkImage(channels.at(0), true);
-
-            gt.loadItkImage(groundTruths.at(0), true);
-
-            ROIData roi;
-            roi.init( img.data(), gt.data(), 0, 0, img.width(), img.height(), img.depth() );
-
-            // raw image integral image
-            ROIData::IntegralImageType ii;
-            ii.compute( img );
-            roi.addII( ii.internalImage().data() );
-
-            //features
-            //check hash
-            int zAnisotropyFactor = 1;
-            computeFeatures(channels.at(0), cacheDir, featuresList, zAnisotropyFactor, false);
-            for(std::string featureItk: featuresList){
-                Matrix3D<ImagePixelType> feature;
-                feature.load(cacheDir + featureItk);
-
-                // raw image integral image
-                ROIData::IntegralImageType ii;
-                ii.compute( feature );
-                roi.addII( ii.internalImage().data() );
-            }
-
-            allROIs.add( &roi );
-
-    }
-
-//        }
-//    }
 
 
 
-            return allROIs;
-}
 
-itkVolumeType::Pointer CcboostSegmentationFilter::core(MultipleROIData allROIs) {
-    qDebug() << "running core plugin";
-
-    BoosterInputData bdata;
-    bdata.init( &allROIs );
-    bdata.showInfo();
-
-    Booster adaboost;
-
-    qDebug() << "training";
-
-    adaboost.train( bdata, 100 );
-
-    qDebug() << "predict";
-
-    // predict
-    Matrix3D<float> predImg;
-    TimerRT timer; timer.reset();
-    adaboost.predict( &allROIs, &predImg );
-    qDebug("Elapsed: %f", timer.elapsed());
-    predImg.save("/tmp/test.nrrd");
-
-    // save JSON model
-    if (!adaboost.saveModelToFile( "/tmp/model.json" ))
-        std::cout << "Error saving JSON model" << std::endl;
-
-    auto outputSegmentation = predImg.asItkImage();
-
-    //TODO not sure why the types are different
-        typedef itk::ImageToImageFilter < Matrix3D<float>::ItkImageType, itkVolumeType > ConvertFilterType;
-
-        ConvertFilterType::Pointer convertFilter = (ConvertFilterType::New()).GetPointer();
-        convertFilter->SetInput(outputSegmentation);
-        convertFilter->Update();
-
-    itkVolumeType::Pointer coreOutputSegmentation = convertFilter->GetOutput();
-    return coreOutputSegmentation;
-
-}
 
 
 //----------------------------------------------------------------------------
