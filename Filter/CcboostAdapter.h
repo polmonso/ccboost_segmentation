@@ -6,8 +6,7 @@
 #include "BoosterInputData.h"
 
 #include "ConfigData.h"
-#include "MessageQueue.h"
-
+#include "CcboostSegmentationFilter.h"
 //ITK
 #include <itkImageFileWriter.h>
 
@@ -18,7 +17,9 @@ namespace EspINA
 {
 class CcboostAdapter
 {
-
+public:
+    typedef itk::Image<float, 3> FloatTypeImage;
+private:
     typedef itk::ImageFileWriter< itkVolumeType > WriterType;
     using bigVolumeType = itk::Image<unsigned short, 3>;
     using BigWriterType = itk::ImageFileWriter< bigVolumeType >;
@@ -26,34 +27,27 @@ class CcboostAdapter
 public:
     CcboostAdapter();
 
-    static void splitSegmentations(const itkVolumeType::Pointer outputSegmentation,
-                            std::vector<itkVolumeType::Pointer>& outSegList);
+    static void splitSegmentations(const ConfigData<itkVolumeType>  &cfgData,
+                                   const itkVolumeType::Pointer outputSegmentation,
+                                   std::vector<itkVolumeType::Pointer>& outSegList);
 
-    static MultipleROIData preprocess(std::vector<itkVolumeType::Pointer> channels,
-                               std::vector<itkVolumeType::Pointer> groundTruths,
-                               std::string cacheDir,
-                               std::vector<std::string> featuresList);
-
-    static void postprocessing(itkVolumeType::Pointer& outputSegmentation,
-                        double anisotropyFactor, std::string cacheDir,
-                        int minComponentSize = 1000,
-                        bool saveIntermediateVolumes = true);
+    static void postprocessing(const ConfigData<itkVolumeType> &cfgData, itkVolumeType::Pointer& outputSegmentation);
 
     static void removeSmallComponents(itk::Image<unsigned char, 3>::Pointer & segmentation,
                                int minCCSize = 1000,
                                int threshold = 128);
 
-    static void computeAllFeatures(const ConfigData<itkVolumeType> cfgData, ThreadStateDescription *stateDescription = NULL);
+    static void computeAllFeatures(const ConfigData<itkVolumeType> cfgData, const CcboostSegmentationFilter *caller = NULL);
 
-    static void computeFeatures(const ConfigData<itkVolumeType> cfgData, const SetConfigData<itkVolumeType> cfgDataROI, ThreadStateDescription *stateDescription = NULL);
+    static void computeFeatures(const ConfigData<itkVolumeType> cfgData, const SetConfigData<itkVolumeType> cfgDataROI, const CcboostSegmentationFilter *caller = NULL);
 
-    static void addAllFeatures(const ConfigData<itkVolumeType> cfgData, ROIData &roi);
+    static void addAllFeatures(const ConfigData<itkVolumeType>& cfgData, ROIData &roi);
 
-    static void addFeatures(const SetConfigData<itkVolumeType> cfgDataROI, ROIData &roi);
+    static void addFeatures(const std::string& cacheDir, const SetConfigData<itkVolumeType>& cfgDataROI, ROIData& roi);
 
     //TODO add const-correctness
     static bool core(const ConfigData<itkVolumeType>& cfg,
-                     itkVolumeType::Pointer& probabilisticOutSeg,
+                     FloatTypeImage::Pointer& probabilisticOutSeg,
                      std::vector<itkVolumeType::Pointer>& outSegList);
 
 

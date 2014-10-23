@@ -149,10 +149,14 @@ void CcboostSegmentationToolGroup::createSAS()
   InputSPtr channelInput;
   InputSList inputs;
 
-  if(m_viewManager->activeChannel() != NULL)
-      channelInput = m_viewManager->activeChannel()->asInput();
-  else
-      channelInput = m_model->channels().at(0)->asInput();
+  //ChannelAdapterPtr channel;
+  if(m_viewManager->activeChannel() != NULL) {
+      auto channel = m_viewManager->activeChannel();
+      channelInput = channel->asInput();
+   } else {
+      auto channel = m_model->channels().at(0);
+      channelInput = channel->asInput();
+  }
 
   qDebug() << "Using channel " << m_viewManager->activeChannel()->data(Qt::DisplayRole);
 
@@ -171,6 +175,8 @@ void CcboostSegmentationToolGroup::createSAS()
   auto filter = adapter.get()->get().get();
   filter->m_groundTruthSegList = validSegmentations;
   filter->m_backgroundGroundTruthSegList = validBgSegmentations;
+
+  //FIXME fails when validSegmentations is empty and crashes espina
   struct CcboostSegmentationPlugin::Data data(adapter, m_model->smartPointer(validSegmentations.at(0)));
   m_plugin->m_executingTasks.insert(adapter.get(), data);
 

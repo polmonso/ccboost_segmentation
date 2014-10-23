@@ -8,12 +8,12 @@
 // Plugin
 #include "CcboostSegmentationFilter.h"
 
-#include "CcboostSegmentationFilterThread.h"
-
 #include <itkTestingHashImageFilter.h>
 
-#include "SplitterImageFilter.h"
-#include "GUI/extras/waitform.h"
+#include "ImageSplitter.h"
+
+#include "CcboostAdapter.h"
+
 // EspINA
 #include <Core/Analysis/Segmentation.h>
 #include <Core/Analysis/Data/MeshData.h>
@@ -27,7 +27,6 @@
 #include <QMessageBox>
 #include <QSettings>
 #include <Support/Settings/EspinaSettings.h>
-
 
 // ITK
 #include <itkImageDuplicator.h>
@@ -89,6 +88,12 @@ const QString SAS = "SAS";
 const char * CcboostSegmentationFilter::MESH_NORMAL = "Normal";
 const char * CcboostSegmentationFilter::MESH_ORIGIN = "Origin";
 
+const QString CcboostSegmentationFilter::MITOCHONDRIA = "mitochondria";
+const QString CcboostSegmentationFilter::SYNAPSE = "synapse";
+QString CcboostSegmentationFilter::ELEMENT = "element";
+const QString CcboostSegmentationFilter::POSITIVETAG = "yes"; //Tags are always lowercase
+const QString CcboostSegmentationFilter::NEGATIVETAG = "no";
+
 //----------------------------------------------------------------------------
 CcboostSegmentationFilter::CcboostSegmentationFilter(InputSList inputs, Type type, SchedulerSPtr scheduler)
 : Filter(inputs, type, scheduler)
@@ -111,8 +116,9 @@ CcboostSegmentationFilter::CcboostSegmentationFilter(InputSList inputs, Type typ
 
   if(memoryAvailableMB == 0){
       memoryAvailableMB = numeric_limits<unsigned int>::max();
-      QMessageBox::warning(NULL,"RAM Memory check", QString("The amount of RAM memory couldn't be detected or very low (info.totalram = %1 Bytes). "
-                                                            "Running the Synapse Segmentation Plugin might lead to crash").arg(info.totalram));
+     //FIXME we're not on the main thread, dialog creation will crash
+//      QMessageBox::warning(NULL,"RAM Memory check", QString("The amount of RAM memory couldn't be detected or very low (info.totalram = %1 Bytes). "
+//                                                            "Running the Synapse Segmentation Plugin might lead to crash").arg(info.totalram));
   }
 #else
   memoryAvailableMB = numeric_limits<unsigned int>::max();
@@ -206,102 +212,105 @@ void CcboostSegmentationFilter::execute()
   itkVolumeType::Pointer segmentedGroundTruth = mergeSegmentations(normalizedChannelItk,
                                                                    m_groundTruthSegList,
                                                                    m_backgroundGroundTruthSegList);
-
-  //Get bounding box of annotated data
-    typedef itk::ImageMaskSpatialObject< 3 > ImageMaskSpatialObjectType;
-    ImageMaskSpatialObjectType::Pointer
-      imageMaskSpatialObject  = ImageMaskSpatialObjectType::New();
-    imageMaskSpatialObject->SetImage ( segmentedGroundTruth );
-    itkVolumeType::RegionType annotatedRegion = imageMaskSpatialObject->GetAxisAlignedBoundingBoxRegion();
-    itkVolumeType::OffsetValueType offset(CcboostSegmentationFilter::ANNOTATEDPADDING);
-    annotatedRegion.PadByRadius(offset);
-
-    unsigned int numPredictRegions;
-    if(!enoughMemory(channelItk, annotatedRegion, numPredictRegions))
-        return;
-
-    //Create config object and retrieve settings from espina
-     ConfigData<itkVolumeType>::setDefault(ccboostconfig);
-
-     ccboostconfig.numPredictRegions = numPredictRegions;
-
-     applyEspinaSettings(ccboostconfig);
-
-     if(CcboostSegmentationFilter::ELEMENT == CcboostSegmentationFilter::MITOCHONDRIA)
-       ccboostconfig.preset = ConfigData<itkVolumeType>::MITOCHONDRIA;
-     else if(CcboostSegmentationFilter::ELEMENT == CcboostSegmentationFilter::SYNAPSE)
-       ccboostconfig.preset = ConfigData<itkVolumeType>::SYNAPSE;
-     else {
-       qWarning() << "Error! Preset is not set. Using default: " << CcboostSegmentationFilter::SYNAPSE;
-       ccboostconfig.preset = ConfigData<itkVolumeType>::SYNAPSE;
+  //save itk image (volume) as binary/classed volume here
+     WriterType::Pointer writer = WriterType::New();
+ //TODO espina2
+     if(ccboostconfig.saveIntermediateVolumes){
+       writer->SetFileName(ccboostconfig.cacheDir + "labelmap.tif");
+       writer->SetFileName("labelmap.tif");
+       writer->SetInput(segmentedGroundTruth);
+       writer->Update();
+       qDebug() << "labelmap.tif created";
      }
 
 
-     //FIXME use channel filename instead of supervoxelcache
-     ccboostconfig.originalVolumeImage = normalizedChannelItk;
-     SetConfigData<itkVolumeType> trainData;
-     trainData.rawVolume = "supervoxelcache-";
-     trainData.rawVolumeImage = normalizedChannelItk;
-     trainData.groundTruthImage = segmentedGroundTruth;
-     trainData.zAnisotropyFactor = 2*channelItk->GetSpacing()[2]/(channelItk->GetSpacing()[0]
-                                                                          + channelItk->GetSpacing()[1]);
-     ccboostconfig.train.push_back(trainData);
+  //Get bounding box of annotated data
+  typedef itk::ImageMaskSpatialObject< 3 > ImageMaskSpatialObjectType;
+  ImageMaskSpatialObjectType::Pointer
+          imageMaskSpatialObject  = ImageMaskSpatialObjectType::New();
+  imageMaskSpatialObject->SetImage ( segmentedGroundTruth );
+  itkVolumeType::RegionType annotatedRegion = imageMaskSpatialObject->GetAxisAlignedBoundingBoxRegion();
+  itkVolumeType::OffsetValueType offset(CcboostSegmentationFilter::ANNOTATEDPADDING);
+  annotatedRegion.PadByRadius(offset);
 
-
-     annotatedRegion.Crop(channelItk->GetLargestPossibleRegion());
-     ccboostconfig.train.at(0).annotatedRegion = annotatedRegion;
-
-     //FIXME computing the hash on cfgData.train.rawVolumeImage provokes a segFault
-     typedef itk::ImageDuplicator< itkVolumeType > DuplicatorType;
-     DuplicatorType::Pointer duplicator = DuplicatorType::New();
-     duplicator->SetInputImage(ccboostconfig.train.at(0).rawVolumeImage);
-     duplicator->Update();
-     itkVolumeType::Pointer inpImg = duplicator->GetOutput();
-     inpImg->DisconnectPipeline();
-     typedef itk::Testing::HashImageFilter<itkVolumeType> HashImageFilterType;
-     HashImageFilterType::Pointer hashImageFilter = HashImageFilterType::New();
-     hashImageFilter->SetInput(inpImg);
-     hashImageFilter->Update();
-     string hash = hashImageFilter->GetHash();
-
-     qDebug("%s", ccboostconfig.train.at(0).cacheDir.c_str());
-
-     ccboostconfig.train.at(0).cacheDir = ccboostconfig.train.at(0).cacheDir
-              + ccboostconfig.train.at(0).rawVolume  + hash + QString::number(spacing[2]).toStdString() + "/";
-
-     qDebug("%s", ccboostconfig.train.at(0).cacheDir.c_str());
-
-     qDebug("%s", ccboostconfig.train.at(0).orientEstimate.c_str());
-
-     // Test
-     //FIXME test should get the whole volume or pieces, it is not a copy of train.
-     SetConfigData<itkVolumeType> testData = trainData;
-     testData.rawVolumeImage = normalizedChannelItk;
-     testData.zAnisotropyFactor = trainData.zAnisotropyFactor;
-     ccboostconfig.test.push_back(testData);
-
-     QDir dir(QString::fromStdString(ccboostconfig.train.at(0).cacheDir));
-     dir.mkpath(QString::fromStdString(ccboostconfig.train.at(0).cacheDir));
-
-     qDebug("%s", "cc boost segmentation");
-
-
-  WriterType::Pointer writer = WriterType::New();
-
-    //CCBOOST here
-    //TODO add const-correctness
-  CcboostSegmentationFilterThread *thread = new CcboostSegmentationFilterThread( ccboostconfig );
-  std::vector<itkVolumeType::Pointer> outSegList = thread->outputSegmentations;
-
-  WaitForm::runThreadWithProgress( thread );
-
-  if(thread->threadStateDescription.getAbort()){
-      qDebug() << "Thread was aborted";
-      thread->threadStateDescription.setAbort(false );
+  unsigned int numPredictRegions;
+  if(!enoughMemory(channelItk, annotatedRegion, numPredictRegions))
       return;
+
+  //Create config object and retrieve settings from espina
+  ConfigData<itkVolumeType>::setDefault(ccboostconfig);
+
+  ccboostconfig.numPredictRegions = numPredictRegions;
+
+  applyEspinaSettings(ccboostconfig);
+
+  if(CcboostSegmentationFilter::ELEMENT == CcboostSegmentationFilter::MITOCHONDRIA)
+      ccboostconfig.preset = ConfigData<itkVolumeType>::MITOCHONDRIA;
+  else if(CcboostSegmentationFilter::ELEMENT == CcboostSegmentationFilter::SYNAPSE)
+      ccboostconfig.preset = ConfigData<itkVolumeType>::SYNAPSE;
+  else {
+      qWarning() << "Error! Preset is not set. Using default: " << CcboostSegmentationFilter::SYNAPSE;
+      ccboostconfig.preset = ConfigData<itkVolumeType>::SYNAPSE;
   }
 
-    //CCBOOST finished
+  ccboostconfig.originalVolumeImage = normalizedChannelItk;
+
+  //FIXME computing the hash on cfgData.train.rawVolumeImage provokes a segFault
+  //TODO each volume (and feature) should has its hash, but we are just using the first throught cachedir
+  typedef itk::ImageDuplicator< itkVolumeType > DuplicatorType;
+  DuplicatorType::Pointer duplicator = DuplicatorType::New();
+  duplicator->SetInputImage(ccboostconfig.originalVolumeImage);
+  duplicator->Update();
+  itkVolumeType::Pointer inpImg = duplicator->GetOutput();
+  inpImg->DisconnectPipeline();
+  typedef itk::Testing::HashImageFilter<itkVolumeType> HashImageFilterType;
+  HashImageFilterType::Pointer hashImageFilter = HashImageFilterType::New();
+  hashImageFilter->SetInput(inpImg);
+  hashImageFilter->Update();
+  string hash = hashImageFilter->GetHash();
+
+  qDebug("%s", ccboostconfig.cacheDir.c_str());
+  ccboostconfig.rawVolume = "supervoxelcache-";
+  ccboostconfig.cacheDir = ccboostconfig.cacheDir + ccboostconfig.rawVolume + hash
+          + QString::number(spacing[2]).toStdString() + "/";
+  //FIXME use channel filename instead of supervoxelcache
+  qDebug("%s", ccboostconfig.cacheDir.c_str());
+
+  SetConfigData<itkVolumeType> trainData;
+  SetConfigData<itkVolumeType>::setDefaultSet(trainData);
+  trainData.rawVolumeImage = ccboostconfig.originalVolumeImage;
+  trainData.groundTruthImage = segmentedGroundTruth;
+  trainData.zAnisotropyFactor = 2*channelItk->GetSpacing()[2]/(channelItk->GetSpacing()[0]
+          + channelItk->GetSpacing()[1]);
+
+
+  annotatedRegion.Crop(channelItk->GetLargestPossibleRegion());
+  trainData.annotatedRegion = annotatedRegion;
+
+  ccboostconfig.train.push_back(trainData);
+
+  // Test
+  //FIXME test should get the whole volume or pieces, it is not a copy of train.
+  SetConfigData<itkVolumeType> testData = trainData;
+  testData.rawVolumeImage = ccboostconfig.originalVolumeImage;
+  testData.zAnisotropyFactor = trainData.zAnisotropyFactor;
+  ccboostconfig.test.push_back(testData);
+
+  QDir dir(QString::fromStdString(ccboostconfig.cacheDir));
+  dir.mkpath(QString::fromStdString(ccboostconfig.cacheDir));
+
+  qDebug("%s", "cc boost segmentation");
+
+  //CCBOOST here
+    //TODO add const-correctness
+  std::vector<itkVolumeType::Pointer> outSegList;
+  ccboostconfig.saveIntermediateVolumes = true;
+  runCore(ccboostconfig, outSegList);
+
+  if(!canExecute())
+      return;
+
+  //CCBOOST finished
 
   qDebug() << outSegList.size();
 
@@ -352,12 +361,13 @@ bool CcboostSegmentationFilter::enoughMemory(const itkVolumeType::Pointer channe
     qDebug() << QString("The volume will be splitted in %1 / %2 = %3 regions of size %4 MB on prediction").arg(memoryNeededMBpredict).arg(memoryAvailableMB).arg(numPredictRegions).arg(pieceSize);
 
     if(memoryAvailableMB < memoryNeededMB){
-       if(QMessageBox::critical(NULL, "Synapse Segmentation Memory check",
-                         QString("The estimated amount of memory required has an upper bound of %1 Mb"
-                                 "and you have %2 Mb. We will process by pieces and ESPina might crash."
-                                 "(You should reduce it by constraining the Ground truth to a smaller 3d Cube)."
-                                 "Continue anyway?").arg(memoryNeededMB).arg(memoryAvailableMB), QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) == QMessageBox::Cancel)
-           return false;
+        //FIXME we're not on the main thread, creating a dialog will provoke a crash
+//       if(QMessageBox::critical(NULL, "Synapse Segmentation Memory check",
+//                         QString("The estimated amount of memory required has an upper bound of %1 Mb"
+//                                 "and you have %2 Mb. We will process by pieces and ESPina might crash."
+//                                 "(You should reduce it by constraining the Ground truth to a smaller 3d Cube)."
+//                                 "Continue anyway?").arg(memoryNeededMB).arg(memoryAvailableMB), QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) == QMessageBox::Cancel)
+//           return false;
     }
     return true;
 }
@@ -387,34 +397,35 @@ bool CcboostSegmentationFilter::enoughGroundTruth(){
         mintruth = MINTRUTHSYNAPSES;
     }
 
-    if(m_groundTruthSegList.size() == 0){
+    //FIXME filter is no longer in the main thread, so it will fail everytime it tries to popup a dialog
+//    if(m_groundTruthSegList.size() == 0){
 
-                QMessageBox::critical(NULL, CcboostSegmentationFilter::ELEMENT + " Segmentation Annotation Check",
-                                      QString("Insufficient positive examples provided. Found none."
-                                              " Make sure the %1 category exists in the model taxonomy"
-                                              " or that you are using the tags 'positive' and 'negative'."
-                                              " Aborting.").arg(CcboostSegmentationFilter::ELEMENT));
-        return false;
-    }else if(numBgPx == 0){
+//                QMessageBox::critical(NULL, CcboostSegmentationFilter::ELEMENT + " Segmentation Annotation Check",
+//                                      QString("Insufficient positive examples provided. Found none."
+//                                              " Make sure the %1 category exists in the model taxonomy"
+//                                              " or that you are using the tags 'positive' and 'negative'."
+//                                              " Aborting.").arg(CcboostSegmentationFilter::ELEMENT));
+//        return false;
+//    }else if(numBgPx == 0){
 
-                QMessageBox::critical(NULL, CcboostSegmentationFilter::ELEMENT +  " Segmentation Annotation Check",
-                                      QString("Insufficient background examples provided. Found none."
-                                              " Make sure the Background category exists in the model taxonomy."
-                                              " or that you are using the tags 'yes%1' and 'no%1'."
-                                              " Aborting.").arg(CcboostSegmentationFilter::ELEMENT));
-        return false;
-    }else if(m_groundTruthSegList.size() < mintruth || numBgPx < MINNUMBGPX){
+//                QMessageBox::critical(NULL, CcboostSegmentationFilter::ELEMENT +  " Segmentation Annotation Check",
+//                                      QString("Insufficient background examples provided. Found none."
+//                                              " Make sure the Background category exists in the model taxonomy."
+//                                              " or that you are using the tags 'yes%1' and 'no%1'."
+//                                              " Aborting.").arg(CcboostSegmentationFilter::ELEMENT));
+//        return false;
+//    }else if(m_groundTruthSegList.size() < mintruth || numBgPx < MINNUMBGPX){
 
-        QMessageBox::StandardButton reply
-                = QMessageBox::question(NULL, CcboostSegmentationFilter::ELEMENT +  " Segmentation Annotation Check",
-                                      QString("Not enough annotations were provided "
-                                              "(%1 positive elements %2 background pixels while %3 and %4 are recommended)."
-                                              " Increase the background or positive annotation provided."
-                                              " Continue anyway?").arg(m_groundTruthSegList.size()).arg(numBgPx).arg(mintruth).arg(MINNUMBGPX),
-                                              QMessageBox::Yes|QMessageBox::No);
-        if (reply == QMessageBox::No)
-            return false;
-    }
+//        QMessageBox::StandardButton reply
+//                = QMessageBox::question(NULL, CcboostSegmentationFilter::ELEMENT +  " Segmentation Annotation Check",
+//                                      QString("Not enough annotations were provided "
+//                                              "(%1 positive elements %2 background pixels while %3 and %4 are recommended)."
+//                                              " Increase the background or positive annotation provided."
+//                                              " Continue anyway?").arg(m_groundTruthSegList.size()).arg(numBgPx).arg(mintruth).arg(MINNUMBGPX),
+//                                              QMessageBox::Yes|QMessageBox::No);
+//        if (reply == QMessageBox::No)
+//            return false;
+//    }
 
     qDebug() << QString("Annotation provided: "
                       "%1 elements > %2 background pixels (%3 and %4 are required). "
@@ -423,8 +434,8 @@ bool CcboostSegmentationFilter::enoughGroundTruth(){
 }
 
 itkVolumeType::Pointer CcboostSegmentationFilter::mergeSegmentations(const itkVolumeType::Pointer channelItk,
-                                                                    const SegmentationAdapterList segList,
-                                                                     const SegmentationAdapterList backgroundSegList){
+                                                                     const SegmentationAdapterList& segList,
+                                                                     const SegmentationAdapterList& backgroundSegList){
 
     itkVolumeType::IndexType start;
     start[0] = start[1] = start[2] = 0;
@@ -442,8 +453,8 @@ itkVolumeType::Pointer CcboostSegmentationFilter::mergeSegmentations(const itkVo
     /*saving the segmentations*/
     for(auto seg: segList){
 
-        DefaultVolumetricDataSPtr volume = volumetricData(seg->output());
-        itkVolumeType::Pointer segVolume = volume->itkImage();
+      DefaultVolumetricDataSPtr volume = volumetricData(seg->output());
+      itkVolumeType::Pointer segVolume = volume->itkImage();
 
       typedef itk::PasteImageFilter <itkVolumeType > PasteImageFilterType;
 
@@ -506,17 +517,6 @@ itkVolumeType::Pointer CcboostSegmentationFilter::mergeSegmentations(const itkVo
          //TODO instead of providing a binary image, use the segmentations map.
      }
 
-    //save itk image (volume) as binary/classed volume here
-    WriterType::Pointer writer = WriterType::New();
-//TODO espina2
-//    if(ccboostconfig.saveIntermediateVolumes){
-//      writer->SetFileName(ccboostconfig.train.cacheDir + "labelmap.tif");
-      writer->SetFileName("labelmap.tif");
-      writer->SetInput(segmentedGroundTruth);
-      writer->Update();
-      qDebug() << "labelmap.tif created";
-//    }
-
     return segmentedGroundTruth;
 
 }
@@ -527,6 +527,9 @@ void CcboostSegmentationFilter::applyEspinaSettings(ConfigData<itkVolumeType> cf
     QSettings settings(CESVIMA, ESPINA);
     settings.beginGroup("Synapse Segmentation");
 
+    //FIXME the stored hash in settings is not used, instead the cacheDir path contains the hash,
+    //so when it changes the directory changes and the features are not found and therefore recomputed (correctly)
+    //When using ROIs this has to be changed and use a vector of stored hashes.
     if (settings.contains("Channel Hash")){
         for(auto setcfg: cfgdata.train)
             setcfg.featuresRawVolumeImageHash = settings.value("Channel Hash").toString().toStdString();
@@ -541,8 +544,7 @@ void CcboostSegmentationFilter::applyEspinaSettings(ConfigData<itkVolumeType> cf
         cfgdata.svoxCubeness = settings.value("Super Voxel Cubeness").toInt();
 
     if (settings.contains("Synapse Features Directory")) {
-        for(auto setcfg: cfgdata.train)
-            setcfg.cacheDir = settings.value("Synapse Features Directory").toString().toStdString();
+            cfgdata.cacheDir = settings.value("Synapse Features Directory").toString().toStdString();
         //FIXME config data setdefault is overwritten and ignored
     }
 
@@ -567,7 +569,46 @@ void CcboostSegmentationFilter::applyEspinaSettings(ConfigData<itkVolumeType> cf
 }
 
 
+void CcboostSegmentationFilter::runCore(const ConfigData<itkVolumeType>& ccboostconfig,
+             std::vector<itkVolumeType::Pointer>& outSegList){
 
+    CcboostAdapter::FloatTypeImage::Pointer probabilisticOutputSegmentation;
+
+    // modify ITK number of  s for speed up
+    const int prevITKNumberOfThreads = itk::MultiThreader::GetGlobalDefaultNumberOfThreads();
+    if (prevITKNumberOfThreads <= 1)
+        itk::MultiThreader::SetGlobalDefaultNumberOfThreads(8);
+
+    try {
+
+        // MultipleROIData allROIs = preprocess(channels, groundTruths, cacheDir, featuresList);
+        if(!CcboostAdapter::core(ccboostconfig, probabilisticOutputSegmentation, outSegList)) {
+            itk::MultiThreader::SetGlobalDefaultNumberOfThreads( prevITKNumberOfThreads );
+            return;
+        }
+
+    } catch( itk::ExceptionObject & err ) {
+        // restore default number of threads
+        itk::MultiThreader::SetGlobalDefaultNumberOfThreads( prevITKNumberOfThreads );
+
+        qDebug() << QObject::tr("Itk exception on ccboost caught. Error: %1.").arg(err.what());
+        //FIXME we're not on main thread, dialog will crash
+//        QMessageBox::warning(NULL, "EspINA", QString("Itk exception when running ccboost. Message: %1").arg(err.what()));
+        return;
+    }
+
+    // restore default number of threads
+    itk::MultiThreader::SetGlobalDefaultNumberOfThreads( prevITKNumberOfThreads );
+
+    if(ccboostconfig.saveIntermediateVolumes){
+        typedef itk::ImageFileWriter<CcboostAdapter::FloatTypeImage> FloatWriterType;
+        FloatWriterType::Pointer fwriter = FloatWriterType::New();
+        fwriter->SetFileName(ccboostconfig.cacheDir + "ccboost-probabilistic-output.tif");
+        fwriter->SetInput(probabilisticOutputSegmentation);
+        fwriter->Update();
+    }
+
+}
 
 
 

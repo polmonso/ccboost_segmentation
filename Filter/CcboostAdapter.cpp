@@ -16,6 +16,7 @@
 #include "SingleEigenVectorOfHessian2.h"
 #include "RepolarizeYVersorWithGradient2.h"
 #include "AllEigenVectorsOfHessian2.h"
+#include "ImageSplitter.h"
 
 //ITK
 #include <itkTestingHashImageFilter.h>
@@ -54,21 +55,25 @@ CcboostAdapter::CcboostAdapter()
 }
 
 bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
-                          itkVolumeType::Pointer& probabilisticOutSeg,
+                          FloatTypeImage::Pointer& probabilisticOutSeg,
                           std::vector<itkVolumeType::Pointer>& outSegList) {
-
+#ifndef WORKINGASIMPORTER
+#define WORK
+#ifdef WORK
     MultipleROIData allROIs;
 
     //    for(auto imgItk: channels) {
     //        for(auto gtItk: groundTruths) {
     Matrix3D<ImagePixelType> img, gt;
 
+    //itkVolumeType::Pointer annotatedImage = Splitter::crop<itkVolumeType>(cfgData.train.groundTruthImage,cfgData.train.annotatedRegion);
+
     img.loadItkImage(cfgdata.train.at(0).rawVolumeImage, true);
 
     gt.loadItkImage(cfgdata.train.at(0).groundTruthImage, true);
 
     ROIData roi;
-    roi.init( img.data(), gt.data(), 0, 0, img.width(), img.height(), img.depth() );
+    roi.init( img.data(), gt.data(), 0, 0, img.width(), img.height(), img.depth(), cfgdata.train.at(0).zAnisotropyFactor );
 
     // raw image integral image
     ROIData::IntegralImageType ii;
@@ -110,34 +115,53 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
     if (!adaboost.saveModelToFile( "/tmp/model.json" ))
         std::cout << "Error saving JSON model" << std::endl;
 
-    auto outSegmentation = predImg.asItkImage();
-
+    probabilisticOutSeg = predImg.asItkImage();
+#else
+    typedef itk::ImageFileReader< itk::Image<float, 3> > ReaderType;
+    ReaderType::Pointer reader = ReaderType::New();
+    reader->SetFileName(cfgdata.cacheDir + "predicted.tif");
+    reader->Update();
+    auto outSegmentation = reader->GetOutput();
+#endif
     qDebug() << "output image";
 
-    itk::ImageFileWriter< itk::Image<float, 3> >::Pointer writerf = itk::ImageFileWriter< itk::Image<float, 3> >::New();
-    //TODO espina2
-    //    if(ccboostconfig.saveIntermediateVolumes){
-    //      writer->SetFileName(ccboostconfig.train.cacheDir + "labelmap.tif");
-    writerf->SetFileName("predicted.tif");
-    writerf->SetInput(outSegmentation);
-    writerf->Update();
+    typedef itk::ImageFileWriter< Matrix3D<float>::ItkImageType > fWriterType;
+    if(cfgdata.saveIntermediateVolumes && probabilisticOutSeg->VerifyRequestedRegion()) {
+        fWriterType::Pointer writerf = fWriterType::New();
+        writerf->SetFileName(cfgdata.cacheDir + "predicted.tif");
+        writerf->SetInput(probabilisticOutSeg);
+        writerf->Update();
+    } else {
+        //TODO what to do when region fails Verify? is return false enough?
+        //return false;
+    }
     qDebug() << "predicted.tif created";
 
-    //TODO not sure why the types are different
-    typedef itk::CastImageFilter< Matrix3D<float>::ItkImageType, itkVolumeType > CastFilterType;
-    CastFilterType::Pointer castFilter = CastFilterType::New();
-    castFilter->SetInput(outSegmentation);
-    castFilter->Update();
+    typedef itk::BinaryThresholdImageFilter <Matrix3D<float>::ItkImageType, itkVolumeType>
+            fBinaryThresholdImageFilterType;
 
-    probabilisticOutSeg = castFilter->GetOutput();
+    float lowerThreshold = 0.0;
 
-//    emit progress(50);
-//     if (!canExecute()) return;
+    fBinaryThresholdImageFilterType::Pointer thresholdFilter
+            = fBinaryThresholdImageFilterType::New();
+    thresholdFilter->SetInput(probabilisticOutSeg);
+    thresholdFilter->SetLowerThreshold(lowerThreshold);
+    thresholdFilter->SetInsideValue(255);
+    thresholdFilter->SetOutsideValue(0);
+    thresholdFilter->Update();
+
     WriterType::Pointer writer = WriterType::New();
+    if(cfgdata.saveIntermediateVolumes && thresholdFilter->GetOutput()->VerifyRequestedRegion()) {
+        writer->SetFileName(cfgdata.cacheDir + "1" + "predicted-thresholded.tif");
+        writer->SetInput(thresholdFilter->GetOutput());
+        writer->Update();
+    }
 
-     if(cfgdata.saveIntermediateVolumes && probabilisticOutSeg->VerifyRequestedRegion()){
-         writer->SetFileName(cfgdata.train.at(0).cacheDir + "thread-outputSegmentation.tif");
-         writer->SetInput(probabilisticOutSeg);
+    itkVolumeType::Pointer outputSegmentation = thresholdFilter->GetOutput();
+
+     if(cfgdata.saveIntermediateVolumes && outputSegmentation->VerifyRequestedRegion()){
+         writer->SetFileName(cfgdata.cacheDir + "2" + "thread-outputSegmentation.tif");
+         writer->SetInput(outputSegmentation);
          writer->Update();
      }
 
@@ -145,43 +169,28 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
      settings.beginGroup("Synapse Segmentation");
      settings.setValue("Channel Hash", QString(cfgdata.train.at(0).featuresRawVolumeImageHash.c_str()));
 
-
-     typedef itk::BinaryThresholdImageFilter <itkVolumeType, itkVolumeType>
-            BinaryThresholdImageFilterType;
-
-     BinaryThresholdImageFilterType::Pointer thresholdFilter
-       = BinaryThresholdImageFilterType::New();
-     thresholdFilter->SetInput(probabilisticOutSeg);
-     thresholdFilter->SetLowerThreshold(128);
-     thresholdFilter->SetUpperThreshold(255);
-     //TODO why here it's the inverse of on ccboost?
-     thresholdFilter->SetInsideValue(0);
-     thresholdFilter->SetOutsideValue(255);
-     thresholdFilter->Update();
-
-     if(cfgdata.saveIntermediateVolumes) {
-         writer->SetFileName("thresholded-segmentation.tif");
-         writer->SetInput(thresholdFilter->GetOutput());
-         writer->Update();
-     }
-
-     itk::Image<unsigned char, 3>::Pointer outputSegmentation = thresholdFilter->GetOutput();
      outputSegmentation->DisconnectPipeline();
 
-     postprocessing(outputSegmentation, 1, "./post-" );
+     postprocessing(cfgdata, outputSegmentation);
 
      outputSegmentation->SetSpacing(cfgdata.train.at(0).rawVolumeImage->GetSpacing());
 
-//     emit progress(70);
-//     if (!canExecute()) return;
+#else
+     typedef itk::ImageFileReader< itkVolumeType > ReaderType;
+       ReaderType::Pointer reader = ReaderType::New();
+       reader->SetFileName(cfgdata.cacheDir + "predicted.tif");
+       reader->Update();
+       auto outputSegmentation = reader->GetOutput();
+       probabilisticOutSeg = outputSegmentation;
+#endif
 
-     splitSegmentations(outputSegmentation, outSegList);
+     splitSegmentations(cfgdata, outputSegmentation, outSegList);
 
-    return true;
-
+     return true;
 }
 
-void CcboostAdapter::splitSegmentations(const itkVolumeType::Pointer outputSegmentation,
+void CcboostAdapter::splitSegmentations(const ConfigData<itkVolumeType>& cfgData,
+                                        const itkVolumeType::Pointer outputSegmentation,
                                         std::vector<itkVolumeType::Pointer>& outSegList){
 
 //    //If 255 components is not enough as output, switch to unsigned short
@@ -200,24 +209,13 @@ void CcboostAdapter::splitSegmentations(const itkVolumeType::Pointer outputSegme
 
     connected->Update();
 
-    //save itk image (volume) as binary/classed volume here
-    WriterType::Pointer writer = WriterType::New();
-//TODO espina2
-//    if(ccboostconfig.saveIntermediateVolumes){
-//      writer->SetFileName(ccboostconfig.train.cacheDir + "labelmap.tif");
-      writer->SetFileName("labelmap3.tif");
-      writer->SetInput(outputSegmentation);
-      writer->Update();
-      qDebug() << "labelmap3.tif created";
-
     std::cout << "Number of objects: " << connected->GetObjectCount() << std::endl;
 
     qDebug("Connected components segmentation");
     BigWriterType::Pointer bigwriter = BigWriterType::New();
-    //TODO espina2
-//    if(ccboostconfig.saveIntermediateVolumes){
-    if(true) {
-        bigwriter->SetFileName(/*ccboostconfig.train.cacheDir + */"connected-segmentation.tif");
+
+    if(cfgData.saveIntermediateVolumes){
+        bigwriter->SetFileName(cfgData.cacheDir + "5" + "connected-segmentation.tif");
         bigwriter->SetInput(connected->GetOutput());
         bigwriter->Update();
     }
@@ -226,11 +224,9 @@ void CcboostAdapter::splitSegmentations(const itkVolumeType::Pointer outputSegme
     RelabelFilterType::Pointer relabelFilter = RelabelFilterType::New();
     relabelFilter->SetInput(connected->GetOutput());
     relabelFilter->Update();
-//TODO espina2
-//    if(ccboostconfig.saveIntermediateVolumes) {
-    if(true) {
+    if(cfgData.saveIntermediateVolumes) {
         qDebug("Save relabeled segmentation");
-        bigwriter->SetFileName(/*ccboostconfig.train.cacheDir + */"relabeled-segmentation.tif");
+        bigwriter->SetFileName(cfgData.cacheDir + "6" + "relabeled-segmentation.tif");
         bigwriter->SetInput(relabelFilter->GetOutput());
         bigwriter->Update();
     }
@@ -255,22 +251,17 @@ void CcboostAdapter::splitSegmentations(const itkVolumeType::Pointer outputSegme
         labelThresholdFilter->SetUpperThreshold(i);
         labelThresholdFilter->Update();
 
-        //TODO espina2 this probably doesn't work if the pointer points the same memory at every iteration
-        //TODO espina2 create the outputs here?
         itkVolumeType::Pointer outSeg = labelThresholdFilter->GetOutput();
         outSeg->DisconnectPipeline();
         outSegList.push_back(outSeg);
 
     }
 
-
+    return true;
 }
 
-void CcboostAdapter::postprocessing(itkVolumeType::Pointer& outputSegmentation,
-                                               double anisotropyFactor,
-                                               std::string cacheDir,
-                                               int minComponentSize,
-                                               bool saveIntermediateVolumes){
+void CcboostAdapter::postprocessing(const ConfigData<itkVolumeType>& cfgData,
+                                    itkVolumeType::Pointer& outputSegmentation) {
 
 
 
@@ -279,7 +270,7 @@ void CcboostAdapter::postprocessing(itkVolumeType::Pointer& outputSegmentation,
     itkVolumeType::SizeType outputSize = outputSegmentation->GetLargestPossibleRegion().GetSize();
 
     const int borderToRemove = 2;
-    const int borderZ = std::max((int)1, (int)(borderToRemove/anisotropyFactor + 0.5));
+    const int borderZ = std::max((int)1, (int)(borderToRemove/cfgData.train.at(0).zAnisotropyFactor + 0.5));
     const int borderOther = borderToRemove;
 
     // this is dimension-agnostic, though now we need to know which one is Z to handle anisotropy
@@ -334,8 +325,8 @@ void CcboostAdapter::postprocessing(itkVolumeType::Pointer& outputSegmentation,
 
 
     WriterType::Pointer writer = WriterType::New();
-    if(saveIntermediateVolumes) {
-        writer->SetFileName(cacheDir + "ccOutputSegmentation-noborders.tif");
+    if(cfgData.saveIntermediateVolumes) {
+        writer->SetFileName(cfgData.cacheDir + "3" + "ccOutputSegmentation-noborders.tif");
         writer->SetInput(outputSegmentation);
         writer->Update();
         qDebug("cc boost segmentation saved");
@@ -343,87 +334,87 @@ void CcboostAdapter::postprocessing(itkVolumeType::Pointer& outputSegmentation,
 
     qDebug("Threshold ccboost output");
 
-    typedef itk::BinaryThresholdImageFilter <itkVolumeType, itkVolumeType>
-           BinaryThresholdImageFilterType;
+//    typedef itk::BinaryThresholdImageFilter <itkVolumeType, itkVolumeType>
+//            BinaryThresholdImageFilterType;
 
-    int lowerThreshold = 128;
-    int upperThreshold = 255;
+//    int lowerThreshold = 128;
+//    int upperThreshold = 255;
 
-       BinaryThresholdImageFilterType::Pointer thresholdFilter1
-         = BinaryThresholdImageFilterType::New();
-       thresholdFilter1->SetInput(outputSegmentation);
-       //TODO parametrize threshold
-       thresholdFilter1->SetLowerThreshold(lowerThreshold);
-       thresholdFilter1->SetUpperThreshold(upperThreshold);
-       thresholdFilter1->SetInsideValue(255);
-       thresholdFilter1->SetOutsideValue(0);
-       thresholdFilter1->Update();
-       outputSegmentation = thresholdFilter1->GetOutput();
+//    BinaryThresholdImageFilterType::Pointer thresholdFilter1
+//            = BinaryThresholdImageFilterType::New();
+//    thresholdFilter1->SetInput(outputSegmentation);
+//    //TODO parametrize threshold
+//    thresholdFilter1->SetLowerThreshold(lowerThreshold);
+//    thresholdFilter1->SetUpperThreshold(upperThreshold);
+//    thresholdFilter1->SetInsideValue(255);
+//    thresholdFilter1->SetOutsideValue(0);
+//    thresholdFilter1->Update();
+//    outputSegmentation = thresholdFilter1->GetOutput();
 
-       if(saveIntermediateVolumes) {
-                 writer->SetFileName(cacheDir + "outputSegmentation-withsmallcomponents.tif");
-                 writer->SetInput(outputSegmentation);
-                 writer->Update();
-              }
+//    if(cfgData.saveIntermediateVolumes) {
+//        writer->SetFileName(cfgData.cacheDir + "outputSegmentation-withsmallcomponents.tif");
+//        writer->SetInput(outputSegmentation);
+//        writer->Update();
+//    }
 
-       qDebug("Remove small components");
+    qDebug("Remove small components");
 
-       outputSegmentation->DisconnectPipeline();
+//    outputSegmentation->DisconnectPipeline();
 
-       removeSmallComponents(outputSegmentation);
+    removeSmallComponents(outputSegmentation);
 
-       if(saveIntermediateVolumes) {
-          writer->SetFileName(cacheDir + "outputSegmentation-nosmallcomponents.tif");
-          writer->SetInput(outputSegmentation);
-          writer->Update();
-       }
+    if(cfgData.saveIntermediateVolumes) {
+        writer->SetFileName(cfgData.cacheDir + "4" + "outputSegmentation-nosmallcomponents.tif");
+        writer->SetInput(outputSegmentation);
+        writer->Update();
+    }
 
-      qDebug("Threshold segmentation");
+    qDebug("Removed");
 
-      BinaryThresholdImageFilterType::Pointer thresholdFilter
-        = BinaryThresholdImageFilterType::New();
-      thresholdFilter->SetInput(outputSegmentation);
-      thresholdFilter->SetLowerThreshold(lowerThreshold);
-      thresholdFilter->SetUpperThreshold(upperThreshold);
-      thresholdFilter->SetInsideValue(255);
-      thresholdFilter->SetOutsideValue(0);
-      thresholdFilter->Update();
+//    BinaryThresholdImageFilterType::Pointer thresholdFilter
+//            = BinaryThresholdImageFilterType::New();
+//    thresholdFilter->SetInput(outputSegmentation);
+//    thresholdFilter->SetLowerThreshold(lowerThreshold);
+//    thresholdFilter->SetUpperThreshold(upperThreshold);
+//    thresholdFilter->SetInsideValue(255);
+//    thresholdFilter->SetOutsideValue(0);
+//    thresholdFilter->Update();
 
-      if(saveIntermediateVolumes) {
-          writer->SetFileName(cacheDir + "thresholded-segmentation.tif");
-          writer->SetInput(thresholdFilter->GetOutput());
-          writer->Update();
-      }
+//    if(cfgData.saveIntermediateVolumes) {
+//        writer->SetFileName(cfgData.cacheDir + "thresholded-segmentation.tif");
+//        writer->SetInput(thresholdFilter->GetOutput());
+//        writer->Update();
+//    }
 
-      typedef itk::BinaryBallStructuringElement< itkVolumeType::PixelType, 3> StructuringElementType;
-      StructuringElementType structuringElement;
-      int radius = 1;
-      structuringElement.SetRadius(radius);
-      structuringElement.CreateStructuringElement();
+    typedef itk::BinaryBallStructuringElement< itkVolumeType::PixelType, 3> StructuringElementType;
+    StructuringElementType structuringElement;
+    int radius = 1;
+    structuringElement.SetRadius(radius);
+    structuringElement.CreateStructuringElement();
 
-      typedef itk::BinaryDilateImageFilter <itkVolumeType, itkVolumeType, StructuringElementType>
-                   BinaryDilateImageFilterType;
+    typedef itk::BinaryDilateImageFilter <itkVolumeType, itkVolumeType, StructuringElementType>
+            BinaryDilateImageFilterType;
 
-          BinaryDilateImageFilterType::Pointer dilateFilter
-               = BinaryDilateImageFilterType::New();
+    BinaryDilateImageFilterType::Pointer dilateFilter
+            = BinaryDilateImageFilterType::New();
 
-          dilateFilter->SetInput(thresholdFilter->GetOutput());
-          dilateFilter->SetKernel(structuringElement);
-          dilateFilter->Update();
+    dilateFilter->SetInput(outputSegmentation);
+    dilateFilter->SetKernel(structuringElement);
+    dilateFilter->Update();
 
-          qDebug("Dilate Segmentation");
-          if(saveIntermediateVolumes) {
-              writer->SetFileName(cacheDir + "dilated-segmentation.tif");
-              writer->SetInput(dilateFilter->GetOutput());
-              writer->Update();
-          }
+    qDebug("Dilate Segmentation");
+    if(cfgData.saveIntermediateVolumes) {
+        writer->SetFileName(cfgData.cacheDir + "dilated-segmentation.tif");
+        writer->SetInput(dilateFilter->GetOutput());
+        writer->Update();
+    }
 
-          outputSegmentation = thresholdFilter->GetOutput();
-          outputSegmentation->DisconnectPipeline();
+//    outputSegmentation = thresholdFilter->GetOutput();
+    outputSegmentation->DisconnectPipeline();
 
 }
 
-void CcboostAdapter::removeSmallComponents(itk::Image<unsigned char, 3>::Pointer & segmentation, int minCCSize, int threshold){
+void CcboostAdapter::removeSmallComponents(itk::Image<unsigned char, 3>::Pointer & segmentation, int minCCSize, int threshold) {
 
     typedef unsigned int LabelScalarType;
 
@@ -466,33 +457,32 @@ void CcboostAdapter::removeSmallComponents(itk::Image<unsigned char, 3>::Pointer
       }
     }
 
-    WriterType::Pointer writer = WriterType::New();
-    writer->SetFileName("outputSegmentation-nosmallcomponents-in.tif");
-    writer->SetInput(segmentation);
-    writer->Update();
-
 }
 
 void CcboostAdapter::computeAllFeatures(const ConfigData<itkVolumeType> cfgData,
-                                        ThreadStateDescription *stateDescription){
+                                         const CcboostSegmentationFilter *caller) {
 
     for(auto cfgROI: cfgData.train){
-        computeFeatures(cfgData, cfgROI);
+//        if(!caller->canExecute())
+//                return;
+        computeFeatures(cfgData, cfgROI,caller);
     }
     for(auto cfgROI: cfgData.test){
-        computeFeatures(cfgData, cfgROI);
+//        if(!caller->canExecute())
+//                return;
+        computeFeatures(cfgData, cfgROI, caller);
     }
 
 }
 
 void CcboostAdapter::computeFeatures(const ConfigData<itkVolumeType> cfgData,
                                      const SetConfigData<itkVolumeType> cfgDataROI,
-                                     ThreadStateDescription *stateDescription){
+                                     const CcboostSegmentationFilter *caller) {
 
 
     //TODO can we give message with?
-    if(stateDescription->getAbort())
-        return;
+//    if(!caller->canExecute())
+//        return;
 
     std::stringstream strstream;
 
@@ -503,9 +493,11 @@ void CcboostAdapter::computeFeatures(const ConfigData<itkVolumeType> cfgData,
        featureNum++;
        strstream << "Computing " << featureNum << "/" << cfgDataROI.otherFeatures.size()+1 << " features";
        std::cout << strstream.str() << std::endl;
-       stateDescription->setTime(strstream.str());
+//       if(!caller->canExecute())
+//           return;
+       //stateDescription->setTime(strstream.str());
 
-       std::string featureFilepath(cfgDataROI.cacheDir + featureFile);
+       std::string featureFilepath(cfgData.cacheDir + featureFile);
        ifstream featureStream(featureFilepath.c_str());
        //TODO check hash to prevent recomputing
        if(!featureStream.good() || cfgData.forceRecomputeFeatures){
@@ -558,78 +550,30 @@ void CcboostAdapter::computeFeatures(const ConfigData<itkVolumeType> cfgData,
        }
     }
 
-    stateDescription->setMessage("Features computed");
-    stateDescription->setTime("");
+//    stateDescription->setMessage("Features computed");
+//    stateDescription->setTime("");
 }
 
-MultipleROIData CcboostAdapter::preprocess(std::vector<itkVolumeType::Pointer> channels,
-                                                      std::vector<itkVolumeType::Pointer> groundTruths,
-                                                      std::string cacheDir,
-                                                      std::vector<std::string> featuresList){
+void CcboostAdapter::addAllFeatures(const ConfigData<itkVolumeType> &cfgData, ROIData &roi ) {
 
-    MultipleROIData allROIs;
-
-//    for(auto imgItk: channels) {
-//        for(auto gtItk: groundTruths) {
-    {
-            Matrix3D<ImagePixelType> img, gt;
-
-            img.loadItkImage(channels.at(0), true);
-
-            gt.loadItkImage(groundTruths.at(0), true);
-
-            ROIData roi;
-            roi.init( img.data(), gt.data(), 0, 0, img.width(), img.height(), img.depth() );
-
-            // raw image integral image
-            ROIData::IntegralImageType ii;
-            ii.compute( img );
-            roi.addII( ii.internalImage().data() );
-
-            //features
-            //check hash
-//            int zAnisotropyFactor = 1;
-//            computeFeatures(channels.at(0), cacheDir, featuresList, zAnisotropyFactor, false);
-//            for(std::string featureItk: featuresList){
-//                Matrix3D<ImagePixelType> feature;
-//                feature.load(cacheDir + featureItk);
-
-//                // raw image integral image
-//                ROIData::IntegralImageType ii;
-//                ii.compute( feature );
-//                roi.addII( ii.internalImage().data() );
-//            }
-
-            allROIs.add( &roi );
-
-    }
-
-//        }
-//    }
-
-
-
-            return allROIs;
-}
-
-void CcboostAdapter::addAllFeatures(const ConfigData<itkVolumeType> cfgData, ROIData &roi ){
-
-    //add Orient "feature"
-
+    //do this first thing tomorrow
+    //FIXME //TODO add Orient "feature"
+    qDebug("Adding train's features");
     for(auto cfgDataROI: cfgData.train)
-        addFeatures(cfgDataROI, roi);
+        addFeatures(cfgData.cacheDir, cfgDataROI, roi);
+    qDebug("Adding test's features");
     for(auto cfgDataROI: cfgData.test)
-        addFeatures(cfgDataROI, roi);
+        addFeatures(cfgData.cacheDir, cfgDataROI, roi);
 }
 
-void CcboostAdapter::addFeatures(const SetConfigData<itkVolumeType> cfgDataROI,
-                                         ROIData &roi )
-{
+void CcboostAdapter::addFeatures(const std::string& cacheDir,
+                                 const SetConfigData<itkVolumeType>& cfgDataROI,
+                                 ROIData& roi ) {
     // now add channels
     typedef itk::VectorImage<float, 3>  ItkVectorImageType;
     for ( const auto& chanFName: cfgDataROI.otherFeatures )
     {
-        const auto &featFName = cfgDataROI.cacheDir + "/" + chanFName;
+        const auto &featFName = cacheDir + chanFName;
         qDebug("Adding feature %s", featFName.c_str());
 
         itk::ImageFileReader<ItkVectorImageType>::Pointer reader = itk::ImageFileReader<ItkVectorImageType>::New();
@@ -714,4 +658,75 @@ void CcboostAdapter::addFeatures(const SetConfigData<itkVolumeType> cfgDataROI,
             roi.addII( std::move(ii), chanType );
         }
     }
+}
+
+int main(){
+
+    std::setlocale(LC_NUMERIC, "C");
+
+    ConfigData<itkVolumeType> cfgdata;
+    cfgdata.saveIntermediateVolumes = true;
+    cfgdata.cacheDir = "./";
+    cfgdata.rawVolume = "supervoxelcache-";
+    SetConfigData<itkVolumeType> trainData;
+    SetConfigData<itkVolumeType>::setDefaultSet(trainData);
+    trainData.zAnisotropyFactor = 1;
+    cfgdata.train.push_back(trainData);
+
+    typedef itk::ImageFileReader< Matrix3D<float>::ItkImageType > ReaderType;
+      ReaderType::Pointer reader = ReaderType::New();
+      reader->SetFileName(cfgdata.cacheDir + "predicted.tif");
+      reader->Update();
+      Matrix3D<float>::ItkImageType::Pointer probabilisticOutSeg = reader->GetOutput();
+
+      qDebug() << "output image";
+
+      typedef itk::ImageFileWriter< Matrix3D<float>::ItkImageType > fWriterType;
+      fWriterType::Pointer writerf = fWriterType::New();
+
+      if(cfgdata.saveIntermediateVolumes) {
+          writerf->SetFileName(cfgdata.cacheDir + "predicted.tif");
+          writerf->SetInput(probabilisticOutSeg);
+          writerf->Update();
+      }
+      qDebug() << "predicted.tif created";
+
+      typedef itk::BinaryThresholdImageFilter <Matrix3D<float>::ItkImageType, itkVolumeType>
+              fBinaryThresholdImageFilterType;
+
+      int lowerThreshold = 128;
+      int upperThreshold = 255;
+
+      fBinaryThresholdImageFilterType::Pointer thresholdFilter
+              = fBinaryThresholdImageFilterType::New();
+      thresholdFilter->SetInput(probabilisticOutSeg);
+      thresholdFilter->SetLowerThreshold(0);
+      thresholdFilter->SetInsideValue(255);
+      thresholdFilter->SetOutsideValue(0);
+      thresholdFilter->Update();
+
+      typedef itk::ImageFileWriter< itkVolumeType > WriterType;
+      WriterType::Pointer writer = WriterType::New();
+      if(cfgdata.saveIntermediateVolumes) {
+          writer->SetFileName(cfgdata.cacheDir + "predicted-thresholded.tif");
+          writer->SetInput(thresholdFilter->GetOutput());
+          writer->Update();
+      }
+
+      itkVolumeType::Pointer outSeg = thresholdFilter->GetOutput();
+
+      if(cfgdata.saveIntermediateVolumes && outSeg->VerifyRequestedRegion()){
+          writer->SetFileName(cfgdata.cacheDir + "thresh-outputSegmentation.tif");
+          writer->SetInput(outSeg);
+          writer->Update();
+      }
+
+      itkVolumeType::Pointer outputSegmentation = outSeg;
+      outputSegmentation->DisconnectPipeline();
+
+      CcboostAdapter::postprocessing(cfgdata, outputSegmentation);
+
+      std::vector<itkVolumeType::Pointer> outSegList;
+      CcboostAdapter::splitSegmentations(cfgdata, outputSegmentation, outSegList);
+
 }

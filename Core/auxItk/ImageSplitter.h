@@ -1,26 +1,12 @@
-#ifndef __itkSplitterImageFilter_h
-#define __itkSplitterImageFilter_h
- 
-#include "itkImageToImageFilter.h"
- 
+#ifndef __itkImageSplitter_h
+#define __itkImageSplitter_h
+  
 namespace itk
 {
     template< class TImage>
-    class SplitterImageFilter:public ImageToImageFilter< TImage, TImage >
+    class ImageSplitter
     {
     public:
-      /** Standard class typedefs. */
-      typedef SplitterImageFilter             Self;
-      typedef ImageToImageFilter< TImage, TImage > Superclass;
-      typedef SmartPointer< Self >        Pointer;
-
-      /** Method for creation through the object factory. */
-      itkNewMacro(Self);
-
-      /** Run-time type information (and related methods). */
-      itkTypeMacro(SplitterImageFilter, ImageToImageFilter);
-
-
       void computeNumSplits(const typename TImage::SizeType originalSize,
                             const unsigned int numPredictRegions,
                             typename TImage::SizeType & numSplits);
@@ -57,39 +43,23 @@ namespace itk
                                        std::vector<typename TImage::RegionType>& pasteDRegions,
                                        std::vector<typename TImage::RegionType>& pasteORegions);
 
-      void SetSelectedRegion(int regionNum) {
-          this->selectedRegion = regionNum;
-          this->Modified();
-      }
-
     protected:
-      SplitterImageFilter();
-      ~SplitterImageFilter(){}
-
-      /** Does the real work. */
-      virtual void GenerateData();
-      virtual void GenerateOutputInformation();
-
+      ImageSplitter();
+      ~ImageSplitter(){}
 
     private:
-      SplitterImageFilter(const Self &); //purposely not implemented
-      void operator=(const Self &);  //purposely not implemented
-
       typename TImage::OffsetType overlap;
       typename TImage::SizeType numSplits;
-      int selectedRegion;
       std::vector<typename TImage::RegionType> pasteDRegions, pasteORegions, cropRegions;
 
-      bool WorkAsSplitter; //TODO inheritance instead
-      bool needUpdate;
 
     };
 } //namespace ITK
  
  
 #ifndef ITK_MANUAL_INSTANTIATION
-#include "SplitterImageFilter.txx"
+#include "ImageSplitter.txx"
 #endif
  
  
-#endif // __itkSplitterImageFilter_h
+#endif // __itkImageSplitter_h

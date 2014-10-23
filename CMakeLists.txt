@@ -41,16 +41,16 @@ set(auxItkFilters Core/auxItk/GradientMagnitudeImageFilter2.cxx
                   Core/auxItk/EigenOfStructureTensorImageFilter2.cxx
 #FIXME header-cpp please
                   #Core/auxItk/SimpleProcessing.h
-                  Core/auxItk/SplitterImageFilter.h)
+                  Core/auxItk/ImageSplitter.h)
 
 
 set( iiboost_SOURCE_DIR Core/iiboost )
 add_subdirectory( ${iiboost_SOURCE_DIR} )
 
-include_directories( ${iiboost_SOURCE_DIR} )
-include_directories( ${iiboost_SOURCE_DIR}/extra )
-include_directories( ${iiboost_SOURCE_DIR}/deps/eigen )
-include_directories( ${iiboost_SOURCE_DIR}/deps/rapidjson/include )
+include_directories( ${iiboost_SOURCE_DIR}
+                     ${iiboost_SOURCE_DIR}/extra
+                     ${iiboost_SOURCE_DIR}/deps/eigen
+                     ${iiboost_SOURCE_DIR}/deps/rapidjson/include )
 
 # RANDOMLIB
 set(RANDOMLIB_DESTPATH "${CMAKE_BINARY_DIR}/randomlib")
@@ -78,18 +78,14 @@ qt4_wrap_ui (UI_BUILT_SOURCES
   ${ESPINA_INCLUDE}/App/Dialogs/TabularReport/TabularReportEntry.ui
   GUI/Settings/CcboostSegmentationSettings.ui
 #  GUI/FilterInspector/CcboostSegmentationFilterInspector.ui
-  GUI/extras/waitform.ui
 )
 
 QT4_WRAP_CPP(MOC_SOURCES
   CcboostSegmentationPlugin.h
   Filter/CcboostSegmentationFilter.h
-  Filter/CcboostSegmentationFilterThread.h
   GUI/Settings/CcboostSegmentationSettings.h
   GUI/CcboostSegmentationToolGroup.h
 #  GUI/FilterInspector/CcboostSegmentationFilterInspector.h
-
-  GUI/extras/waitform.h
 
   OPTIONS -DBOOST_TT_HAS_OPERATOR_HPP_INCLUDED
 )
@@ -110,7 +106,6 @@ set (PLUGIN_SOURCES
   GUI/CcboostSegmentationToolGroup.cpp
   GUI/Settings/CcboostSegmentationSettings.cpp
 #  GUI/FilterInspector/CcboostSegmentationFilterInspector.cpp
-  GUI/extras/waitform.cpp
   ${auxItkFilters}
 )
 
@@ -151,3 +146,6 @@ install(
   TARGETS CcboostSegmentationPlugin
   LIBRARY DESTINATION ${INSTALL_BIN_DIR}/plugins
   )
+
+add_executable(postprocess Filter/CcboostAdapter.cpp ${auxItkFilters})
+target_link_libraries(postprocess ${ITK_LIBRARIES})

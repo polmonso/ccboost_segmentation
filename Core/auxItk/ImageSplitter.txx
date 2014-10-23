@@ -1,7 +1,7 @@
-#ifndef __itkSplitterImageFilter_hxx
-#define __itkSplitterImageFilter_hxx
+#ifndef __itkImageSplitter_hxx
+#define __itkImageSplitter_hxx
  
-#include "SplitterImageFilter.h"
+#include "ImageSplitter.h"
 #include "itkObjectFactory.h"
 #include "itkImageRegionIterator.h"
 #include "itkImageRegionConstIterator.h"
@@ -17,103 +17,19 @@ namespace itk
 {
 
 template< class TImage>
-SplitterImageFilter< TImage>::SplitterImageFilter() : selectedRegion(0), WorkAsSplitter(true), needUpdate(true)
-{
-}
-
-template< class TImage>
-void SplitterImageFilter< TImage>::SetWorkAsSplitter(bool split)
-{
-    this->WorkAsSplitter = split;
-}
-
-template< class TImage>
-void SplitterImageFilter< TImage>::SetNumSplits(const typename TImage::SizeType numSplits)
+void ImageSplitter< TImage >::SetNumSplits(const typename TImage::SizeType numSplits)
 {
     this->numSplits = numSplits;
-    bool needUpdate = true;
 }
 
 template< class TImage>
-void SplitterImageFilter< TImage>::SetOverlap(const typename TImage::OffsetType overlap)
+void ImageSplitter< TImage >::SetOverlap(const typename TImage::OffsetType overlap)
 {
     this->overlap = overlap;
-    bool needUpdate = true;
 }
 
 template< class TImage>
-void SplitterImageFilter< TImage>::GenerateOutputInformation()
-{
-    Superclass::GenerateOutputInformation();
-
-//    typename TImage::ConstPointer  inputImage  = this->GetInput();
-//    typename TImage::Pointer       outputImage = this->GetOutput();
-
-//    typename TImage::SizeType rawSize = inputImage->GetLargestPossibleRegion().GetSize();
-
-//    if(needUpdate) {
-//        getCroppedRegions(rawSize, overlap, numSplits, cropRegions, pasteDRegions, pasteORegions);
-//        needUpdate = false;
-//    }
-
-//    std::cout << rawSize << std::endl;
-//    std::cout << cropRegions.at(selectedRegion) << std::endl;
-
-//    outputImage->SetLargestPossibleRegion( cropRegions.at(selectedRegion) );
-//    outputImage->SetSpacing( inputImage->GetSpacing() );
-//    outputImage->SetOrigin( inputImage->GetOrigin() );
-//    outputImage->SetDirection( inputImage->GetDirection() );
-}
-
-template< class TImage>
-void SplitterImageFilter< TImage>::GenerateData()
-{
-  typename TImage::ConstPointer input = this->GetInput();
-  typename TImage::Pointer output = this->GetOutput();
-  
-  typename TImage::SizeType rawSize = input->GetLargestPossibleRegion().GetSize();
-
-  //TODO base-class <-- splitter/merger
-  std::cerr << "splitter? " << WorkAsSplitter << std::endl;
-  if(WorkAsSplitter) {
-
-      if(needUpdate) {
-          getCroppedRegions(rawSize, overlap, numSplits, cropRegions, pasteDRegions, pasteORegions);
-          needUpdate = false;
-      }
-
-      output->SetRegions(cropRegions.at(selectedRegion));
-      output->SetLargestPossibleRegion( cropRegions.at(selectedRegion) );
-      this->AllocateOutputs();
-
-      ImageAlgorithm::Copy(input.GetPointer(), output.GetPointer(), output->GetRequestedRegion(),
-                             output->GetRequestedRegion() );
-
-      typedef itk::ImageFileWriter< TImage > NormalWriterType;
-      typename NormalWriterType::Pointer writer = NormalWriterType::New();
-      writer->SetInput( output );
-      std::stringstream filename1;
-      filename1 << "selregion"<< selectedRegion << ".tif";
-
-      writer->SetFileName(filename1.str().c_str());
-
-      writer->Update();
-
-      //saveCroppedRegions(input, cropRegions);
-
-  } else { //WorkAsMerger
-
-      //output = pasteCroppedRegions(input, rawSize, overlap, numSplits, cropRegions, pasteDRegions, pasteORegions);
-
-  }
-
-//  saveCroppedRegions(input, cropRegions);
-
-
-}
-
-template< class TImage>
-void SplitterImageFilter< TImage>::computeNumSplits(const typename TImage::SizeType originalSize,
+void ImageSplitter< TImage >::computeNumSplits(const typename TImage::SizeType originalSize,
                                                     const unsigned int numPredictRegions,
                                                     typename TImage::SizeType & numSplits) {
     typename TImage::SizeType pieceSize = originalSize;
@@ -141,7 +57,7 @@ void SplitterImageFilter< TImage>::computeNumSplits(const typename TImage::SizeT
 }
 
 template< class TImage>
-void SplitterImageFilter< TImage>::getCroppedRegions(const typename TImage::SizeType originalSize,
+void ImageSplitter< TImage>::getCroppedRegions(const typename TImage::SizeType originalSize,
                        const typename TImage::OffsetType overlap,
                        const typename TImage::SizeType numSplits,
                        std::vector<typename TImage::RegionType>& cropRegions,
@@ -240,142 +156,8 @@ void SplitterImageFilter< TImage>::getCroppedRegions(const typename TImage::Size
 
 }
 
-
-//template< class TImage>
-//void SplitterImageFilter< TImage>::getCroppedRegions(const typename TImage::SizeType originalSize,
-//                       const typename TImage::OffsetType overlap,
-//                       const typename TImage::SizeType numSplits,
-//                       std::vector<typename TImage::RegionType>& cropRegions,
-//                       std::vector<typename TImage::RegionType>& pasteDRegions,
-//                       std::vector<typename TImage::RegionType>& pasteORegions){
-
-//    typedef typename TImage::SizeType MySizeType;
-//    int dim = MySizeType::Dimension;
-//    assert(dim == 3);
-
-//    typename TImage::SizeType chunkSize;
-//    chunkSize[0] = originalSize[0]/numSplits[0];
-//    chunkSize[1] = originalSize[1]/numSplits[1];
-//    chunkSize[2] = originalSize[2]/numSplits[2];
-
-//    assert(overlap[0] < chunkSize[0]);
-//    assert(overlap[1] < chunkSize[1]);
-//    assert(overlap[2] < chunkSize[2]);
-
-//    typename TImage::IndexType cropIndexO;
-//    typename TImage::IndexType cropIndexD;
-//    typename TImage::IndexType pasteDIndexO;
-//    typename TImage::IndexType pasteDIndexD;
-//    typename TImage::IndexType pasteOIndexO;
-//    typename TImage::IndexType pasteOIndexD;
-
-//    for(int k=0; k < numSplits[2]; k++){
-
-//        if(k == 0){
-//            cropIndexO[2]   = 0;
-//            pasteDIndexO[2] = 0;
-//            pasteOIndexO[2] = 0;
-//        } else {
-//            cropIndexO[2]   = k*chunkSize[2] - overlap[2];
-//            pasteDIndexO[2] = k*chunkSize[2];
-//            pasteOIndexO[2] = overlap[2];
-//        }
-
-//        if(k+1 == numSplits[2]){
-//            cropIndexD[2]   = originalSize[2];
-//            pasteDIndexD[2] = originalSize[2];
-//            pasteOIndexD[2] = pasteOIndexO[2] + chunkSize[2] + originalSize[2]%chunkSize[2];
-//            std::cout << "k " << k << " numSplits " << numSplits[2]
-//                      << " pOiO " << pasteOIndexO[2] << " pOiD " << pasteOIndexD[2]
-//                      << " cS " << chunkSize[2] << std::endl;
-//        } else {
-//            cropIndexD[2]   = cropIndexO[2]   + chunkSize[2] + overlap[2];
-//            pasteDIndexD[2] = pasteDIndexO[2] + chunkSize[2];
-//            pasteOIndexD[2] = pasteOIndexO[2] + chunkSize[2];
-//        }
-
-//        for(int j=0; j < numSplits[1]; j++){
-
-//            if(j == 0){
-//                cropIndexO[1]   = 0;
-//                pasteDIndexO[1] = 0;
-//                pasteOIndexO[1] = 0;
-//            } else {
-//                cropIndexO[1]   = j*chunkSize[1] - overlap[1];
-//                pasteDIndexO[1] = j*chunkSize[1];
-//                pasteOIndexO[1] = overlap[1];
-//            }
-
-//            if(j+1 == numSplits[1]){
-//                cropIndexD[1]   = originalSize[1];
-//                pasteDIndexD[1] = originalSize[1];
-//                pasteOIndexD[1] = pasteOIndexO[1] + chunkSize[1];
-//            } else {
-//                cropIndexD[1]   = cropIndexO[1]   + chunkSize[1] + overlap[1];
-//                pasteDIndexD[1] = pasteDIndexO[1] + chunkSize[1];
-//                pasteOIndexD[1] = pasteOIndexO[1] + chunkSize[1];
-//            }
-
-//            for(int i=0; i < numSplits[0]; i++){
-
-//                if( i==0 ){
-//                    cropIndexO[0]   = 0;
-//                    pasteDIndexO[0] = 0;
-//                    pasteOIndexO[0] = 0;
-//                } else {
-//                    cropIndexO[0]   = i*chunkSize[0] - overlap[0];
-//                    pasteDIndexO[0] = i*chunkSize[0];
-//                    pasteOIndexO[0] = overlap[0];
-//                }
-
-//                if(i+1 == numSplits[0]){
-//                    cropIndexD[0]   = originalSize[0];
-//                    pasteDIndexD[0] = originalSize[0];
-//                    pasteOIndexD[0] = pasteOIndexO[0] + chunkSize[0];
-//                } else {
-//                    cropIndexD[0]   = cropIndexO[0]   + chunkSize[0] + overlap[0];
-//                    pasteDIndexD[0] = pasteDIndexO[0] + chunkSize[0];
-//                    pasteOIndexD[0] = pasteOIndexO[0] + chunkSize[0];
-//                }
-
-//                typename TImage::SizeType cropSize;
-
-//                cropSize[0] = cropIndexD[0] - cropIndexO[0];
-//                cropSize[1] = cropIndexD[1] - cropIndexO[1];
-//                cropSize[2] = cropIndexD[2] - cropIndexO[2];
-
-//                typename TImage::SizeType pasteDSize;
-//                pasteDSize[0] = pasteDIndexD[0] - pasteDIndexO[0];
-//                pasteDSize[1] = pasteDIndexD[1] - pasteDIndexO[1];
-//                pasteDSize[2] = pasteDIndexD[2] - pasteDIndexO[2];
-
-//                typename TImage::SizeType pasteOSize;
-//                pasteOSize[0] = pasteOIndexD[0] - pasteOIndexO[0];
-//                pasteOSize[1] = pasteOIndexD[1] - pasteOIndexO[1];
-//                pasteOSize[2] = pasteOIndexD[2] - pasteOIndexO[2];
-
-//                assert( pasteDSize[0] == chunkSize[0] + (originalSize[0]%chunkSize[0])*(i+1==numSplits[0]));
-//                assert( pasteDSize[1] == chunkSize[1] + (originalSize[1]%chunkSize[1])*(j+1==numSplits[1]));
-//                assert( pasteDSize[2] == chunkSize[2] + (originalSize[2]%chunkSize[2])*(k+1==numSplits[2]));
-
-//                //the chunk size will be chunkSize plus the residu if at last piece
-//                assert( pasteOSize[0] == chunkSize[0] + (originalSize[0]%chunkSize[0])*(i+1==numSplits[0]) );
-//                assert( pasteOSize[1] == chunkSize[1] + (originalSize[1]%chunkSize[1])*(j+1==numSplits[1]) );
-//                assert( pasteOSize[2] == chunkSize[2] + (originalSize[2]%chunkSize[2])*(k+1==numSplits[2]) );
-
-//                typename TImage::RegionType cropRegion(cropIndexO, cropSize);
-//                cropRegions.push_back(cropRegion);
-//                typename TImage::RegionType pasteDRegion(pasteDIndexO, pasteDSize);
-//                pasteDRegions.push_back(pasteDRegion);
-//                typename TImage::RegionType pasteORegion(pasteOIndexO, pasteOSize);
-//                pasteORegions.push_back(pasteORegion);
-//            }
-//        }
-//    }
-//}
-
 template< class TImage>
-void SplitterImageFilter< TImage>::saveCroppedRegions(const typename TImage::ConstPointer rawVolume,
+void ImageSplitter< TImage>::saveCroppedRegions(const typename TImage::ConstPointer rawVolume,
                                                        const std::vector<typename TImage::RegionType> cropRegions) {
 
     typedef itk::ExtractImageFilter< TImage, TImage > ExtractFilterType;
@@ -412,7 +194,7 @@ void SplitterImageFilter< TImage>::saveCroppedRegions(const typename TImage::Con
 
 //TODO does TImage need to be float? (as it originally was in the previous code)
 template< class TImage>
-void SplitterImageFilter< TImage>::pasteCroppedRegions(const typename TImage::ConstPointer rawVolume,
+void ImageSplitter< TImage>::pasteCroppedRegions(const typename TImage::ConstPointer rawVolume,
                                                        const typename TImage::SizeType originalSize,
                                                        const typename TImage::OffsetType overlap,
                                                        const typename TImage::SizeType numSplits,
@@ -500,7 +282,7 @@ void SplitterImageFilter< TImage>::pasteCroppedRegions(const typename TImage::Co
 
 //TODO does TImage need to be float? (as it originally was in the previous code)
 template< class TImage>
-void SplitterImageFilter< TImage>::pasteCroppedRegionsFromDisk(const typename TImage::ConstPointer rawVolume,
+void ImageSplitter< TImage>::pasteCroppedRegionsFromDisk(const typename TImage::ConstPointer rawVolume,
                                                        const typename TImage::SizeType originalSize,
                                                        const typename TImage::OffsetType overlap,
                                                        const typename TImage::SizeType numSplits,

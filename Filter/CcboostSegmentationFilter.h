@@ -56,6 +56,9 @@ namespace EspINA
   : public Filter
   {
     Q_OBJECT
+
+    friend class CcboostAdapter;
+
     static constexpr double   THRESHOLDFACTOR           = 0.005; // Percentage of a single step
     static const unsigned int MAXSAVEDSTATUSES          = 10;
     static const int          MAXITERATIONSFACTOR       = 100;
@@ -176,11 +179,14 @@ namespace EspINA
     bool enoughGroundTruth();
     bool enoughMemory(const itkVolumeType::Pointer channelItk, const itkVolumeType::RegionType annotatedRegion, unsigned int & numPredictRegions);
 
-    itkVolumeType::Pointer mergeSegmentations(const itkVolumeType::Pointer channelItk,
-                                                const SegmentationAdapterList segList,
-                                                const SegmentationAdapterList backgroundSegList);
+    static itkVolumeType::Pointer mergeSegmentations(const itkVolumeType::Pointer channelItk,
+                                                     const SegmentationAdapterList& segList,
+                                                     const SegmentationAdapterList& backgroundSegList);
+
     static void applyEspinaSettings(ConfigData<itkVolumeType> cfgdata);
 
+    void runCore(const ConfigData<itkVolumeType>& ccboostconfig,
+                 std::vector<itkVolumeType::Pointer>& outSegList);
 
   public:
     //TODO espina2. this is a hack to get the segmentations in the filter.

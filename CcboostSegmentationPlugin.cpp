@@ -410,7 +410,9 @@ void CcboostSegmentationPlugin::finishedTask()
         // TODO: what does that mean:
         // samples es la lista de SampleAdapters al que pertenece/donde se origina la segmentación.
         // and how does it relate to we not caring from which segmentations our outputs were born from?
-        auto samples = QueryAdapter::samples(m_finishedTasks.value(filter).segmentation);
+        //auto samples = QueryAdapter::samples(m_finishedTasks.value(filter).segmentation);
+        SampleAdapterSList samples;
+        samples << QueryAdapter::sample(m_viewManager->activeChannel());
         Q_ASSERT(!samples.empty());
 
         m_undoStack->push(new AddSegmentations(segmentation, samples, m_model));
