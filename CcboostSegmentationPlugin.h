@@ -26,7 +26,7 @@
 // Plugin
 #include "Core/Extensions/CcboostSegmentationExtension.h"
 
-// EspINA
+// ESPINA
 #include <Support/ViewManager.h>
 #include <Support/Plugin.h>
 #include <Core/Analysis/Input.h>
@@ -34,13 +34,13 @@
 #include <Core/Factory/FilterFactory.h>
 #include <Core/EspinaTypes.h>
 
-namespace EspINA
+namespace ESPINA
 {
   class CcboostSegmentationPlugin_EXPORT CcboostSegmentationPlugin
   : public Plugin
   {
     Q_OBJECT
-    Q_INTERFACES(EspINA::Plugin)
+    Q_INTERFACES(ESPINA::Plugin)
 
     class ASFilterFactory
     : public FilterFactory
@@ -117,10 +117,10 @@ namespace EspINA
   private:
     struct Data
     {
-      FilterAdapterSPtr adapter;
+      FilterSPtr adapter;
       SegmentationAdapterSPtr segmentation;
 
-      Data(FilterAdapterSPtr adapterP, SegmentationAdapterSPtr segmentationP): adapter{adapterP}, segmentation{segmentationP} {};
+      Data(FilterSPtr adapterP, SegmentationAdapterSPtr segmentationP): adapter{adapterP}, segmentation{segmentationP} {};
       Data(): adapter{nullptr}, segmentation{nullptr} {};
     };
 
@@ -140,12 +140,12 @@ namespace EspINA
     bool                             m_delayedAnalysis;
     SegmentationAdapterList          m_analysisSynapses;
 
-    QMap<FilterAdapterPtr, struct Data> m_executingTasks;
-    QMap<FilterAdapterPtr, struct Data> m_finishedTasks;
+    QMap<FilterPtr, struct Data> m_executingTasks;
+    QMap<FilterPtr, struct Data> m_finishedTasks;
 
     friend class CcboostSegmentationToolGroup;
   };
 
-} // namespace EspINA
+} // namespace ESPINA
 
 #endif// CCBOOSTSEGMENTATION_H

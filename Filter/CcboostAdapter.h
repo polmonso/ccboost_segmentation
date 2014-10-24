@@ -10,10 +10,10 @@
 //ITK
 #include <itkImageFileWriter.h>
 
-// EspINA
+// ESPINA
 #include <Core/EspinaTypes.h>
 
-namespace EspINA
+namespace ESPINA
 {
 class CcboostAdapter
 {
@@ -52,6 +52,6 @@ public:
 
 
 };
-} /* namespace EspINA */
+} /* namespace ESPINA */
 
 #endif // CCBOOSTADAPTER_H

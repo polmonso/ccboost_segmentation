@@ -30,7 +30,7 @@
 // TODO: no filter inspectors yet
 // #include <GUI/FilterInspector/CcboostSegmentationFilterInspector.h>
 
-// EspINA
+// ESPINA
 #include <GUI/Model/ModelAdapter.h>
 #include <Core/IO/FetchBehaviour/RasterizedVolumeFromFetchedMeshData.h>
 #include <Extensions/Morphological/MorphologicalInformation.h>
@@ -52,7 +52,7 @@
 const QString SAS = QObject::tr("SAS");
 const QString SASTAG_PREPEND = QObject::tr("SAS ");
 
-using namespace EspINA;
+using namespace ESPINA;
 
 //-----------------------------------------------------------------------------
 FilterTypeList CcboostSegmentationPlugin::ASFilterFactory::providedFilters() const
@@ -305,7 +305,7 @@ void CcboostSegmentationPlugin::createSASAnalysis()
 //  }
 //  else
 //  {
-//    QMessageBox::warning(nullptr, tr("EspINA"), tr("Current analysis does not contain any synapses"));
+//    QMessageBox::warning(nullptr, tr("ESPINA"), tr("Current analysis does not contain any synapses"));
 //  }
 }
 
@@ -318,7 +318,7 @@ bool CcboostSegmentationPlugin::isSynapse(SegmentationAdapterPtr segmentation)
 //-----------------------------------------------------------------------------
 void CcboostSegmentationPlugin::segmentationsAdded(SegmentationAdapterSList segmentations)
 {
-  QSettings settings(CESVIMA, ESPINA);
+  ESPINA_SETTINGS(settings);
   settings.beginGroup("ccboost segmentation");
   if (!settings.contains("Automatic Computation For Synapses") || !settings.value("Automatic Computation For Synapses").toBool())
     return;
@@ -368,7 +368,7 @@ void CcboostSegmentationPlugin::segmentationsAdded(SegmentationAdapterSList segm
 //-----------------------------------------------------------------------------
 void CcboostSegmentationPlugin::finishedTask()
 {
-  auto filter = qobject_cast<FilterAdapterPtr>(sender());
+  auto filter = dynamic_cast<FilterPtr>(sender());
   disconnect(filter, SIGNAL(finished()), this, SLOT(finishedTask()));
 
   if(!filter->isAborted())
@@ -400,7 +400,7 @@ void CcboostSegmentationPlugin::finishedTask()
 
   for(auto filter: m_finishedTasks.keys())
   {
-    FilterAdapterSPtr adapter = m_finishedTasks.value(filter).adapter;
+    FilterSPtr adapter = m_finishedTasks.value(filter).adapter;
 
     for(int i = 0; i < adapter->numberOfOutputs(); i++){
 
@@ -441,5 +441,5 @@ void CcboostSegmentationPlugin::finishedTask()
   }
 }
 
-Q_EXPORT_PLUGIN2(CcboostSegmentationPlugin, EspINA::CcboostSegmentationPlugin)
+Q_EXPORT_PLUGIN2(CcboostSegmentationPlugin, ESPINA::CcboostSegmentationPlugin)
 

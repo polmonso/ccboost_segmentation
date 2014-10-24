@@ -10,14 +10,14 @@
 
 #include "CcboostSegmentationPlugin_Export.h"
 
-// EspINA
+// ESPINA
 #include <Support/Settings/SettingsPanel.h>
 #include "ui_CcboostSegmentationSettings.h"
 
 // Qt
 #include <QColor>
 
-namespace EspINA
+namespace ESPINA
 {
   class CcboostSegmentationPlugin_EXPORT CcboostSegmentationSettings
   : public SettingsPanel
@@ -45,6 +45,6 @@ namespace EspINA
     bool m_automaticComputation;
     bool m_modified;
   };
-} /* namespace EspINA */
+} /* namespace ESPINA */
 
 #endif /* CCBOOSTSEGMENTATIONSETTINGS_H_ */

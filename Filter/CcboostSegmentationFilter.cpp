@@ -14,11 +14,11 @@
 
 #include "CcboostAdapter.h"
 
-// EspINA
+// ESPINA
 #include <Core/Analysis/Segmentation.h>
 #include <Core/Analysis/Data/MeshData.h>
 #include <Core/Analysis/Data/Mesh/RawMesh.h>
-#include <Core/Analysis/Data/Volumetric/RasterizedVolume.h>
+#include <Core/Analysis/Data/Volumetric/RasterizedVolume.hxx>
 #include <GUI/Representations/SliceRepresentation.h>
 #include <GUI/Representations/MeshRepresentation.h>
 
@@ -80,7 +80,7 @@
 
 const double UNDEFINED = -1.;
 
-using namespace EspINA;
+using namespace ESPINA;
 using namespace std;
 
 const QString SAS = "SAS";
@@ -524,7 +524,7 @@ itkVolumeType::Pointer CcboostSegmentationFilter::mergeSegmentations(const itkVo
 
 void CcboostSegmentationFilter::applyEspinaSettings(ConfigData<itkVolumeType> cfgdata){
 
-    QSettings settings(CESVIMA, ESPINA);
+    ESPINA_SETTINGS(settings);
     settings.beginGroup("Synapse Segmentation");
 
     //FIXME the stored hash in settings is not used, instead the cacheDir path contains the hash,
@@ -593,7 +593,7 @@ void CcboostSegmentationFilter::runCore(const ConfigData<itkVolumeType>& ccboost
 
         qDebug() << QObject::tr("Itk exception on ccboost caught. Error: %1.").arg(err.what());
         //FIXME we're not on main thread, dialog will crash
-//        QMessageBox::warning(NULL, "EspINA", QString("Itk exception when running ccboost. Message: %1").arg(err.what()));
+//        QMessageBox::warning(NULL, "ESPINA", QString("Itk exception when running ccboost. Message: %1").arg(err.what()));
         return;
     }
 

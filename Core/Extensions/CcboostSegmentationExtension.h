@@ -23,7 +23,7 @@
 
 #include "CcboostSegmentationPlugin_Export.h"
 
-// EspINA
+// ESPINA
 #include <Core/Analysis/Extension.h>
 #include <Core/EspinaTypes.h>
 #include <Core/Utils/NmVector3.h>
@@ -33,7 +33,7 @@
 #include <vtkPolyData.h>
 #include <vtkSmartPointer.h>
 
-namespace EspINA
+namespace ESPINA
 {
   const QString SAS = QObject::tr("SAS");
 
@@ -162,6 +162,6 @@ namespace EspINA
   using CcboostSegmentationExtensionPtr  = CcboostSegmentationExtension *;
   using CcboostSegmentationExtensionSPtr = std::shared_ptr<CcboostSegmentationExtension>;
 
-} // namespace EspINA
+} // namespace ESPINA
 
 #endif // APPOSITION_SURFAC_EXTENSION_H

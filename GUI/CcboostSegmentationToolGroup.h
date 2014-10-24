@@ -27,16 +27,16 @@
 #include "CcboostSegmentationPlugin_Export.h"
 #include "Core/Extensions/CcboostSegmentationExtension.h"
 
-// EspINA
+// ESPINA
 #include <Support/ViewManager.h>
-#include <Support/ToolGroup.h>
+#include <Support/Widgets/ToolGroup.h>
 
 class QUndoStack;
 class QIcon;
 class QObject;
 class QString;
 
-namespace EspINA
+namespace ESPINA
 {
   class CcboostSegmentationPlugin;
 
@@ -157,6 +157,6 @@ namespace EspINA
       QAction *m_action;
   };
 
-} // namespace EspINA
+} // namespace ESPINA
 
 #endif// CCBOOSTSEGMENTATIONTOOLBAR_H

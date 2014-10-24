@@ -21,17 +21,17 @@
 #include "SASFetchBehaviour.h"
 #include "CcboostSegmentationFilter.h"
 
-// EspINA
-#include <Core/Analysis/Data/Volumetric/RasterizedVolume.h>
-#include <Core/Analysis/Data/Volumetric/SparseVolume.h>
+// ESPINA
+#include <Core/Analysis/Data/Volumetric/RasterizedVolume.hxx>
+#include <Core/Analysis/Data/Volumetric/SparseVolume.hxx>
 #include <Core/EspinaTypes.h>
 
-namespace EspINA
+namespace ESPINA
 {
   //----------------------------------------------------------------------------
   MeshDataSPtr SASFetchBehaviour::fetchMeshData(OutputSPtr output,
                                                 TemporalStorageSPtr storage,
-                                                QString prefix)
+                                               const QString &path)
   {
     MeshDataSPtr mesh = nullptr;
 
@@ -40,7 +40,7 @@ namespace EspINA
       auto data = DataSPtr{new RawMesh()};
       data->setOutput(output.get());
 
-      if (data->fetchData(storage, prefix))
+      if (data->fetchData(storage, path, QString::number(output->id())))
       {
         output->setData(data);
 
@@ -57,5 +57,5 @@ namespace EspINA
     return mesh;
   }
 
-} // namespace EspINA
+} // namespace ESPINA
 

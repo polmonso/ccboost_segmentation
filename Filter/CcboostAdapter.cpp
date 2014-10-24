@@ -48,7 +48,7 @@
 #include <itkImageToVTKImageFilter.h>
 #include <itkSmoothingRecursiveGaussianImageFilter.h>
 
-using namespace EspINA;
+using namespace ESPINA;
 
 CcboostAdapter::CcboostAdapter()
 {
@@ -165,7 +165,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
          writer->Update();
      }
 
-     QSettings settings(CESVIMA, ESPINA);
+     ESPINA_SETTINGS(settings);
      settings.beginGroup("Synapse Segmentation");
      settings.setValue("Channel Hash", QString(cfgdata.train.at(0).featuresRawVolumeImageHash.c_str()));
 
@@ -491,7 +491,7 @@ void CcboostAdapter::computeFeatures(const ConfigData<itkVolumeType> cfgData,
 
        strstream.str(std::string());
        featureNum++;
-       strstream << "Computing " << featureNum << "/" << cfgDataROI.otherFeatures.size()+1 << " features";
+       strstream << "Computing " << featureNum << "/" << cfgDataROI.otherFeatures.size() << " features";
        std::cout << strstream.str() << std::endl;
 //       if(!caller->canExecute())
 //           return;

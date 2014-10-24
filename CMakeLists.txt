@@ -9,28 +9,46 @@ set (PLUGIN_VERSION_PATCH 0)
 
 cmake_minimum_required(VERSION 2.6)
 
-  set (BUILD_TESTING OFF  CACHE BOOL "Build EspINA Unitary Tests")
+set (BUILD_TESTING OFF  CACHE BOOL "Build EspINA Unitary Tests")
 
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/CMake/Modules/")
 
 if (NOT COMPILING_ESPINA)
 
-  find_package(Qt4 REQUIRED)
-  include(${QT_USE_FILE})
-
-  find_package (VTK REQUIRED)
-  include(${VTK_USE_FILE})
-
-  find_package(ITK REQUIRED)
-  include(${ITK_USE_FILE})
+    find_package(ESPINA REQUIRED)
+    include(${ESPINA_USE_FILE})
 
   find_package(Espina REQUIRED)
   include(${ESPINA_USE_FILE})
-
+    
+    find_package(Qt4 REQUIRED)
+    include(${QT_USE_FILE})
+    
+    find_package (VTK REQUIRED)
+    include(${VTK_USE_FILE})
+    
+    find_package(ITK REQUIRED)
+    include(${ITK_USE_FILE})
+    
 endif ()
 
-  find_package(XLSLIB REQUIRED)
+find_package(OpenMP REQUIRED)
+
+#TODO fix FIndXlslib or remove dependency
+find_package(XLSLIB)
+#set(XLSLIB_INCLUDE_DIR "/home/monso/code/espina-project2/xlslib/src/")
+#set(XLSLIB_LIBRARY "/home/monso/code/espina-project2/xlslib/src/.libs/libxls.so")
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
+
+
+include_directories (
+  ${CMAKE_SOURCE_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${CMAKE_CURRENT_BINARY_DIR} # UI files
+  ${XLSLIB_INCLUDE_DIRS}
+)
+
 
 # ccboost
 include_directories( Core/auxItk )
@@ -39,8 +57,6 @@ set(auxItkFilters Core/auxItk/GradientMagnitudeImageFilter2.cxx
                   Core/auxItk/AllEigenVectorsOfHessian2.cxx
                   Core/auxItk/RepolarizeYVersorWithGradient2.cxx
                   Core/auxItk/EigenOfStructureTensorImageFilter2.cxx
-#FIXME header-cpp please
-                  #Core/auxItk/SimpleProcessing.h
                   Core/auxItk/ImageSplitter.h)
 
 
@@ -54,6 +70,7 @@ include_directories( ${iiboost_SOURCE_DIR}
 
 # RANDOMLIB
 set(RANDOMLIB_DESTPATH "${CMAKE_BINARY_DIR}/randomlib")
+message(STATUS "randomlib: ${RANDOMLIB_DESTPATH}")
 set(RANDOMLIB_LIB "${RANDOMLIB_DESTPATH}/lib/libRandom.a")
 set(RANDOMLIB_INCPATH "${RANDOMLIB_DESTPATH}/include")
 include_directories(${RANDOMLIB_INCPATH})
@@ -62,20 +79,13 @@ include_directories(${RANDOMLIB_INCPATH})
 #ccboost done
 
 
-include_directories (
-  ${CMAKE_SOURCE_DIR}
-  ${CMAKE_CURRENT_SOURCE_DIR}
-  ${CMAKE_CURRENT_BINARY_DIR} # UI files
-  ${XLSLIB_INCLUDE_DIRS}
-)
-
 qt4_add_resources (RCC_BUILT_SOURCES 
   GUI/rsc/CcboostSegmentation.qrc
   )
 
 # Create Interface files
 qt4_wrap_ui (UI_BUILT_SOURCES
-  ${ESPINA_INCLUDE}/App/Dialogs/TabularReport/TabularReportEntry.ui
+  ${ESPINA_INCLUDE}/Support/Widgets/TabularReportEntry.ui
   GUI/Settings/CcboostSegmentationSettings.ui
 #  GUI/FilterInspector/CcboostSegmentationFilterInspector.ui
 )
@@ -114,6 +124,7 @@ set (PLUGIN_LIBRARIES
   EspinaGUI
   EspinaUndo
   EspinaSupport
+  EspinaExtensions
   vtkInfovisCore
   ${XLSLIB_LIBRARIES}
   ${ITK_LIBRARIES}
@@ -136,7 +147,7 @@ GENERATE_EXPORT_HEADER(
              EXPORT_MACRO_NAME CcboostSegmentationPlugin_EXPORT
              EXPORT_FILE_NAME CcboostSegmentationPlugin_Export.h
   )
-target_link_libraries(CcboostSegmentationPlugin ${PLUGIN_LIBRARIES})
+target_link_libraries(CcboostSegmentationPlugin ${PLUGIN_LIBRARIES} ${QT_LIBRARIES} ${ITK_LIBRARIES} ${QUAZIP_LIBRARIES})
 
 if( CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" )
   set_target_properties(CcboostSegmentationPlugin PROPERTIES COMPILE_FLAGS "-fPIC")
@@ -144,7 +155,7 @@ endif( CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" )
 
 install(
   TARGETS CcboostSegmentationPlugin
-  LIBRARY DESTINATION ${INSTALL_BIN_DIR}/plugins
+  DESTINATION "${INSTALL_BIN_DIR}/plugins"
   )
 
 add_executable(postprocess Filter/CcboostAdapter.cpp ${auxItkFilters})

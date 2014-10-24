@@ -23,7 +23,7 @@
 #include "CcboostSegmentationPlugin.h"
 #include <Filter/CcboostSegmentationFilter.h>
 
-// EspINA
+// ESPINA
 #include <GUI/Model/Utils/QueryAdapter.h>
 #include <Undo/AddCategoryCommand.h>
 #include <Undo/AddRelationCommand.h>
@@ -39,7 +39,7 @@
 #include <QDebug>
 #include <QMessageBox>
 
-using namespace EspINA;
+using namespace ESPINA;
 
 //-----------------------------------------------------------------------------
 CcboostSegmentationToolGroup::CcboostSegmentationToolGroup(ModelAdapterSPtr model,
@@ -168,20 +168,21 @@ void CcboostSegmentationToolGroup::createSAS()
   {
     inputs << seg->asInput();
   }
-  auto adapter = m_factory->createFilter<CcboostSegmentationFilter>(inputs, AS_FILTER);
+  auto filterSPtr = m_factory->createFilter<CcboostSegmentationFilter>(inputs, AS_FILTER);
 
   //TODO espina2. this is a überdirty hack to get the segmentations inside the filter
   //TODO find out how to do it properly
-  auto filter = adapter.get()->get().get();
+  //auto filter = adapter.get()->get().get();
+  auto filter = filterSPtr.get();
   filter->m_groundTruthSegList = validSegmentations;
   filter->m_backgroundGroundTruthSegList = validBgSegmentations;
 
   //FIXME fails when validSegmentations is empty and crashes espina
-  struct CcboostSegmentationPlugin::Data data(adapter, m_model->smartPointer(validSegmentations.at(0)));
-  m_plugin->m_executingTasks.insert(adapter.get(), data);
+  struct CcboostSegmentationPlugin::Data data(filterSPtr, m_model->smartPointer(validSegmentations.at(0)));
+  m_plugin->m_executingTasks.insert(filterSPtr.get(), data);
 
-  connect(adapter.get(), SIGNAL(finished()), m_plugin, SLOT(finishedTask()));
-  adapter->submit();
+  connect(filterSPtr.get(), SIGNAL(finished()), m_plugin, SLOT(finishedTask()));
+  Task::submit(filterSPtr);
 
 }
 

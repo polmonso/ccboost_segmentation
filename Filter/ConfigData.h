@@ -129,7 +129,8 @@ public:
         ccConfig.outFileName = "substack";
 
 
-        ccConfig.saveIntermediateVolumes = false;
+        //TODO turn back to not saving
+        ccConfig.saveIntermediateVolumes = true;
         ccConfig.forceRecomputeFeatures = false;
         ccConfig.minComponentSize = 250;
         ccConfig.maxNumObjects = 200;

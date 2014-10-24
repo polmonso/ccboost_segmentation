@@ -5,7 +5,7 @@
  *      Author: Felix de las Pozas Alvarez
  */
 
-// EspINA
+// ESPINA
 #include "CcboostSegmentationSettings.h"
 #include <Support/Settings/EspinaSettings.h>
 
@@ -13,7 +13,7 @@
 #include <QSettings>
 #include <QColorDialog>
 
-namespace EspINA
+namespace ESPINA
 {
   
   //-----------------------------------------------------------------------------
@@ -21,7 +21,7 @@ namespace EspINA
   {
     setupUi(this);
 
-    QSettings settings(CESVIMA, ESPINA);
+    QSettings settings("CeSViMa", "ESPINA");
     settings.beginGroup("ccboost segmentation");
 
     if (settings.contains("Automatic Computation For Synapses"))
@@ -52,7 +52,7 @@ namespace EspINA
     if (!m_modified)
       return;
 
-    QSettings settings(CESVIMA, ESPINA);
+    ESPINA_SETTINGS(settings);
     settings.beginGroup("ccboost segmentation");
     settings.setValue("Automatic Computation For Synapses", m_automaticComputation);
     settings.sync();
@@ -75,4 +75,4 @@ namespace EspINA
     return new CcboostSegmentationSettings();
   }
 
-} /* namespace EspINA */
+} /* namespace ESPINA */

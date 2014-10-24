@@ -9,14 +9,15 @@
 #define CCBOOSTSEGMENTATIONFILTER_H_
 
 #include "CcboostSegmentationPlugin_Export.h"
+#include <Core/Analysis/Filter.h>
 
 //ccboost
 #include <QDebug>
 #include "BoosterInputData.h"
 
-// EspINA
+// ESPINA
 #include <Core/EspinaTypes.h>
-#include <Filters/BasicSegmentationFilter.h>
+#include <Core/Analysis/Filter.h>
 #include <GUI/Representations/MeshRepresentation.h>
 
 #include <Core/Analysis/Data/Mesh/MarchingCubesMesh.hxx>
@@ -44,7 +45,7 @@
 
 class QString;
 
-namespace EspINA
+namespace ESPINA
 {
   class SASFetchBehaviour;
   //FIXME do I have to put this here?
@@ -214,5 +215,5 @@ namespace EspINA
   using CcboostSegmentationFilterPtr  = CcboostSegmentationFilter *;
   using CcboostSegmentationFilterSPtr = std::shared_ptr<CcboostSegmentationFilter>;
 
-} /* namespace EspINA */
+} /* namespace ESPINA */
 #endif /* CCBOOSTSEGMENTATIONFILTER_H_ */

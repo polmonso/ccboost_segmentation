@@ -24,15 +24,15 @@
 // Plugin
 #include <Core/Extensions/CcboostSegmentationExtension.h>
 
-// EspINA
-#include <App/Dialogs/TabularReport/TabularReport.h>
-#include <App/Dialogs/TabularReport/TabularReportEntry.h>
+// ESPINA
+#include <Support/Widgets/TabularReport.h>
+#include <Support/Widgets/TabularReportEntry.h>
 #include <GUI/ModelFactory.h>
 
 // Qt
 #include <QDebug>
 
-namespace EspINA
+namespace ESPINA
 {
   class SASTabularReport
   : public TabularReport
@@ -107,6 +107,6 @@ namespace EspINA
       void extractInformation();
   };
 
-} // namespace EspINA
+} // namespace ESPINA
 
 #endif // SAS_TABULAR_REPORT_H_
