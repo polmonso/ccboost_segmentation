@@ -1,0 +1,8 @@
+<RCC>
+    <qresource prefix="/">
+        <file>SynapseDetection.svg</file>
+        <file>SynapseDetectionPng.png</file>
+        <file>waitIcon.gif</file>
+        <file>MitochondriaDetection.svg</file>
+    </qresource>
+</RCC>

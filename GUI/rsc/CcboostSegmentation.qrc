@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/">
         <file>AppSurface.svg</file>
+        <file>SynapseDetection.svg</file>
     </qresource>
 </RCC>

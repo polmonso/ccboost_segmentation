@@ -107,6 +107,7 @@ set (PLUGIN_SOURCES
   CcboostSegmentationPlugin.cpp
   Core/Extensions/CcboostSegmentationExtension.cpp
   Core/Extensions/ExtensionFactory.cpp
+  Tasks/CcboostTask.cpp
   Filter/CcboostAdapter.cpp
   Filter/CcboostSegmentationFilter.cpp
   Filter/SASFetchBehaviour.cpp

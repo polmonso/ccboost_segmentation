@@ -58,7 +58,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
                           FloatTypeImage::Pointer& probabilisticOutSeg,
                           std::vector<itkVolumeType::Pointer>& outSegList) {
 #ifndef WORKINGASIMPORTER
-#define WORK
+//#define WORK
 #ifdef WORK
     MultipleROIData allROIs;
 
@@ -116,12 +116,13 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
         std::cout << "Error saving JSON model" << std::endl;
 
     probabilisticOutSeg = predImg.asItkImage();
+    probabilisticOutSeg->DisconnectPipeline();
 #else
     typedef itk::ImageFileReader< itk::Image<float, 3> > ReaderType;
     ReaderType::Pointer reader = ReaderType::New();
     reader->SetFileName(cfgdata.cacheDir + "predicted.tif");
     reader->Update();
-    auto outSegmentation = reader->GetOutput();
+    probabilisticOutSeg = reader->GetOutput();
 #endif
     qDebug() << "output image";
 

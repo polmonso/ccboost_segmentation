@@ -90,11 +90,14 @@ namespace ESPINA
      */
     void createSAS();
 
+    void createSimpleCcboostSegmentation();
+
   private:
     ModelAdapterSPtr         m_model;
     ModelFactorySPtr         m_factory;
     QUndoStack              *m_undoStack;
     SASToolSPtr              m_tool;
+    SASToolSPtr              m_tool_ccboost;
     bool                     m_enabled;
     CcboostSegmentationPlugin *m_plugin;
   };

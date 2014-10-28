@@ -26,7 +26,7 @@
 #include <GUI/CcboostSegmentationToolGroup.h>
 #include <GUI/Settings/CcboostSegmentationSettings.h>
 #include <Core/Extensions/ExtensionFactory.h>
-
+#include <Tasks/CcboostTask.h>
 // TODO: no filter inspectors yet
 // #include <GUI/FilterInspector/CcboostSegmentationFilterInspector.h>
 
@@ -53,7 +53,7 @@ const QString SAS = QObject::tr("SAS");
 const QString SASTAG_PREPEND = QObject::tr("SAS ");
 
 using namespace ESPINA;
-
+using namespace CCB;
 //-----------------------------------------------------------------------------
 FilterTypeList CcboostSegmentationPlugin::ASFilterFactory::providedFilters() const
 {
@@ -368,77 +368,150 @@ void CcboostSegmentationPlugin::segmentationsAdded(SegmentationAdapterSList segm
 //-----------------------------------------------------------------------------
 void CcboostSegmentationPlugin::finishedTask()
 {
-  auto filter = dynamic_cast<FilterPtr>(sender());
-  disconnect(filter, SIGNAL(finished()), this, SLOT(finishedTask()));
 
-  if(!filter->isAborted())
-    m_finishedTasks.insert(filter, m_executingTasks[filter]);
+    CcboostTaskPtr ccboostTask = dynamic_cast<CcboostTaskPtr>(sender());
+    disconnect(ccboostTask, SIGNAL(finished()), this, SLOT(finishedTask()));
+//    if(ccboostTask->isAborted())
+//        m_finishedTasks.insert(ccboostTask, m_executingTasks[ccboostTask]);
 
-  m_executingTasks.remove(filter);
+    m_executingTasks.remove(ccboostTask);
 
-  if (!m_executingTasks.empty())
-    return;
+    if (!m_executingTasks.empty())
+        return;
 
-  // maybe all tasks have been aborted.
-  if(m_finishedTasks.empty())
-    return;
+    // maybe all tasks have been aborted.
+    if(m_finishedTasks.empty())
+        return;
 
-  m_undoStack->beginMacro("Create Synaptic ccboost segmentations");
+    m_undoStack->beginMacro("Create Synaptic ccboost segmentations");
 
-  auto classification = m_model->classification();
-  if (classification->category(SAS) == nullptr)
-  {
-    m_undoStack->push(new AddCategoryCommand(m_model->classification()->root(), SAS, m_model, QColor(255,255,0)));
+    auto classification = m_model->classification();
+    if (classification->category(SAS) == nullptr)
+    {
+        m_undoStack->push(new AddCategoryCommand(m_model->classification()->root(), SAS, m_model, QColor(255,255,0)));
 
-    m_model->classification()->category(SAS)->addProperty(QString("Dim_X"), QVariant("500"));
-    m_model->classification()->category(SAS)->addProperty(QString("Dim_Y"), QVariant("500"));
-    m_model->classification()->category(SAS)->addProperty(QString("Dim_Z"), QVariant("500"));
-  }
-
-  CategoryAdapterSPtr category = classification->category(SAS);
-  SegmentationAdapterList createdSegmentations;
-
-  for(auto filter: m_finishedTasks.keys())
-  {
-    FilterSPtr adapter = m_finishedTasks.value(filter).adapter;
-
-    for(int i = 0; i < adapter->numberOfOutputs(); i++){
-
-        auto segmentation = m_factory->createSegmentation(m_finishedTasks.value(filter).adapter, i);
-        segmentation->setCategory(category);
-
-        // TODO: what does that mean:
-        // samples es la lista de SampleAdapters al que pertenece/donde se origina la segmentación.
-        // and how does it relate to we not caring from which segmentations our outputs were born from?
-        //auto samples = QueryAdapter::samples(m_finishedTasks.value(filter).segmentation);
-        SampleAdapterSList samples;
-        samples << QueryAdapter::sample(m_viewManager->activeChannel());
-        Q_ASSERT(!samples.empty());
-
-        m_undoStack->push(new AddSegmentations(segmentation, samples, m_model));
-        //m_undoStack->push(new AddRelationCommand(m_finishedTasks[filter].segmentation, segmentation, SAS, m_model));
-
-        createdSegmentations << segmentation.get();
+        m_model->classification()->category(SAS)->addProperty(QString("Dim_X"), QVariant("500"));
+        m_model->classification()->category(SAS)->addProperty(QString("Dim_Y"), QVariant("500"));
+        m_model->classification()->category(SAS)->addProperty(QString("Dim_Z"), QVariant("500"));
     }
-  }
-  m_undoStack->endMacro();
 
-  m_viewManager->updateSegmentationRepresentations(createdSegmentations);
-  m_viewManager->updateViews();
+    CategoryAdapterSPtr category = classification->category(SAS);
+    SegmentationAdapterList createdSegmentations;
+    for(auto filter: m_finishedTasks.keys())
+    {
+      FilterSPtr adapter = m_finishedTasks.value(filter).adapter;
 
-  m_finishedTasks.clear();
+      for(int i = 0; i < adapter->numberOfOutputs(); i++){
 
-  if(m_delayedAnalysis)
-  {
-    QApplication::restoreOverrideCursor();
-    SASAnalysisDialog *analysis = new SASAnalysisDialog(m_analysisSynapses, m_model, m_undoStack, m_factory, m_viewManager, nullptr);
-    analysis->exec();
+          auto segmentation = m_factory->createSegmentation(m_finishedTasks.value(filter).adapter, i);
+          segmentation->setCategory(category);
 
-    delete analysis;
+          // TODO: what does that mean:
+          // samples es la lista de SampleAdapters al que pertenece/donde se origina la segmentación.
+          // and how does it relate to we not caring from which segmentations our outputs were born from?
+          //auto samples = QueryAdapter::samples(m_finishedTasks.value(filter).segmentation);
+          SampleAdapterSList samples;
+          samples << QueryAdapter::sample(m_viewManager->activeChannel());
+          Q_ASSERT(!samples.empty());
 
-    m_delayedAnalysis = false;
-    m_analysisSynapses.clear();
-  }
+          m_undoStack->push(new AddSegmentations(segmentation, samples, m_model));
+          //m_undoStack->push(new AddRelationCommand(m_finishedTasks[filter].segmentation, segmentation, SAS, m_model));
+
+          createdSegmentations << segmentation.get();
+      }
+    }
+    m_undoStack->endMacro();
+
+    m_viewManager->updateSegmentationRepresentations(createdSegmentations);
+    m_viewManager->updateViews();
+
+    m_finishedTasks.clear();
+
+    if(m_delayedAnalysis)
+    {
+      QApplication::restoreOverrideCursor();
+      SASAnalysisDialog *analysis = new SASAnalysisDialog(m_analysisSynapses, m_model, m_undoStack, m_factory, m_viewManager, nullptr);
+      analysis->exec();
+
+      delete analysis;
+
+      m_delayedAnalysis = false;
+      m_analysisSynapses.clear();
+    }
+    return;
+    //old code:
+
+//  auto filter = dynamic_cast<FilterPtr>(sender());
+//  disconnect(filter, SIGNAL(finished()), this, SLOT(finishedTask()));
+
+//  if(!filter->isAborted())
+//    m_finishedTasks.insert(filter, m_executingTasks[filter]);
+
+//  m_executingTasks.remove(filter);
+
+//  if (!m_executingTasks.empty())
+//    return;
+
+//  // maybe all tasks have been aborted.
+//  if(m_finishedTasks.empty())
+//    return;
+
+//  m_undoStack->beginMacro("Create Synaptic ccboost segmentations");
+
+//  auto classification = m_model->classification();
+//  if (classification->category(SAS) == nullptr)
+//  {
+//    m_undoStack->push(new AddCategoryCommand(m_model->classification()->root(), SAS, m_model, QColor(255,255,0)));
+
+//    m_model->classification()->category(SAS)->addProperty(QString("Dim_X"), QVariant("500"));
+//    m_model->classification()->category(SAS)->addProperty(QString("Dim_Y"), QVariant("500"));
+//    m_model->classification()->category(SAS)->addProperty(QString("Dim_Z"), QVariant("500"));
+//  }
+
+//  CategoryAdapterSPtr category = classification->category(SAS);
+//  SegmentationAdapterList createdSegmentations;
+
+//  for(auto filter: m_finishedTasks.keys())
+//  {
+//    FilterSPtr adapter = m_finishedTasks.value(filter).adapter;
+
+//    for(int i = 0; i < adapter->numberOfOutputs(); i++){
+
+//        auto segmentation = m_factory->createSegmentation(m_finishedTasks.value(filter).adapter, i);
+//        segmentation->setCategory(category);
+
+//        // TODO: what does that mean:
+//        // samples es la lista de SampleAdapters al que pertenece/donde se origina la segmentación.
+//        // and how does it relate to we not caring from which segmentations our outputs were born from?
+//        //auto samples = QueryAdapter::samples(m_finishedTasks.value(filter).segmentation);
+//        SampleAdapterSList samples;
+//        samples << QueryAdapter::sample(m_viewManager->activeChannel());
+//        Q_ASSERT(!samples.empty());
+
+//        m_undoStack->push(new AddSegmentations(segmentation, samples, m_model));
+//        //m_undoStack->push(new AddRelationCommand(m_finishedTasks[filter].segmentation, segmentation, SAS, m_model));
+
+//        createdSegmentations << segmentation.get();
+//    }
+//  }
+//  m_undoStack->endMacro();
+
+//  m_viewManager->updateSegmentationRepresentations(createdSegmentations);
+//  m_viewManager->updateViews();
+
+//  m_finishedTasks.clear();
+
+//  if(m_delayedAnalysis)
+//  {
+//    QApplication::restoreOverrideCursor();
+//    SASAnalysisDialog *analysis = new SASAnalysisDialog(m_analysisSynapses, m_model, m_undoStack, m_factory, m_viewManager, nullptr);
+//    analysis->exec();
+
+//    delete analysis;
+
+//    m_delayedAnalysis = false;
+//    m_analysisSynapses.clear();
+//  }
 }
 
 Q_EXPORT_PLUGIN2(CcboostSegmentationPlugin, ESPINA::CcboostSegmentationPlugin)

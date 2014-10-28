@@ -33,6 +33,7 @@
 #include <Core/Analysis/FetchBehaviour.h>
 #include <Core/Factory/FilterFactory.h>
 #include <Core/EspinaTypes.h>
+#include <Tasks/CcboostTask.h>
 
 namespace ESPINA
 {
@@ -108,6 +109,12 @@ namespace ESPINA
      *
      */
     virtual FilterFactorySList filterFactories() const;
+
+    //FIXME //TODO hack
+  public:
+    SchedulerSPtr getScheduler() {
+        return m_scheduler;
+    }
 
   public slots:
     void createSASAnalysis();

@@ -23,6 +23,8 @@
 #include "CcboostSegmentationPlugin.h"
 #include <Filter/CcboostSegmentationFilter.h>
 
+#include "Tasks/CcboostTask.h"
+
 // ESPINA
 #include <GUI/Model/Utils/QueryAdapter.h>
 #include <Undo/AddCategoryCommand.h>
@@ -47,16 +49,20 @@ CcboostSegmentationToolGroup::CcboostSegmentationToolGroup(ModelAdapterSPtr mode
                                                        ModelFactorySPtr factory,
                                                        ViewManagerSPtr viewManager,
                                                        CcboostSegmentationPlugin *plugin)
-: ToolGroup(viewManager, QIcon(":/AppSurface.svg"), tr("ccboost synapse segmentation"), nullptr)
+: ToolGroup(viewManager, QIcon(":/SynapseDetection.svg"), tr("ccboost synapse segmentation"), nullptr)
 , m_model    {model}
 , m_factory  {factory}
 , m_undoStack{undoStack}
 , m_tool     {SASToolSPtr{new CcboostSegmentationTool{QIcon(":/AppSurface.svg"), tr("Create a synaptic ccboost segmentation from selected segmentations.")}}}
+, m_tool_ccboost     {SASToolSPtr{new CcboostSegmentationTool{QIcon(":/SynapseDetection.svg"), tr("Create a simple synaptic ccboost segmentation from selected segmentations.")}}}
 , m_enabled  {true}
 , m_plugin   {plugin}
 {
   m_tool->setToolTip("Create a synaptic ccboost segmentation from selected segmentations.");
   connect(m_tool.get(), SIGNAL(triggered()), this, SLOT(createSAS()));
+
+  m_tool_ccboost->setToolTip("Create a simple synaptic ccboost segmentation from selected segmentations.");
+  connect(m_tool_ccboost.get(), SIGNAL(triggered()), this, SLOT(createSimpleCcboostSegmentation()));
 
   connect(viewManager->selection().get(), SIGNAL(selectionChanged()), this, SLOT(selectionChanged()));
 }
@@ -87,6 +93,7 @@ ToolSList CcboostSegmentationToolGroup::tools()
   ToolSList tools;
 
   tools << m_tool;
+  tools << m_tool_ccboost;
 
   return tools;
 }
@@ -97,9 +104,9 @@ void CcboostSegmentationToolGroup::selectionChanged()
   QString toolTip("Create a synaptic ccboost segmentation from selected segmentations.");
   bool enabled = false;
 
-  for(auto segmentation: m_viewManager->selection()->segmentations())
+  for(auto segmentation: m_model->segmentations())
   {
-    if (m_plugin->isSynapse(segmentation))
+      if (m_plugin->isSynapse(segmentation.get()))
     {
       enabled = true;
       break;
@@ -107,7 +114,7 @@ void CcboostSegmentationToolGroup::selectionChanged()
   }
 
   if (!enabled)
-    toolTip += QString("\n(Requires a selection of one or more segmentations from 'Synapse' taxonomy)");
+    toolTip += QString("\n(Requires the presence of one or more segmentations from 'Synapse' taxonomy)");
 
   m_tool->setToolTip(toolTip);
   m_tool->setEnabled(enabled && m_enabled);
@@ -159,6 +166,89 @@ void CcboostSegmentationToolGroup::createSAS()
   }
 
   qDebug() << "Using channel " << m_viewManager->activeChannel()->data(Qt::DisplayRole);
+
+  inputs << channelInput;
+
+
+  //TODO espina2 remove this segmentation input dependency
+  for(auto seg: validSegmentations)
+  {
+    inputs << seg->asInput();
+  }
+  auto filterSPtr = m_factory->createFilter<CcboostSegmentationFilter>(inputs, AS_FILTER);
+
+  //TODO espina2. this is a überdirty hack to get the segmentations inside the filter
+  //TODO find out how to do it properly
+  //auto filter = adapter.get()->get().get();
+  auto filter = filterSPtr.get();
+  filter->m_groundTruthSegList = validSegmentations;
+  filter->m_backgroundGroundTruthSegList = validBgSegmentations;
+
+  //FIXME fails when validSegmentations is empty and crashes espina
+  struct CcboostSegmentationPlugin::Data data(filterSPtr, m_model->smartPointer(validSegmentations.at(0)));
+  m_plugin->m_executingTasks.insert(filterSPtr.get(), data);
+
+  connect(filterSPtr.get(), SIGNAL(finished()), m_plugin, SLOT(finishedTask()));
+  Task::submit(filterSPtr);
+
+}
+
+//-----------------------------------------------------------------------------
+void CcboostSegmentationToolGroup::createSimpleCcboostSegmentation()
+{
+  auto segmentations = m_model->segmentations();
+  SegmentationAdapterList validSegmentations;
+  SegmentationAdapterList validBgSegmentations;
+  for(auto seg: segmentations)
+  {
+          //TODO espina2
+//      QStringList tags = SegmentationTags::extension(seg.get())->tags();
+//          if(tags.contains(SynapseDetectionFilter::POSITIVETAG + SynapseDetectionFilter::ELEMENT, Qt::CaseInsensitive) ||
+//             tags.contains(SynapseDetectionFilter::NEGATIVETAG + SynapseDetectionFilter::ELEMENT, Qt::CaseInsensitive)){
+//              validSegmentations << seg;
+//          }
+  }
+
+  if(validSegmentations.isEmpty()){
+//TODO espina2
+//      qDebug() << "No tags named " << SynapseDetectionFilter::POSITIVETAG << SynapseDetectionFilter::ELEMENT << " and "
+//               << SynapseDetectionFilter::NEGATIVETAG << SynapseDetectionFilter::ELEMENT << " found, using category name "
+//               << SynapseDetectionFilter::ELEMENT << " and " << SynapseDetectionFilter::BACKGROUND;
+
+      //TODO add tag automatically
+      for(auto seg: segmentations) {
+          //TODO espina2 const the string
+//          if (seg->taxonomy()->qualifiedName().contains(SynapseDetectionFilter::ELEMENT, Qt::CaseInsensitive)
+        if (seg->category()->classificationName().contains("Synapse", Qt::CaseInsensitive))
+          validSegmentations << seg.get(); //invalid if the shared pointer goes out of scope
+        else if(seg->category()->classificationName().contains("Background", Qt::CaseInsensitive))
+            validBgSegmentations << seg.get();
+      }
+  }
+
+  InputSPtr channelInput;
+  InputSList inputs;
+
+  ChannelAdapterPtr channel;
+  if(m_viewManager->activeChannel() != NULL) {
+      channel = m_viewManager->activeChannel();
+      channelInput = channel->asInput();
+   } else {
+      channel = m_model->channels().at(0).get();
+      channelInput = channel->asInput();
+  }
+
+  qDebug() << "Using channel " << m_viewManager->activeChannel()->data(Qt::DisplayRole);
+
+
+  //create and run task
+  SchedulerSPtr scheduler = m_plugin->getScheduler();
+  CCB::CcboostTaskSPtr ccboostTask{new CCB::CcboostTask(channel, scheduler)};
+  connect(ccboostTask.get(), SIGNAL(finished()), m_plugin, SLOT(finishedTask()));
+  Task::submit(ccboostTask);
+
+  return;
+  //FIXME //TODO remove old code:
 
   inputs << channelInput;
 
