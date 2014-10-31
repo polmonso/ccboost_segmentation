@@ -24,7 +24,7 @@
 #include "CcboostSegmentationPlugin_Export.h"
 
 // Plugin
-#include "Core/Extensions/CcboostSegmentationExtension.h"
+//#include "Core/Extensions/CcboostSegmentationExtension.h"
 
 // ESPINA
 #include <Support/ViewManager.h>
@@ -43,12 +43,12 @@ namespace ESPINA
     Q_OBJECT
     Q_INTERFACES(ESPINA::Plugin)
 
-    class ASFilterFactory
-    : public FilterFactory
-    {
-        virtual FilterTypeList providedFilters() const;
-        virtual FilterSPtr createFilter(InputSList inputs, const Filter::Type& filter, SchedulerSPtr scheduler) const throw (Unknown_Filter_Exception);
-    };
+//    class CCBFilterFactory
+//    : public FilterFactory
+//    {
+//        virtual FilterTypeList providedFilters() const;
+//        virtual FilterSPtr createFilter(InputSList inputs, const Filter::Type& filter, SchedulerSPtr scheduler) const throw (Unknown_Filter_Exception);
+//    };
 
   public:
     explicit CcboostSegmentationPlugin();
@@ -60,54 +60,24 @@ namespace ESPINA
                       SchedulerSPtr    scheduler,
                       QUndoStack      *undoStack);
 
-    /* \brief Implements Plugin::channelExtensionFactories().
-     *
-     */
     virtual ChannelExtensionFactorySList channelExtensionFactories() const;
 
-    /* \brief Implements Plugin::segmentationExtensionFactories().
-     *
-     */
     virtual SegmentationExtensionFactorySList segmentationExtensionFactories() const;
 
-    /* \brief Implements Plugin::colorEngines().
-     *
-     */
     virtual NamedColorEngineSList colorEngines() const;
 
-    /* \brief Implements Plugin::toolGroups().
-     *
-     */
     virtual QList<ToolGroup *> toolGroups() const;
 
-    /* \brief Implements Plugin::dockWidgets().
-     *
-     */
     virtual QList<DockWidget *> dockWidgets() const;
 
-    /* \brief Implements Plugin::renderers().
-     *
-     */
     virtual RendererSList renderers() const;
 
-    /* \brief Implements Plugin::settingsPanels().
-     *
-     */
     virtual SettingsPanelSList settingsPanels() const;
 
-    /* \brief Implements Plugin::menuEntries().
-     *
-     */
     virtual QList<MenuEntry> menuEntries() const;
 
-    /* \brief Implements Plugin::analysisReaders().
-     *
-     */
     virtual AnalysisReaderSList analysisReaders() const;
 
-    /* \brief Implements Plugin::filterFactories().
-     *
-     */
     virtual FilterFactorySList filterFactories() const;
 
     //FIXME //TODO hack
@@ -117,19 +87,17 @@ namespace ESPINA
     }
 
   public slots:
-    void createSASAnalysis();
     void segmentationsAdded(SegmentationAdapterSList segmentations);
     void finishedTask();
 
   private:
-    struct Data
-    {
-      FilterSPtr adapter;
-      SegmentationAdapterSPtr segmentation;
+    struct Data2
+        {
+//         std::vector<itkVolumeType::Pointer>&  predictedSegmentationsList;
 
-      Data(FilterSPtr adapterP, SegmentationAdapterSPtr segmentationP): adapter{adapterP}, segmentation{segmentationP} {};
-      Data(): adapter{nullptr}, segmentation{nullptr} {};
-    };
+//         Data2(std::vector<itkVolumeType::Pointer>& predSegList): predictedSegmentationsList{predSegList} {};
+//         Data2(): predictedSegmentationsList{nullptr} {};
+        };
 
     static bool isSynapse(SegmentationAdapterPtr segmentation);
 
@@ -147,8 +115,11 @@ namespace ESPINA
     bool                             m_delayedAnalysis;
     SegmentationAdapterList          m_analysisSynapses;
 
-    QMap<FilterPtr, struct Data> m_executingTasks;
-    QMap<FilterPtr, struct Data> m_finishedTasks;
+    QMap<CCB::CcboostTaskPtr, struct Data2> m_executingTasks2;
+    QMap<CCB::CcboostTaskPtr, struct Data2> m_finishedTasks2;
+
+    SegmentationAdapterSList createSegmentations(std::vector<itkVolumeType::Pointer>&  predictedSegmentationsList);
+
 
     friend class CcboostSegmentationToolGroup;
   };

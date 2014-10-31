@@ -24,7 +24,7 @@ if (NOT COMPILING_ESPINA)
     find_package(Qt4 REQUIRED)
     include(${QT_USE_FILE})
     
-    find_package (VTK REQUIRED)
+    find_package(VTK REQUIRED)
     include(${VTK_USE_FILE})
     
     find_package(ITK REQUIRED)
@@ -92,7 +92,7 @@ qt4_wrap_ui (UI_BUILT_SOURCES
 
 QT4_WRAP_CPP(MOC_SOURCES
   CcboostSegmentationPlugin.h
-  Filter/CcboostSegmentationFilter.h
+#  Filter/CcboostSegmentationFilter.h
   GUI/Settings/CcboostSegmentationSettings.h
   GUI/CcboostSegmentationToolGroup.h
 #  GUI/FilterInspector/CcboostSegmentationFilterInspector.h
@@ -105,15 +105,15 @@ set (PLUGIN_SOURCES
   ${RCC_BUILT_SOURCES}
   ${UI_BUILT_SOURCES}
   CcboostSegmentationPlugin.cpp
-  Core/Extensions/CcboostSegmentationExtension.cpp
-  Core/Extensions/ExtensionFactory.cpp
+#  Core/Extensions/CcboostSegmentationExtension.cpp
+#  Core/Extensions/ExtensionFactory.cpp
   Tasks/CcboostTask.cpp
   Filter/CcboostAdapter.cpp
-  Filter/CcboostSegmentationFilter.cpp
-  Filter/SASFetchBehaviour.cpp
-  GUI/Analysis/SASAnalysisDialog.cpp
-  GUI/Analysis/SASTabularReport.cpp
-  GUI/Analysis/SASInformationProxy.cpp
+#  Filter/CcboostSegmentationFilter.cpp
+#  Filter/SASFetchBehaviour.cpp
+#  GUI/Analysis/SASAnalysisDialog.cpp
+#  GUI/Analysis/SASTabularReport.cpp
+#  GUI/Analysis/SASInformationProxy.cpp
   GUI/CcboostSegmentationToolGroup.cpp
   GUI/Settings/CcboostSegmentationSettings.cpp
 #  GUI/FilterInspector/CcboostSegmentationFilterInspector.cpp

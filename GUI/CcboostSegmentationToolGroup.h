@@ -25,7 +25,7 @@
 #include <Core/MultiTasking/Task.h>
 #include <GUI/Model/ModelAdapter.h>
 #include "CcboostSegmentationPlugin_Export.h"
-#include "Core/Extensions/CcboostSegmentationExtension.h"
+//#include "Core/Extensions/CcboostSegmentationExtension.h"
 
 // ESPINA
 #include <Support/ViewManager.h>
@@ -80,16 +80,6 @@ namespace ESPINA
     virtual ToolSList tools();
 
   public slots:
-    /* \brief Changes action enabled/disabled depending on the actual selection.
-     *
-     */
-    void selectionChanged();
-
-    /* \brief Launches the tasks to create SAS from the group of selected segmentations.
-     *
-     */
-    void createSAS();
-
     void createSimpleCcboostSegmentation();
 
   private:

@@ -55,10 +55,10 @@ CcboostAdapter::CcboostAdapter()
 }
 
 bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
-                          FloatTypeImage::Pointer& probabilisticOutSeg,
+                          FloatTypeImage::Pointer probabilisticOutSeg,
                           std::vector<itkVolumeType::Pointer>& outSegList) {
 #ifndef WORKINGASIMPORTER
-//#define WORK
+#define WORK
 #ifdef WORK
     MultipleROIData allROIs;
 
@@ -81,9 +81,17 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
     roi.addII( ii.internalImage().data() );
 
     //features
+    TimerRT timerF; timerF.reset();
+
     computeAllFeatures(cfgdata);
 
+    qDebug("Compute all features Elapsed: %f", timerF.elapsed());
+
+    timerF.reset();
+
     addAllFeatures(cfgdata, roi);
+
+    qDebug("Add all features Elapsed: %f", timerF.elapsed());
 
     allROIs.add( &roi );
 
@@ -100,7 +108,11 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
 
     qDebug() << "training";
 
+    timerF.reset();
+
     adaboost.train( bdata, 100 );
+
+    qDebug("train Elapsed: %f", timerF.elapsed());
 
     qDebug() << "predict";
 
@@ -116,7 +128,8 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
         std::cout << "Error saving JSON model" << std::endl;
 
     probabilisticOutSeg = predImg.asItkImage();
-    probabilisticOutSeg->DisconnectPipeline();
+//    probabilisticOutSeg->DisconnectPipeline();
+
 #else
     typedef itk::ImageFileReader< itk::Image<float, 3> > ReaderType;
     ReaderType::Pointer reader = ReaderType::New();
@@ -460,25 +473,23 @@ void CcboostAdapter::removeSmallComponents(itk::Image<unsigned char, 3>::Pointer
 
 }
 
-void CcboostAdapter::computeAllFeatures(const ConfigData<itkVolumeType> cfgData,
-                                         const CcboostSegmentationFilter *caller) {
+void CcboostAdapter::computeAllFeatures(const ConfigData<itkVolumeType> cfgData) {
 
     for(auto cfgROI: cfgData.train){
 //        if(!caller->canExecute())
 //                return;
-        computeFeatures(cfgData, cfgROI,caller);
+        computeFeatures(cfgData, cfgROI);
     }
     for(auto cfgROI: cfgData.test){
 //        if(!caller->canExecute())
 //                return;
-        computeFeatures(cfgData, cfgROI, caller);
+        computeFeatures(cfgData, cfgROI);
     }
 
 }
 
 void CcboostAdapter::computeFeatures(const ConfigData<itkVolumeType> cfgData,
-                                     const SetConfigData<itkVolumeType> cfgDataROI,
-                                     const CcboostSegmentationFilter *caller) {
+                                     const SetConfigData<itkVolumeType> cfgDataROI) {
 
 
     //TODO can we give message with?

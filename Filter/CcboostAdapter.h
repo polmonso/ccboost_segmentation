@@ -6,7 +6,7 @@
 #include "BoosterInputData.h"
 
 #include "ConfigData.h"
-#include "CcboostSegmentationFilter.h"
+//#include "CcboostSegmentationFilter.h"
 //ITK
 #include <itkImageFileWriter.h>
 
@@ -37,9 +37,9 @@ public:
                                int minCCSize = 1000,
                                int threshold = 128);
 
-    static void computeAllFeatures(const ConfigData<itkVolumeType> cfgData, const CcboostSegmentationFilter *caller = NULL);
+    static void computeAllFeatures(const ConfigData<itkVolumeType> cfgData);
 
-    static void computeFeatures(const ConfigData<itkVolumeType> cfgData, const SetConfigData<itkVolumeType> cfgDataROI, const CcboostSegmentationFilter *caller = NULL);
+    static void computeFeatures(const ConfigData<itkVolumeType> cfgData, const SetConfigData<itkVolumeType> cfgDataROI);
 
     static void addAllFeatures(const ConfigData<itkVolumeType>& cfgData, ROIData &roi);
 
@@ -47,7 +47,7 @@ public:
 
     //TODO add const-correctness
     static bool core(const ConfigData<itkVolumeType>& cfg,
-                     FloatTypeImage::Pointer& probabilisticOutSeg,
+                     FloatTypeImage::Pointer probabilisticOutSeg,
                      std::vector<itkVolumeType::Pointer>& outSegList);
 
 
