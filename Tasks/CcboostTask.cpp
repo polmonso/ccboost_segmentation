@@ -75,7 +75,7 @@ using namespace ESPINA;
 using namespace CCB;
 using namespace std;
 
-const QString SAS = "SAS";
+const QString CVL = "CVL";
 
 const QString CcboostTask::MITOCHONDRIA = "mitochondria";
 const QString CcboostTask::SYNAPSE = "synapse";
@@ -520,6 +520,7 @@ void CcboostTask::runCore(const ConfigData<itkVolumeType>& ccboostconfig,
         itk::MultiThreader::SetGlobalDefaultNumberOfThreads( prevITKNumberOfThreads );
 
         qDebug() << QObject::tr("Itk exception on ccboost caught. Error: %1.").arg(err.what());
+
         //FIXME we're not on main thread, dialog will crash
 //        QMessageBox::warning(NULL, "ESPINA", QString("Itk exception when running ccboost. Message: %1").arg(err.what()));
         return;
@@ -528,14 +529,30 @@ void CcboostTask::runCore(const ConfigData<itkVolumeType>& ccboostconfig,
     // restore default number of threads
     itk::MultiThreader::SetGlobalDefaultNumberOfThreads( prevITKNumberOfThreads );
 
-    //FIXME TODO why probabilisticOutput is empty?
-//    if(ccboostconfig.saveIntermediateVolumes){
-//        typedef itk::ImageFileWriter<CcboostAdapter::FloatTypeImage> FloatWriterType;
-//        FloatWriterType::Pointer fwriter = FloatWriterType::New();
-//        fwriter->SetFileName(ccboostconfig.cacheDir + "ccboost-probabilistic-output.tif");
-//        fwriter->SetInput(probabilisticOutputSegmentation);
-//        fwriter->Update();
-//    }
+    try {
+        qDebug() << "tic";
+        //FIXME TODO why probabilisticOutput is empty?
+        if(ccboostconfig.saveIntermediateVolumes){
+            typedef itk::ImageFileWriter<CcboostAdapter::FloatTypeImage> FloatWriterType;
+            FloatWriterType::Pointer fwriter = FloatWriterType::New();
+            fwriter->SetFileName(ccboostconfig.cacheDir + "ccboost-probabilistic-output.tif");
+            fwriter->SetInput(probabilisticOutputSegmentation);
+            fwriter->Update();
+        }
+
+        qDebug() << "toc";
+
+    } catch( itk::ExceptionObject & err ) {
+        // restore default number of threads
+        itk::MultiThreader::SetGlobalDefaultNumberOfThreads( prevITKNumberOfThreads );
+
+        qDebug() << QObject::tr("Itk exception on ccboost caught. Error: %1. From %2:%3").arg(err.what()).arg(__FILE__).arg(__LINE__);
+
+        //FIXME we're not on main thread, dialog will crash
+        //        QMessageBox::warning(NULL, "ESPINA", QString("Itk exception when running ccboost. Message: %1").arg(err.what()));
+        return;
+    }
+
 
 }
 

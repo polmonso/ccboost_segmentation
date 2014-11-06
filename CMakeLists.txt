@@ -160,4 +160,4 @@ install(
   )
 
 add_executable(postprocess Filter/CcboostAdapter.cpp ${auxItkFilters})
-target_link_libraries(postprocess ${ITK_LIBRARIES})
+target_link_libraries(postprocess ${ITK_LIBRARIES} ${RANDOMLIB_LIB})

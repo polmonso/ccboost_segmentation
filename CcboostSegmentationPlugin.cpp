@@ -50,8 +50,8 @@
 #include <QString>
 #include <QVariant>
 
-const QString SAS = QObject::tr("SAS");
-const QString SASTAG_PREPEND = QObject::tr("SAS ");
+const QString CVL = QObject::tr("CVL");
+const QString CVLTAG_PREPEND = QObject::tr("CVL ");
 
 using namespace ESPINA;
 using namespace CCB;
@@ -87,10 +87,7 @@ CcboostSegmentationPlugin::CcboostSegmentationPlugin()
 , m_scheduler       {nullptr}
 , m_undoStack       {nullptr}
 , m_settings        {SettingsPanelSPtr(new CcboostSegmentationSettings())}
-//, m_extensionFactory{SegmentationExtensionFactorySPtr(new ASExtensionFactory())}
 , m_toolGroup       {nullptr}
-//, m_filterFactory   {FilterFactorySPtr{new CCBFilterFactory()}}
-, m_delayedAnalysis {false}
 {
 //    QStringList hierarchy;
 //     hierarchy << "Analysis";
@@ -129,7 +126,7 @@ void CcboostSegmentationPlugin::init(ModelAdapterSPtr model,
 
   m_toolGroup = new CcboostSegmentationToolGroup{m_model, m_undoStack, m_factory, m_viewManager, this};
 
-  // for automatic computation of SAS
+  // for automatic computation of CVL
   connect(m_model.get(), SIGNAL(segmentationsAdded(SegmentationAdapterSList)),
           this, SLOT(segmentationsAdded(SegmentationAdapterSList)));
 }
@@ -262,18 +259,9 @@ void CcboostSegmentationPlugin::finishedTask()
 
     m_finishedTasks2.clear();
 
-    if(m_delayedAnalysis)
-    {
-      QApplication::restoreOverrideCursor();
-      SASAnalysisDialog *analysis = new SASAnalysisDialog(m_analysisSynapses, m_model, m_undoStack, m_factory, m_viewManager, nullptr);
-      analysis->exec();
-
-      delete analysis;
-
-      m_delayedAnalysis = false;
-      m_analysisSynapses.clear();
-    }
     return;
+
+    //TODO connect autosegmentation slot
 
 }
 
@@ -283,16 +271,16 @@ SegmentationAdapterSList CcboostSegmentationPlugin::createSegmentations(std::vec
     auto sourceFilter = m_factory->createFilter<SourceFilter>(InputSList(), "AutoSegmentFilter");
 
     auto classification = m_model->classification();
-    if (classification->category(SAS) == nullptr)
+    if (classification->category(CVL) == nullptr)
     {
-        m_undoStack->push(new AddCategoryCommand(m_model->classification()->root(), SAS, m_model, QColor(255,255,0)));
+        m_undoStack->push(new AddCategoryCommand(m_model->classification()->root(), CVL, m_model, QColor(255,255,0)));
 
-        m_model->classification()->category(SAS)->addProperty(QString("Dim_X"), QVariant("500"));
-        m_model->classification()->category(SAS)->addProperty(QString("Dim_Y"), QVariant("500"));
-        m_model->classification()->category(SAS)->addProperty(QString("Dim_Z"), QVariant("500"));
+        m_model->classification()->category(CVL)->addProperty(QString("Dim_X"), QVariant("500"));
+        m_model->classification()->category(CVL)->addProperty(QString("Dim_Y"), QVariant("500"));
+        m_model->classification()->category(CVL)->addProperty(QString("Dim_Z"), QVariant("500"));
     }
 
-    CategoryAdapterSPtr category = classification->category(SAS);
+    CategoryAdapterSPtr category = classification->category(CVL);
     SegmentationAdapterSList segmentations;
 
     std::cout << "There are " << predictedSegmentationsList.size() << " objects." << std::endl;

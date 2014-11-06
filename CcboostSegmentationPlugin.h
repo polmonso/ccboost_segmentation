@@ -112,7 +112,6 @@ namespace ESPINA
     ToolGroupPtr                     m_toolGroup;
     MenuEntry                        m_menuEntry;
     FilterFactorySPtr                m_filterFactory;
-    bool                             m_delayedAnalysis;
     SegmentationAdapterList          m_analysisSynapses;
 
     QMap<CCB::CcboostTaskPtr, struct Data2> m_executingTasks2;

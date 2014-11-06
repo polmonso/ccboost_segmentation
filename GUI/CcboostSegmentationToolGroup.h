@@ -41,8 +41,8 @@ namespace ESPINA
   class CcboostSegmentationPlugin;
 
   class CcboostSegmentationTool;
-  using SASToolPtr   = CcboostSegmentationTool *;
-  using SASToolSPtr  = std::shared_ptr<CcboostSegmentationTool>;
+  using CVLToolPtr   = CcboostSegmentationTool *;
+  using CVLToolSPtr  = std::shared_ptr<CcboostSegmentationTool>;
 
   //-----------------------------------------------------------------------------
   class CcboostSegmentationPlugin_EXPORT CcboostSegmentationToolGroup
@@ -81,13 +81,19 @@ namespace ESPINA
 
   public slots:
     void createSimpleCcboostSegmentation();
+    void createSegmentationImporter();
+
+    void processMsg(/*inputInfo,outputInfo*/){
+
+    }
 
   private:
     ModelAdapterSPtr         m_model;
     ModelFactorySPtr         m_factory;
     QUndoStack              *m_undoStack;
-    SASToolSPtr              m_tool;
-    SASToolSPtr              m_tool_ccboost;
+    CVLToolSPtr              m_tool;
+    CVLToolSPtr              m_tool_ccboost;
+    CVLToolSPtr              m_tool_import;
     bool                     m_enabled;
     CcboostSegmentationPlugin *m_plugin;
   };

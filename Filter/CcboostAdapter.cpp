@@ -58,7 +58,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
                           FloatTypeImage::Pointer probabilisticOutSeg,
                           std::vector<itkVolumeType::Pointer>& outSegList) {
 #ifndef WORKINGASIMPORTER
-#define WORK
+//#define WORK
 #ifdef WORK
     MultipleROIData allROIs;
 
@@ -131,15 +131,17 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
 //    probabilisticOutSeg->DisconnectPipeline();
 
 #else
-    typedef itk::ImageFileReader< itk::Image<float, 3> > ReaderType;
+    typedef itk::ImageFileReader< FloatTypeImage > ReaderType;
     ReaderType::Pointer reader = ReaderType::New();
     reader->SetFileName(cfgdata.cacheDir + "predicted.tif");
     reader->Update();
     probabilisticOutSeg = reader->GetOutput();
+    probabilisticOutSeg->DisconnectPipeline();
+    return true;
 #endif
     qDebug() << "output image";
 
-    typedef itk::ImageFileWriter< Matrix3D<float>::ItkImageType > fWriterType;
+    typedef itk::ImageFileWriter< FloatTypeImage > fWriterType;
     if(cfgdata.saveIntermediateVolumes && probabilisticOutSeg->VerifyRequestedRegion()) {
         fWriterType::Pointer writerf = fWriterType::New();
         writerf->SetFileName(cfgdata.cacheDir + "predicted.tif");
