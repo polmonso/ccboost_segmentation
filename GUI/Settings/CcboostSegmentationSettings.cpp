@@ -1,19 +1,33 @@
-/*
- * CcboostSegmentationSettings.cpp
- *
- *  Created on: Jan 16, 2013
- *      Author: Felix de las Pozas Alvarez
- */
+/********************************************************************************/
+// Copyright (c) 2013 Pol Monsó Purtí                                           //
+// Ecole Polytechnique Federale de Lausanne                                     //
+// Contact <pol.monso@epfl.ch> for comments & bug reports                       //
+//                                                                              //
+// This program is free software: you can redistribute it and/or modify         //
+// it under the terms of the version 3 of the GNU General Public License        //
+// as published by the Free Software Foundation.                                //
+//                                                                              //
+// This program is distributed in the hope that it will be useful, but          //
+// WITHOUT ANY WARRANTY; without even the implied warranty of                   //
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU             //
+// General Public License for more details.                                     //
+//                                                                              //
+// You should have received a copy of the GNU General Public License            //
+// along with this program. If not, see <http://www.gnu.org/licenses/>.         //
+/********************************************************************************/
 
-// ESPINA
+// EspINA
 #include "CcboostSegmentationSettings.h"
-#include <Support/Settings/EspinaSettings.h>
+#include <Core/EspinaSettings.h>
 
 // Qt
 #include <QSettings>
 #include <QColorDialog>
+#include <QFileDialog>
+#include <QDir>
+#include <QDebug>
 
-namespace ESPINA
+namespace EspINA
 {
   
   //-----------------------------------------------------------------------------
@@ -21,29 +35,210 @@ namespace ESPINA
   {
     setupUi(this);
 
-    QSettings settings("CeSViMa", "ESPINA");
+    QSettings settings(CESVIMA, ESPINA);
     settings.beginGroup("ccboost segmentation");
 
-    if (settings.contains("Automatic Computation For Synapses"))
-      m_automaticComputation = settings.value("Automatic Computation For Synapses").toBool();
+    ConfigData::setDefault(m_settingsConfigData);
+
+    if (settings.contains("Channel Hash"))
+      m_settingsConfigData.train.featuresRawVolumeImageHash = settings.value("Channel Hash").toString().toStdString();
+
+    if (settings.contains("Number of Stumps"))
+      m_settingsConfigData.numStumps = settings.value("Number of Stumps").toInt();
     else
-    {
-      m_automaticComputation = false;
-      settings.setValue("Automatic Computation For Synapses", m_automaticComputation);
+      settings.setValue("Number of Stumps", m_settingsConfigData.numStumps);
+
+    if (settings.contains("Super Voxel Seed"))
+      m_settingsConfigData.svoxSeed = settings.value("Super Voxel Seed").toInt();
+    else
+      settings.setValue("Super Voxel Seed", m_settingsConfigData.svoxSeed);
+
+    if (settings.contains("Super Voxel Cubeness"))
+      m_settingsConfigData.svoxCubeness = settings.value("Super Voxel Cubeness").toInt();
+    else
+      settings.setValue("Super Voxel Cubeness", m_settingsConfigData.svoxCubeness);
+
+    if (settings.contains("Force Recompute Features"))
+       m_settingsConfigData.forceRecomputeFeatures = settings.value("Force Recompute Features").toBool();
+    else
+       settings.setValue("Force Recompute Features", m_settingsConfigData.forceRecomputeFeatures);
+
+    if (settings.contains("Save Intermediate Volumes"))
+      m_settingsConfigData.saveIntermediateVolumes = settings.value("Save Intermediate Volumes").toBool();
+    else
+      settings.setValue("Save Intermediate Volumes", m_settingsConfigData.saveIntermediateVolumes);
+
+    if (settings.contains("Minimum synapse size (voxels)"))
+       m_minCCSize = settings.value("Minimum synapse size (voxels)").toInt();
+    else
+        settings.setValue("Minimum synapse size (voxels)", m_settingsConfigData.minComponentSize);
+
+    if (settings.contains("Number of objects limit"))
+        m_maxNumObjects = settings.value("Number of objects limit").toInt();
+    else
+        settings.setValue("Number of objects limit", m_settingsConfigData.maxNumObjects);
+
+    if (settings.contains("TP Quantile"))
+        m_settingsConfigData.TPQuantile = settings.value("TP Quantile").toFloat();
+    else
+        settings.setValue("TP Quantile", m_settingsConfigData.TPQuantile);
+
+    if (settings.contains("FP Quantile"))
+        m_settingsConfigData.FPQuantile = settings.value("FP Quantile").toFloat();
+    else
+        settings.setValue("FP Quantile", m_settingsConfigData.FPQuantile);
+
+    if (settings.contains("Features Directory"))
+      m_settingsConfigData.train.cacheDir = settings.value("Features Directory").toString().toStdString();
+    else{
+        m_settingsConfigData.train.cacheDir = (QDir("./").absolutePath() + QString("/")).toStdString();
+        m_settingsConfigData.train.orientEstimate = (std::string("hessOrient-s3.5-repolarized.nrrd"));
+
+        m_settingsConfigData.train.otherFeatures.clear();
+        m_settingsConfigData.train.otherFeatures.push_back( std::string("gradient-magnitude-s1.0.nrrd"));
+        m_settingsConfigData.train.otherFeatures.push_back( std::string("gradient-magnitude-s1.6.nrrd"));
+        m_settingsConfigData.train.otherFeatures.push_back( std::string("gradient-magnitude-s3.5.nrrd"));
+        m_settingsConfigData.train.otherFeatures.push_back( std::string("gradient-magnitude-s5.0.nrrd"));
+        m_settingsConfigData.train.otherFeatures.push_back( std::string("stensor-s0.5-r1.0.nrrd"));
+        m_settingsConfigData.train.otherFeatures.push_back( std::string("stensor-s0.8-r1.6.nrrd"));
+        m_settingsConfigData.train.otherFeatures.push_back( std::string("stensor-s1.8-r3.5.nrrd"));
+        m_settingsConfigData.train.otherFeatures.push_back( std::string("stensor-s2.5-r5.0.nrrd"));
+        settings.setValue("Features Directory", QString::fromStdString(m_settingsConfigData.train.cacheDir));
     }
+
+    if(settings.contains("Automatic Computation"))
+        m_automaticComputation = settings.value("Automatic Computation");
+    else
+        m_automaticComputation = false;
+
     settings.sync();
 
     m_modified = false;
-    defaultComputation->setChecked(m_automaticComputation);
-    connect(defaultComputation, SIGNAL(stateChanged(int)),
-            this, SLOT(changeDefaultComputation(int)));
+    labelName->setText(QString::fromStdString(m_labelName));
+    automaticComputation->setValue(m_settingsConfigData.automaticComputation);
+    minCCSize->setValue(m_minCCSize);
+    maxNumObj->setValue(m_maxNumObjects);
+    numStumps->setValue(m_settingsConfigData.numStumps);
+    svoxSeed->setValue(m_settingsConfigData.svoxSeed);
+    svoxCubeness->setValue(m_settingsConfigData.svoxCubeness);
+    saveIntermediateVolumes->setChecked(m_settingsConfigData.saveIntermediateVolumes);
+    forceRecomputeFeatures->setChecked(m_settingsConfigData.forceRecomputeFeatures);
+
+    TPQuantile->setValue(m_settingsConfigData.TPQuantile);
+    FPQuantile->setValue(m_settingsConfigData.FPQuantile);
+
+    featuresPath->setText(QString::fromStdString(m_settingsConfigData.train.cacheDir));
+    connect(minCCSize,  SIGNAL(valueChanged(int)),
+                  this, SLOT(changeMinCCSize(int)));
+    connect(maxNumObj,  SIGNAL(valueChanged(int)),
+                  this, SLOT(changeMaxNumObjects(int)));
+    connect(numStumps,  SIGNAL(valueChanged(int)),
+                  this, SLOT(changeNumStumps(int)));
+    connect(svoxSeed,   SIGNAL(valueChanged(int)),
+                  this, SLOT(changeSVoxSeed(int)));
+    connect(svoxCubeness, SIGNAL(valueChanged(int)),
+                  this, SLOT(changeSVoxCubeness(int)));
+    connect(TPQuantile, SIGNAL(valueChanged(double)),
+                  this, SLOT(changeTPQuantile(double)));
+    connect(FPQuantile, SIGNAL(valueChanged(double)),
+                  this, SLOT(changeFPQuantile(double)));
+    connect(saveIntermediateVolumes, SIGNAL(toggled(bool)),
+                  this, SLOT(changeSaveIntermediateVolumes(bool)));
+    connect(forceRecomputeFeatures, SIGNAL(toggled(bool)),
+                  this, SLOT(changeForceRecomputeFeatures(bool)));
+
+    connect(labelName, SIGNAL(textChanged(QString)),
+                  this, SLOT(changeLabelName(QString)));
+    connect(featuresPath, SIGNAL(textChanged(QString)),
+                  this, SLOT(changeFeaturesPath(QString)));
+
+    connect(chooseFeaturesDirectoryButton, SIGNAL(clicked()),
+                  this, SLOT(openDirectoryDialog()));
+
+    connect(automaticSegmentation, SIGNAL(toggled(bool)),
+                  this, SLOT(changeAutomaticComputation(bool)));
   }
 
   //-----------------------------------------------------------------------------
-  void CcboostSegmentationSettings::changeDefaultComputation(int value)
+  void CcboostSegmentationSettings::changeAutomaticComputation(bool value)
   {
-    m_automaticComputation = (Qt::Checked == value ? true : false);
+    m_settingsConfigData.automaticComputation = value;
     m_modified = true;
+  }
+
+  void CcboostSegmentationSettings::changeMinCCSize(int value)
+  {
+    m_minCCSize = value;
+    m_modified = true;
+  }
+
+  void CcboostSegmentationSettings::changeMaxNumObjects(int value)
+    {
+      m_maxNumObjects = value;
+      m_modified = true;
+    }
+
+  void CcboostSegmentationSettings::changeSaveIntermediateVolumes(bool doSave){
+    m_settingsConfigData.saveIntermediateVolumes = doSave;
+    m_modified = true;
+  }
+
+  void CcboostSegmentationSettings::changeForceRecomputeFeatures(bool doForce){
+    m_settingsConfigData.forceRecomputeFeatures = doForce;
+    m_modified = true;
+  }
+
+  void CcboostSegmentationSettings::changeNumStumps(int value)
+  {
+    m_settingsConfigData.numStumps = value;
+    m_modified = true;
+  }
+
+  void CcboostSegmentationSettings::changeTPQuantile(double value)
+   {
+     m_settingsConfigData.TPQuantile = value;
+     m_modified = true;
+   }
+
+  void CcboostSegmentationSettings::changeFPQuantile(double value)
+   {
+     m_settingsConfigData.FPQuantile = value;
+     m_modified = true;
+   }
+
+  void CcboostSegmentationSettings::changeSVoxSeed(int value)
+  {
+    m_settingsConfigData.svoxSeed = value;
+    m_modified = true;
+  }
+
+  void CcboostSegmentationSettings::changeSVoxCubeness(int value)
+  {
+    m_settingsConfigData.svoxCubeness = value;
+    m_modified = true;
+  }
+
+  void CcboostSegmentationSettings::changeLabelName(QString autoLabelName){
+      m_labelName = autoLabelName.toStdString();
+      m_modified = true;
+  }
+
+  void CcboostSegmentationSettings::changeFeaturesPath(QString path){
+    if(!path.endsWith("/"))
+        path.append("/");
+    m_settingsConfigData.train.cacheDir = path.toStdString();
+    m_modified = true;
+  }
+
+  void CcboostSegmentationSettings::openDirectoryDialog(){
+
+      QString path = QFileDialog::getExistingDirectory(this,
+                                                       tr("Select directory"), ".", QFileDialog::ShowDirsOnly);
+      path.append("/");
+      qDebug() << "Selected path " << path;
+
+      m_settingsConfigData.train.cacheDir = path.toStdString();
+      featuresPath->setText(path);
   }
 
   //-----------------------------------------------------------------------------
@@ -52,9 +247,19 @@ namespace ESPINA
     if (!m_modified)
       return;
 
-    ESPINA_SETTINGS(settings);
+    QSettings settings(CESVIMA, ESPINA);
     settings.beginGroup("ccboost segmentation");
-    settings.setValue("Automatic Computation For Synapses", m_automaticComputation);
+    settings.setValue("Minimum synapse size (voxels)", m_minCCSize);
+    settings.setValue("Number of Stumps", m_settingsConfigData.numStumps);
+    settings.setValue("Super Voxel Seed", m_settingsConfigData.svoxSeed);
+    settings.setValue("Super Voxel Cubeness", m_settingsConfigData.svoxCubeness);
+    settings.setValue("Features Directory", QString::fromStdString(m_settingsConfigData.train.cacheDir));
+    settings.setValue("Save Intermediate Volumes", m_settingsConfigData.saveIntermediateVolumes);
+    settings.setValue("Automatic Segmentation Label", QString::fromStdString(m_labelName));
+    settings.setValue("Force Recompute Features", m_settingsConfigData.forceRecomputeFeatures);
+    settings.setValue("Automatic Computation", m_settingsConfigData.automaticComputation);
+    settings.setValue("TP Quantile", m_settingsConfigData.TPQuantile);
+    settings.setValue("FP Quantile", m_settingsConfigData.FPQuantile);
     settings.sync();
   }
 
@@ -75,4 +280,4 @@ namespace ESPINA
     return new CcboostSegmentationSettings();
   }
 
-} /* namespace ESPINA */
+} /* namespace EspINA */

@@ -77,6 +77,8 @@ using namespace std;
 
 const QString CVL = "CVL";
 
+
+const QString CcboostTask::BACKGROUND = "Background";
 const QString CcboostTask::MITOCHONDRIA = "mitochondria";
 const QString CcboostTask::SYNAPSE = "synapse";
 QString CcboostTask::ELEMENT = "element";
@@ -230,6 +232,14 @@ void CcboostTask::run()
   trainData.zAnisotropyFactor = 2*channelItk->GetSpacing()[2]/(channelItk->GetSpacing()[0]
           + channelItk->GetSpacing()[1]);
 
+  //Get bounding box of annotated data
+  typedef itk::ImageMaskSpatialObject< 3 > ImageMaskSpatialObjectType;
+  ImageMaskSpatialObjectType::Pointer
+    imageMaskSpatialObject  = ImageMaskSpatialObjectType::New();
+  imageMaskSpatialObject->SetImage ( segmentedGroundTruth );
+  itkVolumeType::RegionType annotatedRegion = imageMaskSpatialObject->GetAxisAlignedBoundingBoxRegion();
+  itkVolumeType::OffsetValueType offset(CcboostSegmentationFilter::ANNOTATEDPADDING);
+  annotatedRegion.PadByRadius(offset);
 
   annotatedRegion.Crop(channelItk->GetLargestPossibleRegion());
   trainData.annotatedRegion = annotatedRegion;
@@ -270,6 +280,7 @@ void CcboostTask::run()
     qDebug() << "AutoSegment Finished";
   }
 }
+
 bool CcboostTask::enoughMemory(const itkVolumeType::Pointer channelItk, const itkVolumeType::RegionType annotatedRegion, unsigned int & numPredictRegions){
     itkVolumeType::SizeType channelItkSize = channelItk->GetLargestPossibleRegion().GetSize();
     double channelSize = channelItkSize[0] * channelItkSize[1] * channelItkSize[2] /1024/1024;
@@ -296,6 +307,11 @@ bool CcboostTask::enoughMemory(const itkVolumeType::Pointer channelItk, const it
 //                                 "(You should reduce it by constraining the Ground truth to a smaller 3d Cube)."
 //                                 "Continue anyway?").arg(memoryNeededMB).arg(memoryAvailableMB), QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) == QMessageBox::Cancel)
 //           return false;
+        std::string msg = QString("The estimated amount of memory required has an upper bound of %1 Mb"
+                            "and you have %2 Mb. We will process by pieces and ESPina might crash."
+                            "(You should reduce it by constraining the Ground truth to a smaller 3d Cube)."
+                            "Continue anyway?").arg(memoryNeededMB).arg(memoryAvailableMB).toStdString();
+        emit(message(msg));
     }
     return true;
 }
@@ -453,7 +469,7 @@ itkVolumeType::Pointer CcboostTask::mergeSegmentations(const itkVolumeType::Poin
 void CcboostTask::applyEspinaSettings(ConfigData<itkVolumeType> cfgdata){
 
     ESPINA_SETTINGS(settings);
-    settings.beginGroup("Synapse Segmentation");
+    settings.beginGroup("ccboost segmentation");
 
     //FIXME the stored hash in settings is not used, instead the cacheDir path contains the hash,
     //so when it changes the directory changes and the features are not found and therefore recomputed (correctly)
@@ -471,8 +487,8 @@ void CcboostTask::applyEspinaSettings(ConfigData<itkVolumeType> cfgdata){
     if (settings.contains("Super Voxel Cubeness"))
         cfgdata.svoxCubeness = settings.value("Super Voxel Cubeness").toInt();
 
-    if (settings.contains("Synapse Features Directory")) {
-            cfgdata.cacheDir = settings.value("Synapse Features Directory").toString().toStdString();
+    if (settings.contains("Features Directory")) {
+            cfgdata.cacheDir = settings.value("Features Directory").toString().toStdString();
         //FIXME config data setdefault is overwritten and ignored
     }
 
@@ -493,6 +509,9 @@ void CcboostTask::applyEspinaSettings(ConfigData<itkVolumeType> cfgdata){
 
     if (settings.contains("Number of objects limit"))
         cfgdata.maxNumObjects = settings.value("Number of objects limit").toInt();
+
+    if (settings.contains("Automatic Computation"))
+        cfgdata.automaticComputation = settings.value("Automatic Computation").toBool();
 
 }
 
@@ -530,7 +549,6 @@ void CcboostTask::runCore(const ConfigData<itkVolumeType>& ccboostconfig,
     itk::MultiThreader::SetGlobalDefaultNumberOfThreads( prevITKNumberOfThreads );
 
     try {
-        qDebug() << "tic";
         //FIXME TODO why probabilisticOutput is empty?
         if(ccboostconfig.saveIntermediateVolumes){
             typedef itk::ImageFileWriter<CcboostAdapter::FloatTypeImage> FloatWriterType;
@@ -539,8 +557,6 @@ void CcboostTask::runCore(const ConfigData<itkVolumeType>& ccboostconfig,
             fwriter->SetInput(probabilisticOutputSegmentation);
             fwriter->Update();
         }
-
-        qDebug() << "toc";
 
     } catch( itk::ExceptionObject & err ) {
         // restore default number of threads

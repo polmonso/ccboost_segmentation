@@ -66,6 +66,7 @@ namespace ESPINA {
     public:
        static const QString MITOCHONDRIA;
        static const QString SYNAPSE;
+       static const QString BACKGROUND;
        static QString ELEMENT;
        static const QString POSITIVETAG;
        static const QString NEGATIVETAG;
@@ -79,6 +80,9 @@ namespace ESPINA {
       { return m_channel; }
 
       std::vector<itkVolumeType::Pointer>  predictedSegmentationsList;
+
+    signals:
+      void message(std::string);
 
     protected:
       virtual void run();

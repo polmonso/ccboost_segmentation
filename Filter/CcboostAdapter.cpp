@@ -55,7 +55,7 @@ CcboostAdapter::CcboostAdapter()
 }
 
 bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
-                          FloatTypeImage::Pointer probabilisticOutSeg,
+                          FloatTypeImage::Pointer& probabilisticOutSeg,
                           std::vector<itkVolumeType::Pointer>& outSegList) {
 #ifndef WORKINGASIMPORTER
 //#define WORK
@@ -182,7 +182,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
      }
 
      ESPINA_SETTINGS(settings);
-     settings.beginGroup("Synapse Segmentation");
+     settings.beginGroup("ccboost segmentation");
      settings.setValue("Channel Hash", QString(cfgdata.train.at(0).featuresRawVolumeImageHash.c_str()));
 
      outputSegmentation->DisconnectPipeline();
@@ -199,6 +199,173 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
        auto outputSegmentation = reader->GetOutput();
        probabilisticOutSeg = outputSegmentation;
 #endif
+
+     splitSegmentations(cfgdata, outputSegmentation, outSegList);
+
+     return true;
+}
+
+
+bool CcboostAdapter::automaticCore(const ConfigData<itkVolumeType>& cfgdata,
+                          FloatTypeImage::Pointer& probabilisticOutSeg,
+                          std::vector<itkVolumeType::Pointer>& outSegList) {
+#define WORK2
+#ifdef WORK2
+    MultipleROIData allROIs;
+
+    //    for(auto imgItk: channels) {
+    //        for(auto gtItk: groundTruths) {
+    Matrix3D<ImagePixelType> img, gt;
+
+    //itkVolumeType::Pointer annotatedImage = Splitter::crop<itkVolumeType>(cfgData.train.groundTruthImage,cfgData.train.annotatedRegion);
+
+    img.loadItkImage(cfgdata.train.at(0).rawVolumeImage, true);
+
+    gt.loadItkImage(cfgdata.train.at(0).groundTruthImage, true);
+
+    ROIData roi;
+    roi.init( img.data(), gt.data(), 0, 0, img.width(), img.height(), img.depth(), cfgdata.train.at(0).zAnisotropyFactor );
+
+    // raw image integral image
+    ROIData::IntegralImageType ii;
+    ii.compute( img );
+    roi.addII( ii.internalImage().data() );
+
+    //features
+    TimerRT timerF; timerF.reset();
+
+    computeAllFeatures(cfgdata);
+
+    qDebug("Compute all features Elapsed: %f", timerF.elapsed());
+
+    timerF.reset();
+
+    addAllFeatures(cfgdata, roi);
+
+    qDebug("Add all features Elapsed: %f", timerF.elapsed());
+
+    allROIs.add( &roi );
+
+    // }
+    // }
+
+    qDebug() << "running core plugin";
+
+    BoosterInputData bdata;
+    bdata.init( &allROIs );
+    bdata.showInfo();
+
+    Booster adaboost;
+
+    qDebug() << "training";
+
+    timerF.reset();
+
+    // predict
+    Matrix3D<float> predImg;
+
+    //TODO provide a stumped train
+    if(!cfgdata.automaticcomputation) {
+
+        adaboost.train( bdata, 100 );
+
+        qDebug("train Elapsed: %f", timerF.elapsed());
+
+        qDebug() << "predict";
+
+        TimerRT timer; timer.reset();
+        adaboost.predict( &allROIs, &predImg );
+        qDebug("Elapsed: %f", timer.elapsed());
+
+    } else {
+
+        do {
+
+            if(!cfgdata.pendingtrain.isempty()){
+                cfgdata.train.append(cfgdata.pendingtrain);
+                cfgdata.clear();
+            }
+            adaboost.trainstump( bdata, 100, stumpindex);
+
+            Matrix3D<float> predImg;
+            TimerRT timer; timer.reset();
+            adaboost.predict( &allROIs, &predImg );
+            qDebug("Elapsed: %f", timer.elapsed());
+
+            emit(updatePrediction(predImg));
+
+        }while(stumpindex < cfgdata.numstumps);
+    }
+
+    predImg.save("/tmp/test.nrrd");
+
+    // save JSON model
+    if (!adaboost.saveModelToFile( "/tmp/model.json" ))
+        std::cout << "Error saving JSON model" << std::endl;
+
+    probabilisticOutSeg = predImg.asItkImage();
+//    probabilisticOutSeg->DisconnectPipeline();
+
+#else
+    typedef itk::ImageFileReader< FloatTypeImage > ReaderType;
+    ReaderType::Pointer reader = ReaderType::New();
+    reader->SetFileName(cfgdata.cacheDir + "predicted.tif");
+    reader->Update();
+    probabilisticOutSeg = reader->GetOutput();
+    probabilisticOutSeg->DisconnectPipeline();
+    return true;
+#endif
+    qDebug() << "output image";
+
+    typedef itk::ImageFileWriter< FloatTypeImage > fWriterType;
+    if(cfgdata.saveIntermediateVolumes && probabilisticOutSeg->VerifyRequestedRegion()) {
+        fWriterType::Pointer writerf = fWriterType::New();
+        writerf->SetFileName(cfgdata.cacheDir + "predicted.tif");
+        writerf->SetInput(probabilisticOutSeg);
+        writerf->Update();
+    } else {
+        //TODO what to do when region fails Verify? is return false enough?
+        //return false;
+    }
+    qDebug() << "predicted.tif created";
+
+    typedef itk::BinaryThresholdImageFilter <Matrix3D<float>::ItkImageType, itkVolumeType>
+            fBinaryThresholdImageFilterType;
+
+    float lowerThreshold = 0.0;
+
+    fBinaryThresholdImageFilterType::Pointer thresholdFilter
+            = fBinaryThresholdImageFilterType::New();
+    thresholdFilter->SetInput(probabilisticOutSeg);
+    thresholdFilter->SetLowerThreshold(lowerThreshold);
+    thresholdFilter->SetInsideValue(255);
+    thresholdFilter->SetOutsideValue(0);
+    thresholdFilter->Update();
+
+    WriterType::Pointer writer = WriterType::New();
+    if(cfgdata.saveIntermediateVolumes && thresholdFilter->GetOutput()->VerifyRequestedRegion()) {
+        writer->SetFileName(cfgdata.cacheDir + "1" + "predicted-thresholded.tif");
+        writer->SetInput(thresholdFilter->GetOutput());
+        writer->Update();
+    }
+
+    itkVolumeType::Pointer outputSegmentation = thresholdFilter->GetOutput();
+
+     if(cfgdata.saveIntermediateVolumes && outputSegmentation->VerifyRequestedRegion()){
+         writer->SetFileName(cfgdata.cacheDir + "2" + "thread-outputSegmentation.tif");
+         writer->SetInput(outputSegmentation);
+         writer->Update();
+     }
+
+     ESPINA_SETTINGS(settings);
+     settings.beginGroup("ccboost segmentation");
+     settings.setValue("Channel Hash", QString(cfgdata.train.at(0).featuresRawVolumeImageHash.c_str()));
+
+     outputSegmentation->DisconnectPipeline();
+
+     postprocessing(cfgdata, outputSegmentation);
+
+     outputSegmentation->SetSpacing(cfgdata.train.at(0).rawVolumeImage->GetSpacing());
 
      splitSegmentations(cfgdata, outputSegmentation, outSegList);
 
@@ -520,7 +687,8 @@ void CcboostAdapter::computeFeatures(const ConfigData<itkVolumeType> cfgData,
            if( (stringPos = featureFile.find(std::string("hessOrient-"))) != std::string::npos){
                float sigma;
                std::string filename(featureFile.substr(stringPos));
-               int result = sscanf(filename.c_str(),"hessOrient-s%f-repolarized.nrrd",&sigma);
+               std::string matchStr = "hessOrient-s%f-repolarized" + cfgDataROI.featureExtension;
+               int result = sscanf(filename.c_str(),matchStr.c_str(),&sigma);
               //FIXME break if error
                if(result < 0)
                    qDebug() << "Error scanning feature name " << featureFile.c_str();
@@ -538,7 +706,8 @@ void CcboostAdapter::computeFeatures(const ConfigData<itkVolumeType> cfgData,
           } else if ( (stringPos = featureFile.find(std::string("gradient-magnitude"))) != std::string::npos ) {
                float sigma;
                std::string filename(featureFile.substr(stringPos));
-               int result = sscanf(filename.c_str(),"gradient-magnitude-s%f.nrrd",&sigma);
+               std::string matchStr = "gradient-magnitude-s%f" + cfgDataROI.featureExtension;
+               int result = sscanf(filename.c_str(),matchStr.c_str(),&sigma);
                if(result < 0)
                    qDebug() << "Error scanning feature name " << featureFile.c_str();
 
@@ -549,7 +718,8 @@ void CcboostAdapter::computeFeatures(const ConfigData<itkVolumeType> cfgData,
            } else if( (stringPos = featureFile.find(std::string("stensor"))) != std::string::npos ) {
                float rho,sigma;
                std::string filename(featureFile.substr(stringPos));
-               int result = sscanf(filename.c_str(),"stensor-s%f-r%f.nrrd",&sigma,&rho);
+               std::string matchStr = "stensor-s%f-r%f" + cfgDataROI.featureExtension;
+               int result = sscanf(filename.c_str(),,matchStr.c_str(),&sigma,&rho);
                if(result < 0)
                    qDebug() << "Error scanning feature name" << featureFile.c_str();
 

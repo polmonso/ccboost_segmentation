@@ -31,6 +31,8 @@
 #include <Undo/AddRelationCommand.h>
 #include <Undo/AddSegmentations.h>
 #include <Core/Utils/AnalysisUtils.h>
+#include <Extensions/Tags/SegmentationTags.h>
+#include <Extensions/ExtensionUtils.h>
 
 // Qt
 #include <QApplication>
@@ -42,6 +44,7 @@
 #include <QMessageBox>
 
 using namespace ESPINA;
+using namespace CCB;
 
 //-----------------------------------------------------------------------------
 CcboostSegmentationToolGroup::CcboostSegmentationToolGroup(ModelAdapterSPtr model,
@@ -76,7 +79,7 @@ CcboostSegmentationToolGroup::~CcboostSegmentationToolGroup()
 
 //  disconnect(m_tool.get(), SIGNAL(triggered()), this, SLOT(createSAS()));
   disconnect(m_tool_ccboost.get(), SIGNAL(triggered()), this, SLOT(createSimpleCcboostSegmentation()));
-  disconnect( m_tool_import.get(), SIGNAL(triggered()), this, SLOT(createSegmentationImport()));
+  disconnect(m_tool_import.get(), SIGNAL(triggered()), this, SLOT(createSegmentationImport()));
 
 }
 
@@ -104,6 +107,14 @@ ToolSList CcboostSegmentationToolGroup::tools()
   return tools;
 }
 
+void CcboostSegmentationToolGroup::processMsg(std::string &msg){
+
+    if(!msg.empty())
+        QMessageBox::critical(NULL, "Synapse Segmentation Memory check",
+                             QString(msg), QMessageBox::Yes, QMessageBox::Yes);
+
+}
+
 void CcboostSegmentationToolGroup::createSegmentationImporter()
 {
 
@@ -123,62 +134,7 @@ void CcboostSegmentationToolGroup::createSegmentationImporter()
 //-----------------------------------------------------------------------------
 void CcboostSegmentationToolGroup::createSimpleCcboostSegmentation()
 {
-  auto segmentations = m_model->segmentations();
-  SegmentationAdapterList validSegmentations;
-  SegmentationAdapterList validBgSegmentations;
-  for(auto seg: segmentations)
-  {
-          //TODO espina2
-//      QStringList tags = SegmentationTags::extension(seg.get())->tags();
-//          if(tags.contains(SynapseDetectionFilter::POSITIVETAG + SynapseDetectionFilter::ELEMENT, Qt::CaseInsensitive) ||
-//             tags.contains(SynapseDetectionFilter::NEGATIVETAG + SynapseDetectionFilter::ELEMENT, Qt::CaseInsensitive)){
-//              validSegmentations << seg;
-//          }
-  }
-
-  if(validSegmentations.isEmpty()){
-//TODO espina2
-//      qDebug() << "No tags named " << SynapseDetectionFilter::POSITIVETAG << SynapseDetectionFilter::ELEMENT << " and "
-//               << SynapseDetectionFilter::NEGATIVETAG << SynapseDetectionFilter::ELEMENT << " found, using category name "
-//               << SynapseDetectionFilter::ELEMENT << " and " << SynapseDetectionFilter::BACKGROUND;
-
-      //TODO add tag automatically
-      for(auto seg: segmentations) {
-          //TODO espina2 const the string
-//          if (seg->taxonomy()->qualifiedName().contains(SynapseDetectionFilter::ELEMENT, Qt::CaseInsensitive)
-        if (seg->category()->classificationName().contains("Synapse", Qt::CaseInsensitive))
-          validSegmentations << seg.get(); //invalid if the shared pointer goes out of scope
-        else if(seg->category()->classificationName().contains("Background", Qt::CaseInsensitive))
-            validBgSegmentations << seg.get();
-      }
-  }
-
-  InputSPtr channelInput;
-  InputSList inputs;
-
-  ChannelAdapterPtr channel;
-  if(m_viewManager->activeChannel() != NULL) {
-      channel = m_viewManager->activeChannel();
-      channelInput = channel->asInput();
-   } else {
-      channel = m_model->channels().at(0).get();
-      channelInput = channel->asInput();
-  }
-
-  qDebug() << "Using channel " << m_viewManager->activeChannel()->data(Qt::DisplayRole);
-
-
-  //create and run task //FIXME is that the correct way of getting the scheduler?
-  SchedulerSPtr scheduler = m_plugin->getScheduler();
-  CCB::CcboostTaskSPtr ccboostTask{new CCB::CcboostTask(channel, scheduler)};
-  ccboostTask.get()->m_groundTruthSegList = validBgSegmentations;
-  ccboostTask.get()->m_backgroundGroundTruthSegList = validSegmentations;
-  struct CcboostSegmentationPlugin::Data2 data;
-  m_plugin->m_executingTasks2.insert(ccboostTask.get(), data);
-  connect(ccboostTask.get(), SIGNAL(finished()), m_plugin, SLOT(finishedTask()));
-  Task::submit(ccboostTask);
-
-  return;
+  m_plugin->createCcboostTask(m_model->segmentations());
 }
 
 //-----------------------------------------------------------------------------

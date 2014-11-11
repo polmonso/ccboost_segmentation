@@ -83,10 +83,6 @@ namespace ESPINA
     void createSimpleCcboostSegmentation();
     void createSegmentationImporter();
 
-    void processMsg(/*inputInfo,outputInfo*/){
-
-    }
-
   private:
     ModelAdapterSPtr         m_model;
     ModelFactorySPtr         m_factory;

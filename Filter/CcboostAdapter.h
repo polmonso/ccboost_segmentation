@@ -47,7 +47,7 @@ public:
 
     //TODO add const-correctness
     static bool core(const ConfigData<itkVolumeType>& cfg,
-                     FloatTypeImage::Pointer probabilisticOutSeg,
+                     FloatTypeImage::Pointer &probabilisticOutSeg,
                      std::vector<itkVolumeType::Pointer>& outSegList);
 
 

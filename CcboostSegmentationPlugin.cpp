@@ -30,6 +30,9 @@
 // TODO: no filter inspectors yet
 // #include <GUI/FilterInspector/CcboostSegmentationFilterInspector.h>
 
+#include <itkChangeInformationImageFilter.h>
+#include <itkImageMaskSpatialObject.h>
+
 // ESPINA
 #include <GUI/Model/ModelAdapter.h>
 #include <Core/IO/FetchBehaviour/RasterizedVolumeFromFetchedMeshData.h>
@@ -55,29 +58,6 @@ const QString CVLTAG_PREPEND = QObject::tr("CVL ");
 
 using namespace ESPINA;
 using namespace CCB;
-////-----------------------------------------------------------------------------
-//FilterTypeList CcboostSegmentationPlugin::CCBFilterFactory::providedFilters() const
-//{
-//  FilterTypeList filters;
-
-//  filters << CCB_FILTER;
-
-//  return filters;
-//}
-
-////-----------------------------------------------------------------------------
-//FilterSPtr CcboostSegmentationPlugin::CCBFilterFactory::createFilter(InputSList          inputs,
-//                                                            const Filter::Type& type,
-//                                                            SchedulerSPtr       scheduler) const throw (Unknown_Filter_Exception)
-//{
-
-//  if (type != CCB_FILTER) throw Unknown_Filter_Exception();
-
-//  auto filter = FilterSPtr{new CcboostSegmentationFilter(inputs, type, scheduler)};
-//  filter->setFetchBehaviour(FetchBehaviourSPtr{new SASFetchBehaviour()});
-
-//  return filter;
-//}
 
 //-----------------------------------------------------------------------------
 CcboostSegmentationPlugin::CcboostSegmentationPlugin()
@@ -129,6 +109,7 @@ void CcboostSegmentationPlugin::init(ModelAdapterSPtr model,
   // for automatic computation of CVL
   connect(m_model.get(), SIGNAL(segmentationsAdded(SegmentationAdapterSList)),
           this, SLOT(segmentationsAdded(SegmentationAdapterSList)));
+
 }
 
 //-----------------------------------------------------------------------------
@@ -203,14 +184,145 @@ AnalysisReaderSList CcboostSegmentationPlugin::analysisReaders() const
   return AnalysisReaderSList();
 }
 
+void CcboostSegmentationPlugin::getGTSegmentations(const SegmentationAdapterList segmentations,
+                                                   SegmentationAdapterList& validSegmentations,
+                                                   SegmentationAdapterList& validBgSegmentations) {
+    for(auto seg: segmentations)
+    {
+        if(seg->hasExtension(SegmentationTags::TYPE))
+            auto extension = retrieveExtension<SegmentationTags>(seg);
+        QStringList tags = extension->tags();
+        if(tags.contains(CcboostTask::POSITIVETAG + CcboostTask::ELEMENT, Qt::CaseInsensitive))
+            validSegmentations << seg;
+        else if(tags.contains(CcboostTask::NEGATIVETAG + CcboostTask::ELEMENT, Qt::CaseInsensitive))
+            validBgSegmentations << seg;
+
+    }
+
+    if(validSegmentations.isEmpty()){
+        qDebug() << "No tags named " << CcboostTask::POSITIVETAG << CcboostTask::ELEMENT << " and "
+                 << CcboostTask::NEGATIVETAG << CcboostTask::ELEMENT << " found, using category name "
+                 << CcboostTask::ELEMENT << " and " << CcboostTask::BACKGROUND;
+
+        //TODO add tag automatically
+        for(auto seg: segmentations) {
+            //TODO espina2 const the string
+            if (seg->category()->classificationName().contains(CcboostTask::ELEMENT, Qt::CaseInsensitive))
+                validSegmentations << seg.get(); //invalid if the shared pointer goes out of scope
+            else if(seg->category()->classificationName().contains(CcboostTask::BACKGROUND, Qt::CaseInsensitive))
+                validBgSegmentations << seg.get();
+        }
+    }
+
+}
+
+void CcboostSegmentationPlugin::createCcboostTask(SegmentationAdapterList segmentations){
+    SegmentationAdapterList validSegmentations;
+    SegmentationAdapterList validBgSegmentations;
+
+    CcboostSegmentationPlugin::getGTSegmentations(segmentations, validSegmentations, validBgSegmentations);
+
+    ChannelAdapterPtr channel;
+    if(m_viewManager->activeChannel() != NULL)
+        channel = m_viewManager->activeChannel();
+    else
+        channel = m_model->channels().at(0).get();
+
+    qDebug() << "Using channel " << m_viewManager->activeChannel()->data(Qt::DisplayRole);
+
+    //create and run task //FIXME is that the correct way of getting the scheduler?
+    SchedulerSPtr scheduler = m_plugin->getScheduler();
+    CCB::CcboostTaskSPtr ccboostTask{new CCB::CcboostTask(channel, scheduler)};
+    ccboostTask.get()->m_groundTruthSegList = validBgSegmentations;
+    ccboostTask.get()->m_backgroundGroundTruthSegList = validSegmentations;
+    struct CcboostSegmentationPlugin::Data2 data;
+    m_plugin->m_executingTasks.insert(ccboostTask.get(), data);
+    connect(ccboostTask.get(), SIGNAL(finished()), m_plugin, SLOT(finishedTask()));
+    connect(ccboostTask.get(), SIGNAL(message(std::string)), m_plugin, SLOT(processMsg(std::string)));
+    Task::submit(ccboostTask);
+
+    return;
+}
 
 //-----------------------------------------------------------------------------
 void CcboostSegmentationPlugin::segmentationsAdded(SegmentationAdapterSList segmentations)
 {
-  ESPINA_SETTINGS(settings);
-  settings.beginGroup("ccboost segmentation");
-  if (!settings.contains("Automatic Computation For Synapses") || !settings.value("Automatic Computation For Synapses").toBool())
-    return;
+    ESPINA_SETTINGS(settings);
+    settings.beginGroup("ccboost segmentation");
+    if (!settings.contains("Automatic Computation") || !settings.value("Automatic Computation").toBool())
+        return;
+
+    if(m_executingTasks.isEmpty()){
+        //if task is not running, create
+        createCcboostTask(segmentations);
+
+    }else{
+        //if task is running, add ROIs
+        SegmentationAdapterList validSegmentations;
+        SegmentationAdapterList validBgSegmentations;
+
+        CcboostSegmentationPlugin::getGTSegmentations(segmentations,
+                                                      validSegmentations,
+                                                      validBgSegmentations);
+
+        ChannelAdapterPtr channel;
+        if(m_viewManager->activeChannel() != NULL)
+            channel = m_viewManager->activeChannel();
+        else
+            channel = m_model->channels().at(0).get();
+
+        if(validSegmentations.isEmpty() && validBgSegmentations.isEmpty())
+            return;
+
+        auto taskList = m_executingTasks.keys();
+        CcboostTaskPtr task = taskList.at(0);
+
+        itkVolumeType::Pointer channelItk = volumetricData(channel->asInput()->output())->itkImage();
+
+        typedef itk::ChangeInformationImageFilter< itkVolumeType > ChangeInformationFilterType;
+        ChangeInformationFilterType::Pointer normalizeFilter = ChangeInformationFilterType::New();
+        normalizeFilter->SetInput(channelItk);
+        itkVolumeType::SpacingType spacing = channelItk->GetSpacing();
+        spacing[2] = 2*channelItk->GetSpacing()[2]/(channelItk->GetSpacing()[0]
+                     + channelItk->GetSpacing()[1]);
+        spacing[0] = 1;
+        spacing[1] = 1;
+        normalizeFilter->SetOutputSpacing( spacing );
+        normalizeFilter->ChangeSpacingOn();
+        normalizeFilter->Update();
+        itkVolumeType::Pointer normalizedChannelItk = normalizeFilter->GetOutput();
+
+        itkVolumeType::Pointer segmentedGroundTruth = CcboostTask::mergeSegmentations(normalizedChannelItk,
+                                                                         m_groundTruthSegList,
+                                                                         m_backgroundGroundTruthSegList);
+
+        SetConfigData data(task->ccboostconfig.train.at(0));
+
+        data.groundTruthImage = segmentedGroundTruth;
+
+        //Get bounding box of annotated data
+        typedef itk::ImageMaskSpatialObject< 3 > ImageMaskSpatialObjectType;
+        ImageMaskSpatialObjectType::Pointer
+          imageMaskSpatialObject  = ImageMaskSpatialObjectType::New();
+        imageMaskSpatialObject->SetImage ( segmentedGroundTruth );
+        itkVolumeType::RegionType annotatedRegion = imageMaskSpatialObject->GetAxisAlignedBoundingBoxRegion();
+        itkVolumeType::OffsetValueType offset(CcboostSegmentationFilter::ANNOTATEDPADDING);
+        annotatedRegion.PadByRadius(offset);
+
+        annotatedRegion.Crop(channelItk->GetLargestPossibleRegion());
+        data.annotatedRegion = annotatedRegion;
+
+        //FIXME TODO set new ROIs in some other vector and let the task decide when to get them
+        task->ccboostconfig.train.push_back(data);
+
+    }
+}
+
+void CcboostSegmentationPlugin::processMsg(std::string &msg){
+
+    if(!msg.empty())
+        QMessageBox::critical(NULL, "Synapse Segmentation Message Box",
+                             QString(msg), QMessageBox::Yes, QMessageBox::Yes);
 
 }
 
@@ -221,23 +333,23 @@ void CcboostSegmentationPlugin::finishedTask()
     CcboostTaskPtr ccboostTask = dynamic_cast<CcboostTaskPtr>(sender());
     disconnect(ccboostTask, SIGNAL(finished()), this, SLOT(finishedTask()));
     if(!ccboostTask->isAborted())
-        m_finishedTasks2.insert(ccboostTask, m_executingTasks2[ccboostTask]);
+        m_finishedTasks.insert(ccboostTask, m_executingTasks[ccboostTask]);
 
-    m_executingTasks2.remove(ccboostTask);
+    m_executingTasks.remove(ccboostTask);
 
     //if everyone did not finish yet, wait.
-    if (!m_executingTasks2.empty())
+    if (!m_executingTasks.empty())
         return;
 
     // maybe all tasks have been aborted.
-    if(m_finishedTasks2.empty())
+    if(m_finishedTasks.empty())
         return;
 
     m_undoStack->beginMacro("Create Synaptic ccboost segmentations");
 
 
     SegmentationAdapterSList createdSegmentations;
-    for(CCB::CcboostTaskPtr ccbtask: m_finishedTasks2.keys())
+    for(CCB::CcboostTaskPtr ccbtask: m_finishedTasks.keys())
     {
         createdSegmentations = createSegmentations(ccbtask->predictedSegmentationsList);
         for(auto segmentation: createdSegmentations){
@@ -257,7 +369,7 @@ void CcboostSegmentationPlugin::finishedTask()
     //m_viewManager->updateSegmentationRepresentations(createdSegmentations);
     m_viewManager->updateViews();
 
-    m_finishedTasks2.clear();
+    m_finishedTasks.clear();
 
     return;
 

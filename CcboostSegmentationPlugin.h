@@ -80,6 +80,12 @@ namespace ESPINA
 
     virtual FilterFactorySList filterFactories() const;
 
+    static void getGTSegmentations(const SegmentationAdapterList segmentations,
+                                   SegmentationAdapterList& validSegmentations,
+                                   SegmentationAdapterList& validBgSegmentations);
+
+    void createCcboostTask(SegmentationAdapterList segmentations);
+
     //FIXME //TODO hack
   public:
     SchedulerSPtr getScheduler() {
@@ -89,6 +95,7 @@ namespace ESPINA
   public slots:
     void segmentationsAdded(SegmentationAdapterSList segmentations);
     void finishedTask();
+    void processMsg(std::string& msg);
 
   private:
     struct Data2
@@ -114,8 +121,8 @@ namespace ESPINA
     FilterFactorySPtr                m_filterFactory;
     SegmentationAdapterList          m_analysisSynapses;
 
-    QMap<CCB::CcboostTaskPtr, struct Data2> m_executingTasks2;
-    QMap<CCB::CcboostTaskPtr, struct Data2> m_finishedTasks2;
+    QMap<CCB::CcboostTaskPtr, struct Data2> m_executingTasks;
+    QMap<CCB::CcboostTaskPtr, struct Data2> m_finishedTasks;
 
     SegmentationAdapterSList createSegmentations(std::vector<itkVolumeType::Pointer>&  predictedSegmentationsList);
 

@@ -35,6 +35,8 @@ struct SetConfigData
 
     std::string groundTruth;
 
+    std::string featureExtension{".mha"};
+
 //    std::string cacheDir;
 
     std::string orientEstimate;
@@ -61,17 +63,17 @@ struct SetConfigData
            setCfgData.featuresRawVolumeImageHash = "";
 
            // orientation estimate, take the "-repolarized" output of computeSynapseFeatures.py
-           setCfgData.orientEstimate = "hessOrient-s3.5-repolarized.nrrd";
+           setCfgData.orientEstimate = "hessOrient-s3.5-repolarized" + featureExtension;
 
            // these are the feature channels, which must be precomputed with computeSynapseFeatures.py
-           setCfgData.otherFeatures.push_back("gradient-magnitude-s1.0.nrrd");
-           setCfgData.otherFeatures.push_back("gradient-magnitude-s1.6.nrrd");
-           setCfgData.otherFeatures.push_back("gradient-magnitude-s3.5.nrrd");
-           setCfgData.otherFeatures.push_back("gradient-magnitude-s5.0.nrrd");
-           setCfgData.otherFeatures.push_back("stensor-s0.5-r1.0.nrrd");
-           setCfgData.otherFeatures.push_back("stensor-s0.8-r1.6.nrrd");
-           setCfgData.otherFeatures.push_back("stensor-s1.8-r3.5.nrrd");
-           setCfgData.otherFeatures.push_back("stensor-s2.5-r5.0.nrrd");
+           setCfgData.otherFeatures.push_back("gradient-magnitude-s1.0" + featureExtension);
+           setCfgData.otherFeatures.push_back("gradient-magnitude-s1.6" + featureExtension);
+           setCfgData.otherFeatures.push_back("gradient-magnitude-s3.5" + featureExtension);
+           setCfgData.otherFeatures.push_back("gradient-magnitude-s5.0" + featureExtension);
+           setCfgData.otherFeatures.push_back("stensor-s0.5-r1.0" + featureExtension);
+           setCfgData.otherFeatures.push_back("stensor-s0.8-r1.6" + featureExtension);
+           setCfgData.otherFeatures.push_back("stensor-s1.8-r3.5" + featureExtension);
+           setCfgData.otherFeatures.push_back("stensor-s2.5-r5.0" + featureExtension);
 
        }
 
@@ -85,6 +87,8 @@ public:
 
     std::vector<SetConfigData<ItkImageType> > train;
     std::vector<SetConfigData<ItkImageType> > test;
+
+    std::vector<SetConfigData<ItkImageType> > pendingTrain;
 
     //FIXME use scoped enums when we switch to C++11
     enum Preset {
@@ -104,6 +108,7 @@ public:
     
     bool saveIntermediateVolumes;
     bool forceRecomputeFeatures;
+    bool automaticComputation;
 
     unsigned int numPredictRegions;
 
@@ -147,6 +152,8 @@ public:
         //std::string featuresPath = "/home/monso/code/data/synapse_features/";
         //FIXME architecture dependent--> add portability
         ccConfig.cacheDir = "./";
+
+        ccConfig.automaticComputation = false;
 
     }
 

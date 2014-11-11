@@ -31,8 +31,9 @@ if (NOT COMPILING_ESPINA)
     include(${ITK_USE_FILE})
     
 endif ()
-
-find_package(OpenMP REQUIRED)
+#replace temporaly
+message(WARN "reset openmp at cmakelists!!")
+#find_package(OpenMP REQUIRED)
 
 #TODO fix FIndXlslib or remove dependency
 find_package(XLSLIB)
