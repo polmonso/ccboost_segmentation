@@ -107,14 +107,6 @@ ToolSList CcboostSegmentationToolGroup::tools()
   return tools;
 }
 
-void CcboostSegmentationToolGroup::processMsg(std::string &msg){
-
-    if(!msg.empty())
-        QMessageBox::critical(NULL, "Synapse Segmentation Memory check",
-                             QString(msg), QMessageBox::Yes, QMessageBox::Yes);
-
-}
-
 void CcboostSegmentationToolGroup::createSegmentationImporter()
 {
 
@@ -134,7 +126,7 @@ void CcboostSegmentationToolGroup::createSegmentationImporter()
 //-----------------------------------------------------------------------------
 void CcboostSegmentationToolGroup::createSimpleCcboostSegmentation()
 {
-  m_plugin->createCcboostTask(m_model->segmentations());
+    m_plugin->createCcboostTask(m_model->segmentations());
 }
 
 //-----------------------------------------------------------------------------

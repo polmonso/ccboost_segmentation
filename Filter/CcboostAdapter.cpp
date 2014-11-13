@@ -50,10 +50,6 @@
 
 using namespace ESPINA;
 
-CcboostAdapter::CcboostAdapter()
-{
-}
-
 bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
                           FloatTypeImage::Pointer& probabilisticOutSeg,
                           std::vector<itkVolumeType::Pointer>& outSegList) {
@@ -137,7 +133,6 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
     reader->Update();
     probabilisticOutSeg = reader->GetOutput();
     probabilisticOutSeg->DisconnectPipeline();
-    return true;
 #endif
     qDebug() << "output image";
 
@@ -265,7 +260,7 @@ bool CcboostAdapter::automaticCore(const ConfigData<itkVolumeType>& cfgdata,
     Matrix3D<float> predImg;
 
     //TODO provide a stumped train
-    if(!cfgdata.automaticcomputation) {
+    if(!cfgdata.automaticComputation) {
 
         adaboost.train( bdata, 100 );
 
@@ -279,22 +274,25 @@ bool CcboostAdapter::automaticCore(const ConfigData<itkVolumeType>& cfgdata,
 
     } else {
 
+        int stumpindex = 0;
         do {
 
-            if(!cfgdata.pendingtrain.isempty()){
-                cfgdata.train.append(cfgdata.pendingtrain);
-                cfgdata.clear();
+            cfgdata.train.reserve(cfgdata.train.size() + cfgdata.pendingTrain.size());
+            if(!cfgdata.pendingTrain.empty()){
+                std::move(std::begin(cfgdata.train), std::end(cfgdata.train), std::back_inserter(cfgdata.pendingTrain));
+                cfgdata.pendingTrain.clear();
             }
-            adaboost.trainstump( bdata, 100, stumpindex);
+            //adaboost.trainStump( bdata, 100, stumpindex);
 
             Matrix3D<float> predImg;
             TimerRT timer; timer.reset();
             adaboost.predict( &allROIs, &predImg );
             qDebug("Elapsed: %f", timer.elapsed());
 
-            emit(updatePrediction(predImg));
+            //emit(updatePrediction(predImg.asItkImage()));
 
-        }while(stumpindex < cfgdata.numstumps);
+            stumpindex++;
+        } while(stumpindex < cfgdata.numStumps);
     }
 
     predImg.save("/tmp/test.nrrd");
@@ -687,7 +685,7 @@ void CcboostAdapter::computeFeatures(const ConfigData<itkVolumeType> cfgData,
            if( (stringPos = featureFile.find(std::string("hessOrient-"))) != std::string::npos){
                float sigma;
                std::string filename(featureFile.substr(stringPos));
-               std::string matchStr = "hessOrient-s%f-repolarized" + cfgDataROI.featureExtension;
+               std::string matchStr = std::string("hessOrient-s%f-repolarized") + FEATUREEXTENSION;
                int result = sscanf(filename.c_str(),matchStr.c_str(),&sigma);
               //FIXME break if error
                if(result < 0)
@@ -706,7 +704,7 @@ void CcboostAdapter::computeFeatures(const ConfigData<itkVolumeType> cfgData,
           } else if ( (stringPos = featureFile.find(std::string("gradient-magnitude"))) != std::string::npos ) {
                float sigma;
                std::string filename(featureFile.substr(stringPos));
-               std::string matchStr = "gradient-magnitude-s%f" + cfgDataROI.featureExtension;
+               std::string matchStr = std::string("gradient-magnitude-s%f") + FEATUREEXTENSION;
                int result = sscanf(filename.c_str(),matchStr.c_str(),&sigma);
                if(result < 0)
                    qDebug() << "Error scanning feature name " << featureFile.c_str();
@@ -718,8 +716,8 @@ void CcboostAdapter::computeFeatures(const ConfigData<itkVolumeType> cfgData,
            } else if( (stringPos = featureFile.find(std::string("stensor"))) != std::string::npos ) {
                float rho,sigma;
                std::string filename(featureFile.substr(stringPos));
-               std::string matchStr = "stensor-s%f-r%f" + cfgDataROI.featureExtension;
-               int result = sscanf(filename.c_str(),,matchStr.c_str(),&sigma,&rho);
+               std::string matchStr = std::string("stensor-s%f-r%f") + FEATUREEXTENSION;
+               int result = sscanf(filename.c_str(),matchStr.c_str(),&sigma,&rho);
                if(result < 0)
                    qDebug() << "Error scanning feature name" << featureFile.c_str();
 

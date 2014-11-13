@@ -23,6 +23,8 @@
 #include <iostream>
 #include <fstream>
 
+const std::string SetConfigData::FEATUREEXTENSION = ".mha";
+
 //TODO template
 void ConfigData::setDefault(ConfigData& ccConfig){
 

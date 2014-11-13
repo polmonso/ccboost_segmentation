@@ -80,11 +80,11 @@ namespace ESPINA
 
     virtual FilterFactorySList filterFactories() const;
 
-    static void getGTSegmentations(const SegmentationAdapterList segmentations,
-                                   SegmentationAdapterList& validSegmentations,
-                                   SegmentationAdapterList& validBgSegmentations);
+    static void getGTSegmentations(const SegmentationAdapterSList segmentations,
+                                   SegmentationAdapterSList &validSegmentations,
+                                   SegmentationAdapterSList &validBgSegmentations);
 
-    void createCcboostTask(SegmentationAdapterList segmentations);
+    void createCcboostTask(SegmentationAdapterSList segmentations);
 
     //FIXME //TODO hack
   public:
@@ -95,7 +95,7 @@ namespace ESPINA
   public slots:
     void segmentationsAdded(SegmentationAdapterSList segmentations);
     void finishedTask();
-    void processMsg(std::string& msg);
+    void publishMsg(std::string msg);
 
   private:
     struct Data2

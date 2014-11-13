@@ -15,8 +15,10 @@
 
 namespace ESPINA
 {
-class CcboostAdapter
+class CcboostAdapter : public QObject
 {
+    Q_OBJECT
+
 public:
     typedef itk::Image<float, 3> FloatTypeImage;
 private:
@@ -24,8 +26,11 @@ private:
     using bigVolumeType = itk::Image<unsigned short, 3>;
     using BigWriterType = itk::ImageFileWriter< bigVolumeType >;
 
+signals:
+    updatePrediction(FloatTypeImage::Pointer itkVolumeType);
+
 public:
-    CcboostAdapter();
+    explicit CcboostAdapter() {};
 
     static void splitSegmentations(const ConfigData<itkVolumeType>  &cfgData,
                                    const itkVolumeType::Pointer outputSegmentation,
@@ -50,6 +55,9 @@ public:
                      FloatTypeImage::Pointer &probabilisticOutSeg,
                      std::vector<itkVolumeType::Pointer>& outSegList);
 
+    static bool automaticCore(const ConfigData<itkVolumeType>& cfgdata,
+                              FloatTypeImage::Pointer& probabilisticOutSeg,
+                              std::vector<itkVolumeType::Pointer>& outSegList);
 
 };
 } /* namespace ESPINA */

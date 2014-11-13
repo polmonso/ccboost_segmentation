@@ -52,6 +52,8 @@ namespace ESPINA {
     : public Task
     {
 
+        Q_OBJECT
+    private:
         typedef itk::ImageFileWriter< itkVolumeType > WriterType;
         using bigVolumeType = itk::Image<unsigned short, 3>;
         using BigWriterType = itk::ImageFileWriter< bigVolumeType >;
@@ -62,6 +64,7 @@ namespace ESPINA {
         static const unsigned int MINTRUTHMITOCHONDRIA = 2;
         static const double       MINNUMBGPX = 100000;
         static const unsigned int CCBOOSTBACKGROUNDLABEL = 128;
+    public:
         static const unsigned int ANNOTATEDPADDING = 30;
     public:
        static const QString MITOCHONDRIA;
@@ -81,6 +84,10 @@ namespace ESPINA {
 
       std::vector<itkVolumeType::Pointer>  predictedSegmentationsList;
 
+      static itkVolumeType::Pointer mergeSegmentations(const itkVolumeType::Pointer channelItk,
+                                                            const SegmentationAdapterSList& segList,
+                                                            const SegmentationAdapterSList& backgroundSegList);
+
     signals:
       void message(std::string);
 
@@ -93,9 +100,6 @@ namespace ESPINA {
       bool enoughGroundTruth();
       bool enoughMemory(const itkVolumeType::Pointer channelItk, const itkVolumeType::RegionType annotatedRegion, unsigned int & numPredictRegions);
 
-      static itkVolumeType::Pointer mergeSegmentations(const itkVolumeType::Pointer channelItk,
-                                                       const SegmentationAdapterList& segList,
-                                                       const SegmentationAdapterList& backgroundSegList);
 
       static void applyEspinaSettings(ConfigData<itkVolumeType> cfgdata);
 
@@ -104,8 +108,8 @@ namespace ESPINA {
     public:
       //TODO espina2. this is a hack to get the segmentations in the filter.
       //Find out how to do it properly
-      SegmentationAdapterList m_groundTruthSegList;
-      SegmentationAdapterList m_backgroundGroundTruthSegList;
+      SegmentationAdapterSList m_groundTruthSegList;
+      SegmentationAdapterSList m_backgroundGroundTruthSegList;
 
     private:
       ChannelAdapterPtr m_channel;

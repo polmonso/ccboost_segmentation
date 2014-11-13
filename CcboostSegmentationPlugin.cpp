@@ -43,6 +43,8 @@
 #include <Undo/AddSegmentations.h>
 #include <Undo/AddRelationCommand.h>
 #include <Filters/SourceFilter.h>
+#include <Extensions/Tags/SegmentationTags.h>
+#include <Extensions/ExtensionUtils.h>
 
 // Qt
 #include <QColorDialog>
@@ -184,18 +186,19 @@ AnalysisReaderSList CcboostSegmentationPlugin::analysisReaders() const
   return AnalysisReaderSList();
 }
 
-void CcboostSegmentationPlugin::getGTSegmentations(const SegmentationAdapterList segmentations,
-                                                   SegmentationAdapterList& validSegmentations,
-                                                   SegmentationAdapterList& validBgSegmentations) {
+void CcboostSegmentationPlugin::getGTSegmentations(const SegmentationAdapterSList segmentations,
+                                                   SegmentationAdapterSList& validSegmentations,
+                                                   SegmentationAdapterSList& validBgSegmentations) {
     for(auto seg: segmentations)
     {
-        if(seg->hasExtension(SegmentationTags::TYPE))
+        if(seg->hasExtension(SegmentationTags::TYPE)) {
             auto extension = retrieveExtension<SegmentationTags>(seg);
-        QStringList tags = extension->tags();
-        if(tags.contains(CcboostTask::POSITIVETAG + CcboostTask::ELEMENT, Qt::CaseInsensitive))
-            validSegmentations << seg;
-        else if(tags.contains(CcboostTask::NEGATIVETAG + CcboostTask::ELEMENT, Qt::CaseInsensitive))
-            validBgSegmentations << seg;
+            QStringList tags = extension->tags();
+            if(tags.contains(CcboostTask::POSITIVETAG + CcboostTask::ELEMENT, Qt::CaseInsensitive))
+                validSegmentations << seg;
+            else if(tags.contains(CcboostTask::NEGATIVETAG + CcboostTask::ELEMENT, Qt::CaseInsensitive))
+                validBgSegmentations << seg;
+        }
 
     }
 
@@ -208,17 +211,17 @@ void CcboostSegmentationPlugin::getGTSegmentations(const SegmentationAdapterList
         for(auto seg: segmentations) {
             //TODO espina2 const the string
             if (seg->category()->classificationName().contains(CcboostTask::ELEMENT, Qt::CaseInsensitive))
-                validSegmentations << seg.get(); //invalid if the shared pointer goes out of scope
+                validSegmentations << seg; //invalid if the shared pointer goes out of scope
             else if(seg->category()->classificationName().contains(CcboostTask::BACKGROUND, Qt::CaseInsensitive))
-                validBgSegmentations << seg.get();
+                validBgSegmentations << seg;
         }
     }
 
 }
 
-void CcboostSegmentationPlugin::createCcboostTask(SegmentationAdapterList segmentations){
-    SegmentationAdapterList validSegmentations;
-    SegmentationAdapterList validBgSegmentations;
+void CcboostSegmentationPlugin::createCcboostTask(SegmentationAdapterSList segmentations){
+    SegmentationAdapterSList validSegmentations;
+    SegmentationAdapterSList validBgSegmentations;
 
     CcboostSegmentationPlugin::getGTSegmentations(segmentations, validSegmentations, validBgSegmentations);
 
@@ -231,14 +234,14 @@ void CcboostSegmentationPlugin::createCcboostTask(SegmentationAdapterList segmen
     qDebug() << "Using channel " << m_viewManager->activeChannel()->data(Qt::DisplayRole);
 
     //create and run task //FIXME is that the correct way of getting the scheduler?
-    SchedulerSPtr scheduler = m_plugin->getScheduler();
+    SchedulerSPtr scheduler = getScheduler();
     CCB::CcboostTaskSPtr ccboostTask{new CCB::CcboostTask(channel, scheduler)};
     ccboostTask.get()->m_groundTruthSegList = validBgSegmentations;
     ccboostTask.get()->m_backgroundGroundTruthSegList = validSegmentations;
     struct CcboostSegmentationPlugin::Data2 data;
-    m_plugin->m_executingTasks.insert(ccboostTask.get(), data);
-    connect(ccboostTask.get(), SIGNAL(finished()), m_plugin, SLOT(finishedTask()));
-    connect(ccboostTask.get(), SIGNAL(message(std::string)), m_plugin, SLOT(processMsg(std::string)));
+    m_executingTasks.insert(ccboostTask.get(), data);
+    connect(ccboostTask.get(), SIGNAL(finished()), this, SLOT(finishedTask()));
+    connect(ccboostTask.get(), SIGNAL(message(std::string)), this, SLOT(publishMsg(std::string)));
     Task::submit(ccboostTask);
 
     return;
@@ -258,8 +261,8 @@ void CcboostSegmentationPlugin::segmentationsAdded(SegmentationAdapterSList segm
 
     }else{
         //if task is running, add ROIs
-        SegmentationAdapterList validSegmentations;
-        SegmentationAdapterList validBgSegmentations;
+        SegmentationAdapterSList validSegmentations;
+        SegmentationAdapterSList validBgSegmentations;
 
         CcboostSegmentationPlugin::getGTSegmentations(segmentations,
                                                       validSegmentations,
@@ -293,10 +296,10 @@ void CcboostSegmentationPlugin::segmentationsAdded(SegmentationAdapterSList segm
         itkVolumeType::Pointer normalizedChannelItk = normalizeFilter->GetOutput();
 
         itkVolumeType::Pointer segmentedGroundTruth = CcboostTask::mergeSegmentations(normalizedChannelItk,
-                                                                         m_groundTruthSegList,
-                                                                         m_backgroundGroundTruthSegList);
+                                                                         validSegmentations,
+                                                                         validBgSegmentations);
 
-        SetConfigData data(task->ccboostconfig.train.at(0));
+        SetConfigData<itkVolumeType> data(task->ccboostconfig.train.at(0));
 
         data.groundTruthImage = segmentedGroundTruth;
 
@@ -306,7 +309,7 @@ void CcboostSegmentationPlugin::segmentationsAdded(SegmentationAdapterSList segm
           imageMaskSpatialObject  = ImageMaskSpatialObjectType::New();
         imageMaskSpatialObject->SetImage ( segmentedGroundTruth );
         itkVolumeType::RegionType annotatedRegion = imageMaskSpatialObject->GetAxisAlignedBoundingBoxRegion();
-        itkVolumeType::OffsetValueType offset(CcboostSegmentationFilter::ANNOTATEDPADDING);
+        itkVolumeType::OffsetValueType offset(CcboostTask::ANNOTATEDPADDING);
         annotatedRegion.PadByRadius(offset);
 
         annotatedRegion.Crop(channelItk->GetLargestPossibleRegion());
@@ -318,11 +321,13 @@ void CcboostSegmentationPlugin::segmentationsAdded(SegmentationAdapterSList segm
     }
 }
 
-void CcboostSegmentationPlugin::processMsg(std::string &msg){
+void CcboostSegmentationPlugin::publishMsg(std::string msg){
+
+    qDebug() << "Show message: " << QString::fromUtf8(msg.c_str());
 
     if(!msg.empty())
         QMessageBox::critical(NULL, "Synapse Segmentation Message Box",
-                             QString(msg), QMessageBox::Yes, QMessageBox::Yes);
+                             QString(msg.c_str()), QMessageBox::Yes, QMessageBox::Yes);
 
 }
 

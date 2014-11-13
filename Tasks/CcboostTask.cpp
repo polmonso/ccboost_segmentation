@@ -172,7 +172,6 @@ void CcboostTask::run()
        qDebug() << "labelmap.tif created";
      }
 
-
   //Get bounding box of annotated data
   typedef itk::ImageMaskSpatialObject< 3 > ImageMaskSpatialObjectType;
   ImageMaskSpatialObjectType::Pointer
@@ -181,6 +180,8 @@ void CcboostTask::run()
   itkVolumeType::RegionType annotatedRegion = imageMaskSpatialObject->GetAxisAlignedBoundingBoxRegion();
   itkVolumeType::OffsetValueType offset(CcboostTask::ANNOTATEDPADDING);
   annotatedRegion.PadByRadius(offset);
+
+  annotatedRegion.Crop(channelItk->GetLargestPossibleRegion());
 
   unsigned int numPredictRegions;
   if(!enoughMemory(channelItk, annotatedRegion, numPredictRegions))
@@ -232,16 +233,6 @@ void CcboostTask::run()
   trainData.zAnisotropyFactor = 2*channelItk->GetSpacing()[2]/(channelItk->GetSpacing()[0]
           + channelItk->GetSpacing()[1]);
 
-  //Get bounding box of annotated data
-  typedef itk::ImageMaskSpatialObject< 3 > ImageMaskSpatialObjectType;
-  ImageMaskSpatialObjectType::Pointer
-    imageMaskSpatialObject  = ImageMaskSpatialObjectType::New();
-  imageMaskSpatialObject->SetImage ( segmentedGroundTruth );
-  itkVolumeType::RegionType annotatedRegion = imageMaskSpatialObject->GetAxisAlignedBoundingBoxRegion();
-  itkVolumeType::OffsetValueType offset(CcboostSegmentationFilter::ANNOTATEDPADDING);
-  annotatedRegion.PadByRadius(offset);
-
-  annotatedRegion.Crop(channelItk->GetLargestPossibleRegion());
   trainData.annotatedRegion = annotatedRegion;
 
   ccboostconfig.train.push_back(trainData);
@@ -277,7 +268,7 @@ void CcboostTask::run()
   if (canExecute())
   {
     emit progress(100);
-    qDebug() << "AutoSegment Finished";
+    qDebug() << "Ccboost Segmentation Finished";
   }
 }
 
@@ -311,8 +302,15 @@ bool CcboostTask::enoughMemory(const itkVolumeType::Pointer channelItk, const it
                             "and you have %2 Mb. We will process by pieces and ESPina might crash."
                             "(You should reduce it by constraining the Ground truth to a smaller 3d Cube)."
                             "Continue anyway?").arg(memoryNeededMB).arg(memoryAvailableMB).toStdString();
+        qDebug() << QString::fromUtf8(msg.c_str());
         emit(message(msg));
     }
+
+    //FIXME //TODO remove this
+    qDebug() << "remove this test ccboosttask.cpp:310";
+    std::string test = "test dialog message";
+    emit(message(test));
+
     return true;
 }
 
@@ -378,8 +376,8 @@ bool CcboostTask::enoughGroundTruth(){
 }
 
 itkVolumeType::Pointer CcboostTask::mergeSegmentations(const itkVolumeType::Pointer channelItk,
-                                                                     const SegmentationAdapterList& segList,
-                                                                     const SegmentationAdapterList& backgroundSegList){
+                                                       const SegmentationAdapterSList& segList,
+                                                       const SegmentationAdapterSList& backgroundSegList){
 
     itkVolumeType::IndexType start;
     start[0] = start[1] = start[2] = 0;

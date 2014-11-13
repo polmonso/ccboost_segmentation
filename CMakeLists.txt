@@ -31,9 +31,8 @@ if (NOT COMPILING_ESPINA)
     include(${ITK_USE_FILE})
     
 endif ()
-#replace temporaly
-message(WARN "reset openmp at cmakelists!!")
-#find_package(OpenMP REQUIRED)
+
+find_package(OpenMP REQUIRED)
 
 #TODO fix FIndXlslib or remove dependency
 find_package(XLSLIB)
@@ -92,6 +91,8 @@ qt4_wrap_ui (UI_BUILT_SOURCES
 )
 
 QT4_WRAP_CPP(MOC_SOURCES
+  Filter/CcboostAdapter.h
+  Tasks/CcboostTask.h
   CcboostSegmentationPlugin.h
 #  Filter/CcboostSegmentationFilter.h
   GUI/Settings/CcboostSegmentationSettings.h

@@ -30,7 +30,7 @@
 // Qt
 #include <QColor>
 
-namespace EspINA
+namespace ESPINA
 {
   class CcboostSegmentationPlugin_EXPORT CcboostSegmentationSettings
   : public SettingsPanel
@@ -60,7 +60,7 @@ namespace EspINA
     void changeSVoxCubeness(int);
     void changeTPQuantile(double);
     void changeFPQuantile(double);
-    void changeLabelName(QString);
+    void changeFeaturesPath(QString path);
     void changeSynapseFeaturesPath(QString);
     void openDirectoryDialog();
     void changeAutomaticComputation(bool);
@@ -68,7 +68,7 @@ namespace EspINA
   private:
     int m_minCCSize;
     int m_maxNumObjects;
-    ConfigData m_settingsConfigData;
+    ConfigData<itkVolumeType> m_settingsConfigData;
     bool m_modified;
   };
 } /* namespace EspINA */

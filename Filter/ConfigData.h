@@ -23,6 +23,9 @@
 #include <vector>
 #include <iostream>
 
+//FIXME I don't like this, but const string inside a tempalted class is tricky
+#define FEATUREEXTENSION ".mha"
+
 template<typename ItkImageType>
 struct SetConfigData
 {
@@ -34,8 +37,6 @@ struct SetConfigData
     std::string featuresRawVolumeImageHash;
 
     std::string groundTruth;
-
-    std::string featureExtension{".mha"};
 
 //    std::string cacheDir;
 
@@ -63,17 +64,17 @@ struct SetConfigData
            setCfgData.featuresRawVolumeImageHash = "";
 
            // orientation estimate, take the "-repolarized" output of computeSynapseFeatures.py
-           setCfgData.orientEstimate = "hessOrient-s3.5-repolarized" + featureExtension;
+           setCfgData.orientEstimate = std::string("hessOrient-s3.5-repolarized") + FEATUREEXTENSION;
 
            // these are the feature channels, which must be precomputed with computeSynapseFeatures.py
-           setCfgData.otherFeatures.push_back("gradient-magnitude-s1.0" + featureExtension);
-           setCfgData.otherFeatures.push_back("gradient-magnitude-s1.6" + featureExtension);
-           setCfgData.otherFeatures.push_back("gradient-magnitude-s3.5" + featureExtension);
-           setCfgData.otherFeatures.push_back("gradient-magnitude-s5.0" + featureExtension);
-           setCfgData.otherFeatures.push_back("stensor-s0.5-r1.0" + featureExtension);
-           setCfgData.otherFeatures.push_back("stensor-s0.8-r1.6" + featureExtension);
-           setCfgData.otherFeatures.push_back("stensor-s1.8-r3.5" + featureExtension);
-           setCfgData.otherFeatures.push_back("stensor-s2.5-r5.0" + featureExtension);
+           setCfgData.otherFeatures.push_back(std::string("gradient-magnitude-s1.0") + FEATUREEXTENSION);
+           setCfgData.otherFeatures.push_back(std::string("gradient-magnitude-s1.6") + FEATUREEXTENSION);
+           setCfgData.otherFeatures.push_back(std::string("gradient-magnitude-s3.5") + FEATUREEXTENSION);
+           setCfgData.otherFeatures.push_back(std::string("gradient-magnitude-s5.0") + FEATUREEXTENSION);
+           setCfgData.otherFeatures.push_back(std::string("stensor-s0.5-r1.0") + FEATUREEXTENSION);
+           setCfgData.otherFeatures.push_back(std::string("stensor-s0.8-r1.6") + FEATUREEXTENSION);
+           setCfgData.otherFeatures.push_back(std::string("stensor-s1.8-r3.5") + FEATUREEXTENSION);
+           setCfgData.otherFeatures.push_back(std::string("stensor-s2.5-r5.0") + FEATUREEXTENSION);
 
        }
 
@@ -83,6 +84,41 @@ template<typename ItkImageType>
 class ConfigData
 {
 public:
+    ConfigData(){
+        preset = ConfigData::SYNAPSE;
+
+        TPQuantile = 0.1;
+        FPQuantile = 0.01;
+
+        // number of adaboost stumps (recommended >= 1000, but in general 400 does well enough)
+        numStumps = 500;
+
+        // output base file name. Output files will have this as the first part of their name
+        outFileName = "substack";
+
+
+        //TODO turn back to not saving
+        saveIntermediateVolumes = true;
+        forceRecomputeFeatures = false;
+        minComponentSize = 250;
+        maxNumObjects = 200;
+
+        // Number of regions to split the volume into
+        numPredictRegions = 1;
+
+        //supervoxel seed and cubeness
+        svoxSeed = 1;//3;
+        svoxCubeness = 16;//16;
+
+        rawVolume = "ccboostcache";
+
+        //std::string featuresPath = "/home/monso/code/data/synapse_features/";
+        //FIXME architecture dependent--> add portability
+        cacheDir = "./";
+
+        automaticComputation = false;
+    }
+
     typename ItkImageType::Pointer originalVolumeImage;
 
     std::vector<SetConfigData<ItkImageType> > train;
