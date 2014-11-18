@@ -34,6 +34,7 @@
 #include <Core/Factory/FilterFactory.h>
 #include <Core/EspinaTypes.h>
 #include <Tasks/CcboostTask.h>
+#include <Tasks/ImportTask.h>
 
 namespace ESPINA
 {
@@ -85,6 +86,7 @@ namespace ESPINA
                                    SegmentationAdapterSList &validBgSegmentations);
 
     void createCcboostTask(SegmentationAdapterSList segmentations);
+    void createImportTask();
 
     //FIXME //TODO hack
   public:
@@ -95,6 +97,7 @@ namespace ESPINA
   public slots:
     void segmentationsAdded(SegmentationAdapterSList segmentations);
     void finishedTask();
+    void finishedImportTask();
     void publishMsg(std::string msg);
 
   private:
@@ -104,6 +107,9 @@ namespace ESPINA
 
 //         Data2(std::vector<itkVolumeType::Pointer>& predSegList): predictedSegmentationsList{predSegList} {};
 //         Data2(): predictedSegmentationsList{nullptr} {};
+        };
+    struct ImportData
+        {
         };
 
     static bool isSynapse(SegmentationAdapterPtr segmentation);
@@ -124,7 +130,10 @@ namespace ESPINA
     QMap<CCB::CcboostTaskPtr, struct Data2> m_executingTasks;
     QMap<CCB::CcboostTaskPtr, struct Data2> m_finishedTasks;
 
-    SegmentationAdapterSList createSegmentations(std::vector<itkVolumeType::Pointer>&  predictedSegmentationsList);
+    QMap<CCB::ImportTaskPtr, struct ImportData> m_executingImportTasks;
+    QMap<CCB::ImportTaskPtr, struct ImportData> m_finishedImportTasks;
+
+    SegmentationAdapterSList createSegmentations(std::vector<itkVolumeType::Pointer>&  predictedSegmentationsList, const QString &categoryName);
 
 
     friend class CcboostSegmentationToolGroup;

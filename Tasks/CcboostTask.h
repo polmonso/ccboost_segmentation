@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef ESPINA_RAS_TRAINER_TASK_H
-#define ESPINA_RAS_TRAINER_TASK_H
+#ifndef ESPINA_CCBOOST_TASK_H
+#define ESPINA_CCBOOST_TASK_H
 
 #include <Core/MultiTasking/Task.h>
 #include <GUI/Model/ChannelAdapter.h>

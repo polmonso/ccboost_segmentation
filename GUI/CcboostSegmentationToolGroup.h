@@ -81,7 +81,7 @@ namespace ESPINA
 
   public slots:
     void createSimpleCcboostSegmentation();
-    void createSegmentationImporter();
+    void createSegmentationImport();
 
   private:
     ModelAdapterSPtr         m_model;

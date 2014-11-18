@@ -93,6 +93,7 @@ qt4_wrap_ui (UI_BUILT_SOURCES
 QT4_WRAP_CPP(MOC_SOURCES
   Filter/CcboostAdapter.h
   Tasks/CcboostTask.h
+  Tasks/ImportTask.h
   CcboostSegmentationPlugin.h
 #  Filter/CcboostSegmentationFilter.h
   GUI/Settings/CcboostSegmentationSettings.h
@@ -110,6 +111,7 @@ set (PLUGIN_SOURCES
 #  Core/Extensions/CcboostSegmentationExtension.cpp
 #  Core/Extensions/ExtensionFactory.cpp
   Tasks/CcboostTask.cpp
+  Tasks/ImportTask.cpp
   Filter/CcboostAdapter.cpp
 #  Filter/CcboostSegmentationFilter.cpp
 #  Filter/SASFetchBehaviour.cpp

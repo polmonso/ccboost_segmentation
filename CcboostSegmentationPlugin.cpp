@@ -54,9 +54,13 @@
 #include <QDir>
 #include <QString>
 #include <QVariant>
+#include <QFileDialog>
 
+const QString UNSPECIFIED = QObject::tr("UNSPECIFIED");
 const QString CVL = QObject::tr("CVL");
+const QString IMPORTED = QObject::tr("IMPORTED");
 const QString CVLTAG_PREPEND = QObject::tr("CVL ");
+const QString IMPORTEDTAG_PREPEND = QObject::tr("IMPORTED ");
 
 using namespace ESPINA;
 using namespace CCB;
@@ -240,9 +244,44 @@ void CcboostSegmentationPlugin::createCcboostTask(SegmentationAdapterSList segme
     ccboostTask.get()->m_backgroundGroundTruthSegList = validSegmentations;
     struct CcboostSegmentationPlugin::Data2 data;
     m_executingTasks.insert(ccboostTask.get(), data);
-    connect(ccboostTask.get(), SIGNAL(finished()), this, SLOT(finishedTask()));
+    connect(ccboostTask.get(), SIGNAL(finished()), this, SLOT(finishedImportTask()));
     connect(ccboostTask.get(), SIGNAL(message(std::string)), this, SLOT(publishMsg(std::string)));
     Task::submit(ccboostTask);
+
+    return;
+}
+
+void CcboostSegmentationPlugin::createImportTask(){
+
+    ChannelAdapterPtr channel;
+    if(m_viewManager->activeChannel() != NULL)
+        channel = m_viewManager->activeChannel();
+    else
+        channel = m_model->channels().at(0).get();
+
+    qDebug() << "Using channel " << m_viewManager->activeChannel()->data(Qt::DisplayRole);
+
+
+    QFileDialog fileDialog;
+    fileDialog.setObjectName("SelectSegmentationFile");
+    fileDialog.setFileMode(QFileDialog::ExistingFiles);
+    fileDialog.setWindowTitle(QString("Select file "));
+    fileDialog.setFilter(ImportTask::SUPPORTED_FILES);
+
+    if (fileDialog.exec() != QDialog::Accepted)
+        return;
+
+    std::string file = fileDialog.selectedFiles().first().toStdString();
+
+
+
+     SchedulerSPtr scheduler = getScheduler();
+     CCB::ImportTaskSPtr importTask{new CCB::ImportTask(channel, scheduler)};
+     importTask.get()->filename = file;
+     struct CcboostSegmentationPlugin::ImportData data;
+     m_executingImportTasks.insert(importTask.get(), data);
+     connect(importTask.get(), SIGNAL(finished()), this, SLOT(finishedImportTask()));
+     Task::submit(importTask);
 
     return;
 }
@@ -352,11 +391,11 @@ void CcboostSegmentationPlugin::finishedTask()
 
     m_undoStack->beginMacro("Create Synaptic ccboost segmentations");
 
-
+    auto classification = m_model->classification();
     SegmentationAdapterSList createdSegmentations;
     for(CCB::CcboostTaskPtr ccbtask: m_finishedTasks.keys())
     {
-        createdSegmentations = createSegmentations(ccbtask->predictedSegmentationsList);
+        createdSegmentations = createSegmentations(ccbtask->predictedSegmentationsList, CVL);
         for(auto segmentation: createdSegmentations){
 
             SampleAdapterSList samples;
@@ -382,22 +421,80 @@ void CcboostSegmentationPlugin::finishedTask()
 
 }
 
-SegmentationAdapterSList CcboostSegmentationPlugin::createSegmentations(std::vector<itkVolumeType::Pointer>&  predictedSegmentationsList)
+//-----------------------------------------------------------------------------
+void CcboostSegmentationPlugin::finishedImportTask()
+{
+
+    ImportTaskPtr importTask = dynamic_cast<ImportTaskPtr>(sender());
+    disconnect(importTask, SIGNAL(finished()), this, SLOT(finishedImportTask()));
+    if(!importTask->isAborted())
+        m_finishedImportTasks.insert(importTask, m_executingImportTasks[importTask]);
+
+    m_executingImportTasks.remove(importTask);
+
+    //if everyone did not finish yet, wait.
+    if (!m_executingImportTasks.empty())
+        return;
+
+    // maybe all tasks have been aborted.
+    if(m_finishedImportTasks.empty())
+        return;
+
+    m_undoStack->beginMacro("Create import segmentations");
+
+    SegmentationAdapterSList createdSegmentations;
+    for(CCB::ImportTaskPtr imptask: m_finishedImportTasks.keys())
+    {
+        createdSegmentations = createSegmentations(imptask->predictedSegmentationsList,
+                                                   CCB::ImportTask::IMPORTED);
+
+
+
+
+        SampleAdapterSList samples;
+        samples << QueryAdapter::sample(m_viewManager->activeChannel());
+        Q_ASSERT(!samples.empty());
+
+        //TODO there's no way to initialize the list with n-copies directly?
+        SampleAdapterSList samplesList;
+        for(int i=0; i < createdSegmentations.size(); i++)
+            samplesList << samples;
+
+        std::cout << "Create segmentations" << std::endl;
+        m_undoStack->push(new AddSegmentations(createdSegmentations, samplesList, m_model));
+        std::cout << "Segmentations created." << std::endl;
+
+
+    }
+    m_undoStack->endMacro();
+
+    //FIXME TODO do I need this?
+    //m_viewManager->updateSegmentationRepresentations(createdSegmentations);
+    m_viewManager->updateViews();
+
+    m_finishedImportTasks.clear();
+
+}
+
+SegmentationAdapterSList CcboostSegmentationPlugin::createSegmentations(std::vector<itkVolumeType::Pointer>&  predictedSegmentationsList,
+                                                                        const QString& categoryName)
 {
 
     auto sourceFilter = m_factory->createFilter<SourceFilter>(InputSList(), "AutoSegmentFilter");
 
     auto classification = m_model->classification();
-    if (classification->category(CVL) == nullptr)
+    CategoryAdapterSPtr category = classification->category(categoryName);
+    if (category == nullptr)
     {
-        m_undoStack->push(new AddCategoryCommand(m_model->classification()->root(), CVL, m_model, QColor(255,255,0)));
+        m_undoStack->push(new AddCategoryCommand(m_model->classification()->root(), categoryName, m_model, QColor(255,255,0)));
 
-        m_model->classification()->category(CVL)->addProperty(QString("Dim_X"), QVariant("500"));
-        m_model->classification()->category(CVL)->addProperty(QString("Dim_Y"), QVariant("500"));
-        m_model->classification()->category(CVL)->addProperty(QString("Dim_Z"), QVariant("500"));
+        category = m_model->classification()->category(categoryName);
+
+        category->addProperty(QString("Dim_X"), QVariant("500"));
+        category->addProperty(QString("Dim_Y"), QVariant("500"));
+        category->addProperty(QString("Dim_Z"), QVariant("500"));
     }
 
-    CategoryAdapterSPtr category = classification->category(CVL);
     SegmentationAdapterSList segmentations;
 
     std::cout << "There are " << predictedSegmentationsList.size() << " objects." << std::endl;

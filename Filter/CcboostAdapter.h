@@ -32,9 +32,10 @@ signals:
 public:
     explicit CcboostAdapter() {};
 
-    static void splitSegmentations(const ConfigData<itkVolumeType>  &cfgData,
-                                   const itkVolumeType::Pointer outputSegmentation,
-                                   std::vector<itkVolumeType::Pointer>& outSegList);
+    static void splitSegmentations(const itkVolumeType::Pointer outputSegmentation,
+                                   std::vector<itkVolumeType::Pointer>& outSegList,
+                                   bool saveIntermediateVolumes = false,
+                                   std::string cacheDir = std::string(".") );
 
     static void postprocessing(const ConfigData<itkVolumeType> &cfgData, itkVolumeType::Pointer& outputSegmentation);
 

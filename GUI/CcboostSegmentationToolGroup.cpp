@@ -24,6 +24,7 @@
 //#include <Filter/CcboostSegmentationFilter.h>
 
 #include "Tasks/CcboostTask.h"
+#include "Tasks/ImportTask.h"
 
 // ESPINA
 #include <GUI/Model/Utils/QueryAdapter.h>
@@ -69,7 +70,7 @@ CcboostSegmentationToolGroup::CcboostSegmentationToolGroup(ModelAdapterSPtr mode
   connect(m_tool_ccboost.get(), SIGNAL(triggered()), this, SLOT(createSimpleCcboostSegmentation()));
 
   m_tool_import->setToolTip("Import segmentation from segmented greyscale image");
-  connect(m_tool_import.get(), SIGNAL(triggered()), this, SLOT(createSegmentationImporter()));
+  connect(m_tool_import.get(), SIGNAL(triggered()), this, SLOT(createSegmentationImport()));
 
 }
 
@@ -107,20 +108,11 @@ ToolSList CcboostSegmentationToolGroup::tools()
   return tools;
 }
 
-void CcboostSegmentationToolGroup::createSegmentationImporter()
+void CcboostSegmentationToolGroup::createSegmentationImport()
 {
 
-    //TODO create segmentation importer task
-    //     SchedulerSPtr scheduler = m_plugin->getScheduler();
-//     CCB::CcboostTaskSPtr ccboostTask{new CCB::CcboostTask(channel, scheduler)};
-//     ccboostTask.get()->m_groundTruthSegList = validBgSegmentations;
-//     ccboostTask.get()->m_backgroundGroundTruthSegList = validSegmentations;
-//     struct CcboostSegmentationPlugin::Data2 data;
-//     m_plugin->m_executingTasks2.insert(ccboostTask.get(), data);
-//     connect(ccboostTask.get(), SIGNAL(finished()), m_plugin, SLOT(finishedTask()));
-//     Task::submit(ccboostTask);
+    m_plugin->createImportTask();
 
-     return;
 }
 
 //-----------------------------------------------------------------------------

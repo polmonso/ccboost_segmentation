@@ -54,7 +54,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
                           FloatTypeImage::Pointer& probabilisticOutSeg,
                           std::vector<itkVolumeType::Pointer>& outSegList) {
 #ifndef WORKINGASIMPORTER
-//#define WORK
+#define WORK
 #ifdef WORK
     MultipleROIData allROIs;
 
@@ -195,7 +195,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
        probabilisticOutSeg = outputSegmentation;
 #endif
 
-     splitSegmentations(cfgdata, outputSegmentation, outSegList);
+     splitSegmentations(outputSegmentation, outSegList, cfgdata.saveIntermediateVolumes, cfgdata.cacheDir);
 
      return true;
 }
@@ -365,14 +365,15 @@ bool CcboostAdapter::automaticCore(const ConfigData<itkVolumeType>& cfgdata,
 
      outputSegmentation->SetSpacing(cfgdata.train.at(0).rawVolumeImage->GetSpacing());
 
-     splitSegmentations(cfgdata, outputSegmentation, outSegList);
+     splitSegmentations(outputSegmentation, outSegList, cfgdata.saveIntermediateVolumes, cfgdata.cacheDir);
 
      return true;
 }
 
-void CcboostAdapter::splitSegmentations(const ConfigData<itkVolumeType>& cfgData,
-                                        const itkVolumeType::Pointer outputSegmentation,
-                                        std::vector<itkVolumeType::Pointer>& outSegList){
+void CcboostAdapter::splitSegmentations(const itkVolumeType::Pointer outputSegmentation,
+                                        std::vector<itkVolumeType::Pointer>& outSegList,
+                                        bool saveIntermediateVolumes,
+                                        std::string cacheDir){
 
 //    //If 255 components is not enough as output, switch to unsigned short
 //    typedef itk::ImageToImageFilter <itkVolumeType, bigVolumeType > ConvertFilterType;
@@ -395,8 +396,8 @@ void CcboostAdapter::splitSegmentations(const ConfigData<itkVolumeType>& cfgData
     qDebug("Connected components segmentation");
     BigWriterType::Pointer bigwriter = BigWriterType::New();
 
-    if(cfgData.saveIntermediateVolumes){
-        bigwriter->SetFileName(cfgData.cacheDir + "5" + "connected-segmentation.tif");
+    if(saveIntermediateVolumes){
+        bigwriter->SetFileName(cacheDir + "5" + "connected-segmentation.tif");
         bigwriter->SetInput(connected->GetOutput());
         bigwriter->Update();
     }
@@ -405,9 +406,9 @@ void CcboostAdapter::splitSegmentations(const ConfigData<itkVolumeType>& cfgData
     RelabelFilterType::Pointer relabelFilter = RelabelFilterType::New();
     relabelFilter->SetInput(connected->GetOutput());
     relabelFilter->Update();
-    if(cfgData.saveIntermediateVolumes) {
+    if(saveIntermediateVolumes) {
         qDebug("Save relabeled segmentation");
-        bigwriter->SetFileName(cfgData.cacheDir + "6" + "relabeled-segmentation.tif");
+        bigwriter->SetFileName(cacheDir + "6" + "relabeled-segmentation.tif");
         bigwriter->SetInput(relabelFilter->GetOutput());
         bigwriter->Update();
     }
@@ -909,6 +910,6 @@ int main(){
       CcboostAdapter::postprocessing(cfgdata, outputSegmentation);
 
       std::vector<itkVolumeType::Pointer> outSegList;
-      CcboostAdapter::splitSegmentations(cfgdata, outputSegmentation, outSegList);
+      CcboostAdapter::splitSegmentations(outputSegmentation, outSegList, cfgdata.saveIntermediateVolumes, cfgdata.cacheDir);
 
 }
