@@ -54,7 +54,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
                           FloatTypeImage::Pointer& probabilisticOutSeg,
                           std::vector<itkVolumeType::Pointer>& outSegList) {
 #ifndef WORKINGASIMPORTER
-#define WORK
+//#define WORK
 #ifdef WORK
     MultipleROIData allROIs;
 

@@ -78,7 +78,7 @@ using namespace std;
 const QString CVL = "CVL";
 
 
-const QString CcboostTask::BACKGROUND = "Background";
+const QString CcboostTask::BACKGROUND = "background";
 const QString CcboostTask::MITOCHONDRIA = "mitochondria";
 const QString CcboostTask::SYNAPSE = "synapse";
 QString CcboostTask::ELEMENT = "element";

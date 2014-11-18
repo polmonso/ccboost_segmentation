@@ -118,6 +118,11 @@ void CcboostSegmentationToolGroup::createSegmentationImport()
 //-----------------------------------------------------------------------------
 void CcboostSegmentationToolGroup::createSimpleCcboostSegmentation()
 {
+    //FIXME Move the element setting to the plugin and load it from settings.
+    //      This has to be set before merging the segmentations
+    CcboostTask::ELEMENT = CcboostTask::SYNAPSE;
+    qWarning() << "Detecting " << CcboostTask::ELEMENT;
+
     m_plugin->createCcboostTask(m_model->segmentations());
 }
 

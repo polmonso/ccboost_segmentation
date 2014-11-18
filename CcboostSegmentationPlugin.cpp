@@ -193,6 +193,13 @@ AnalysisReaderSList CcboostSegmentationPlugin::analysisReaders() const
 void CcboostSegmentationPlugin::getGTSegmentations(const SegmentationAdapterSList segmentations,
                                                    SegmentationAdapterSList& validSegmentations,
                                                    SegmentationAdapterSList& validBgSegmentations) {
+
+    if(CcboostTask::ELEMENT != CcboostTask::MITOCHONDRIA
+       && CcboostTask::ELEMENT != CcboostTask::SYNAPSE) {
+         qWarning() << "Error! Element is not set. Using default: " << CcboostTask::SYNAPSE;
+         CcboostTask::ELEMENT = CcboostTask::SYNAPSE;
+     }
+
     for(auto seg: segmentations)
     {
         if(seg->hasExtension(SegmentationTags::TYPE)) {
@@ -206,7 +213,7 @@ void CcboostSegmentationPlugin::getGTSegmentations(const SegmentationAdapterSLis
 
     }
 
-    if(validSegmentations.isEmpty()){
+    if(validSegmentations.isEmpty() || validBgSegmentations.isEmpty()){
         qDebug() << "No tags named " << CcboostTask::POSITIVETAG << CcboostTask::ELEMENT << " and "
                  << CcboostTask::NEGATIVETAG << CcboostTask::ELEMENT << " found, using category name "
                  << CcboostTask::ELEMENT << " and " << CcboostTask::BACKGROUND;
@@ -224,10 +231,13 @@ void CcboostSegmentationPlugin::getGTSegmentations(const SegmentationAdapterSLis
 }
 
 void CcboostSegmentationPlugin::createCcboostTask(SegmentationAdapterSList segmentations){
+
     SegmentationAdapterSList validSegmentations;
     SegmentationAdapterSList validBgSegmentations;
 
     CcboostSegmentationPlugin::getGTSegmentations(segmentations, validSegmentations, validBgSegmentations);
+
+    qDebug() << QString("Retrieved %1 positive elements and %2 background elements").arg(validSegmentations.size()).arg(validBgSegmentations.size());
 
     ChannelAdapterPtr channel;
     if(m_viewManager->activeChannel() != NULL)
@@ -240,11 +250,11 @@ void CcboostSegmentationPlugin::createCcboostTask(SegmentationAdapterSList segme
     //create and run task //FIXME is that the correct way of getting the scheduler?
     SchedulerSPtr scheduler = getScheduler();
     CCB::CcboostTaskSPtr ccboostTask{new CCB::CcboostTask(channel, scheduler)};
-    ccboostTask.get()->m_groundTruthSegList = validBgSegmentations;
-    ccboostTask.get()->m_backgroundGroundTruthSegList = validSegmentations;
+    ccboostTask.get()->m_groundTruthSegList = validSegmentations;
+    ccboostTask.get()->m_backgroundGroundTruthSegList = validBgSegmentations;
     struct CcboostSegmentationPlugin::Data2 data;
     m_executingTasks.insert(ccboostTask.get(), data);
-    connect(ccboostTask.get(), SIGNAL(finished()), this, SLOT(finishedImportTask()));
+    connect(ccboostTask.get(), SIGNAL(finished()), this, SLOT(finishedTask()));
     connect(ccboostTask.get(), SIGNAL(message(std::string)), this, SLOT(publishMsg(std::string)));
     Task::submit(ccboostTask);
 
@@ -395,12 +405,15 @@ void CcboostSegmentationPlugin::finishedTask()
     SegmentationAdapterSList createdSegmentations;
     for(CCB::CcboostTaskPtr ccbtask: m_finishedTasks.keys())
     {
+        //FIXME createSegmentations removes one. makes sense on import, but not here.
         createdSegmentations = createSegmentations(ccbtask->predictedSegmentationsList, CVL);
+        int i = 1;
         for(auto segmentation: createdSegmentations){
 
             SampleAdapterSList samples;
             samples << QueryAdapter::sample(m_viewManager->activeChannel());
             Q_ASSERT(!samples.empty());
+            std::cout << "Create segmentation " << i++ << "/" << createdSegmentations.size() << "." << std::endl;
 
             m_undoStack->push(new AddSegmentations(segmentation, samples, m_model));
 
@@ -448,21 +461,30 @@ void CcboostSegmentationPlugin::finishedImportTask()
         createdSegmentations = createSegmentations(imptask->predictedSegmentationsList,
                                                    CCB::ImportTask::IMPORTED);
 
+        int i = 1;
+        for(auto segmentation: createdSegmentations){
 
+              SampleAdapterSList samples;
+              samples << QueryAdapter::sample(m_viewManager->activeChannel());
+              Q_ASSERT(!samples.empty());
+              std::cout << "Create segmentation " << i++ << "/" << createdSegmentations.size() << "." << std::endl;
+              m_undoStack->push(new AddSegmentations(segmentation, samples, m_model));
 
+          }
 
-        SampleAdapterSList samples;
-        samples << QueryAdapter::sample(m_viewManager->activeChannel());
-        Q_ASSERT(!samples.empty());
+        //FIXME the following doesn't work, it tries to add crossed relations and fails
+//        //TODO there's no way to initialize the list with n-copies directly?
+//        SampleAdapterSList samplesList;
+//        for(int i=0; i < createdSegmentations.size(); i++){
+//            SampleAdapterSList samples;
+//            samples << QueryAdapter::sample(m_viewManager->activeChannel());
+//            Q_ASSERT(!samples.empty());
+//            samplesList << samples;
+//        }
 
-        //TODO there's no way to initialize the list with n-copies directly?
-        SampleAdapterSList samplesList;
-        for(int i=0; i < createdSegmentations.size(); i++)
-            samplesList << samples;
-
-        std::cout << "Create segmentations" << std::endl;
-        m_undoStack->push(new AddSegmentations(createdSegmentations, samplesList, m_model));
-        std::cout << "Segmentations created." << std::endl;
+//        std::cout << "Create " << createdSegmentations.size() << " segmentations" << std::endl;
+//        m_undoStack->push(new AddSegmentations(createdSegmentations, samplesList, m_model));
+//        std::cout << "Segmentations created." << std::endl;
 
 
     }
@@ -473,6 +495,8 @@ void CcboostSegmentationPlugin::finishedImportTask()
     m_viewManager->updateViews();
 
     m_finishedImportTasks.clear();
+
+    std::cout << "Segmentations created. Returning control to ESPina" << std::endl;
 
 }
 
