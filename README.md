@@ -20,6 +20,20 @@ openmp
 the binary is ccbooststandalone and is ran like this:
 
 *Running
+
+
+```
+#!bash
+
 ./ccbooststandalone -g groundtruth.tif -i volumeinput.tif -o predictionoutputfilename.tif
+```
+
+
 i.e.
+
+
+```
+#!bash
+
 ./ccbooststandalone -g Madrid_Train_espinagt_many.tif -i Madrid_Train.tif -o predict.tif
+```
