@@ -8,7 +8,7 @@
 #include <QSettings>
 
 //Espina
-#include <Support/Settings/EspinaSettings.h>
+//#include <Support/Settings/EspinaSettings.h>
 
 //auxITK
 #include "EigenOfStructureTensorImageFilter2.h"
@@ -48,7 +48,11 @@
 #include <itkImageToVTKImageFilter.h>
 #include <itkSmoothingRecursiveGaussianImageFilter.h>
 
-using namespace ESPINA;
+//using namespace ESPINA;
+
+#ifndef ESPINA_SETTINGS
+#define ESPINA_SETTINGS(settings) QSettings settings("CeSViMa", "ESPINA");
+#endif
 
 bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
                           FloatTypeImage::Pointer& probabilisticOutSeg,

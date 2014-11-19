@@ -11,10 +11,11 @@
 #include <itkImageFileWriter.h>
 
 // ESPINA
-#include <Core/EspinaTypes.h>
+//#include <Core/EspinaTypes.h>
 
-namespace ESPINA
-{
+//for standalone version we input itkVolumeType ourselves
+typedef itk::Image<unsigned char, 3> itkVolumeType;
+
 class CcboostAdapter : public QObject
 {
     Q_OBJECT
@@ -62,6 +63,5 @@ public:
                               std::vector<itkVolumeType::Pointer>& outSegList);
 
 };
-} /* namespace ESPINA */
 
 #endif // CCBOOSTADAPTER_H

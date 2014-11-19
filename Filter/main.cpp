@@ -3,8 +3,6 @@
 #include <stdio.h>
 #include <argp.h>
 
-//TODO remove CcboostAdapter from espina namespace
-using namespace ESPINA;
 
 typedef itk::Image<unsigned char , 3> itkVolumeType;
 
