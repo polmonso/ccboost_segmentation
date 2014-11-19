@@ -52,7 +52,8 @@ using namespace ESPINA;
 
 bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
                           FloatTypeImage::Pointer& probabilisticOutSeg,
-                          std::vector<itkVolumeType::Pointer>& outSegList) {
+                          std::vector<itkVolumeType::Pointer>& outSegList,
+                          itkVolumeType::Pointer& outputSegmentation) {
 #ifndef WORKINGASIMPORTER
 //#define WORK
 #ifdef WORK
@@ -168,7 +169,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
         writer->Update();
     }
 
-    itkVolumeType::Pointer outputSegmentation = thresholdFilter->GetOutput();
+    outputSegmentation = thresholdFilter->GetOutput();
 
      if(cfgdata.saveIntermediateVolumes && outputSegmentation->VerifyRequestedRegion()){
          writer->SetFileName(cfgdata.cacheDir + "2" + "thread-outputSegmentation.tif");
@@ -196,6 +197,8 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
 #endif
 
      splitSegmentations(outputSegmentation, outSegList, cfgdata.saveIntermediateVolumes, cfgdata.cacheDir);
+
+     outputSegmentation->DisconnectPipeline();
 
      return true;
 }
@@ -841,75 +844,4 @@ void CcboostAdapter::addFeatures(const std::string& cacheDir,
             roi.addII( std::move(ii), chanType );
         }
     }
-}
-
-int main(){
-
-    std::setlocale(LC_NUMERIC, "C");
-
-    ConfigData<itkVolumeType> cfgdata;
-    cfgdata.saveIntermediateVolumes = true;
-    cfgdata.cacheDir = "./";
-    cfgdata.rawVolume = "supervoxelcache-";
-    SetConfigData<itkVolumeType> trainData;
-    SetConfigData<itkVolumeType>::setDefaultSet(trainData);
-    trainData.zAnisotropyFactor = 1;
-    cfgdata.train.push_back(trainData);
-
-    typedef itk::ImageFileReader< Matrix3D<float>::ItkImageType > ReaderType;
-      ReaderType::Pointer reader = ReaderType::New();
-      reader->SetFileName(cfgdata.cacheDir + "predicted.tif");
-      reader->Update();
-      Matrix3D<float>::ItkImageType::Pointer probabilisticOutSeg = reader->GetOutput();
-
-      qDebug() << "output image";
-
-      typedef itk::ImageFileWriter< Matrix3D<float>::ItkImageType > fWriterType;
-      fWriterType::Pointer writerf = fWriterType::New();
-
-      if(cfgdata.saveIntermediateVolumes) {
-          writerf->SetFileName(cfgdata.cacheDir + "predicted.tif");
-          writerf->SetInput(probabilisticOutSeg);
-          writerf->Update();
-      }
-      qDebug() << "predicted.tif created";
-
-      typedef itk::BinaryThresholdImageFilter <Matrix3D<float>::ItkImageType, itkVolumeType>
-              fBinaryThresholdImageFilterType;
-
-      int lowerThreshold = 128;
-      int upperThreshold = 255;
-
-      fBinaryThresholdImageFilterType::Pointer thresholdFilter
-              = fBinaryThresholdImageFilterType::New();
-      thresholdFilter->SetInput(probabilisticOutSeg);
-      thresholdFilter->SetLowerThreshold(0);
-      thresholdFilter->SetInsideValue(255);
-      thresholdFilter->SetOutsideValue(0);
-      thresholdFilter->Update();
-
-      typedef itk::ImageFileWriter< itkVolumeType > WriterType;
-      WriterType::Pointer writer = WriterType::New();
-      if(cfgdata.saveIntermediateVolumes) {
-          writer->SetFileName(cfgdata.cacheDir + "predicted-thresholded.tif");
-          writer->SetInput(thresholdFilter->GetOutput());
-          writer->Update();
-      }
-
-      itkVolumeType::Pointer outSeg = thresholdFilter->GetOutput();
-
-      if(cfgdata.saveIntermediateVolumes && outSeg->VerifyRequestedRegion()){
-          writer->SetFileName(cfgdata.cacheDir + "thresh-outputSegmentation.tif");
-          writer->SetInput(outSeg);
-          writer->Update();
-      }
-
-      itkVolumeType::Pointer outputSegmentation = outSeg;
-      outputSegmentation->DisconnectPipeline();
-
-      CcboostAdapter::postprocessing(cfgdata, outputSegmentation);
-
-      std::vector<itkVolumeType::Pointer> outSegList;
-      CcboostAdapter::splitSegmentations(outputSegmentation, outSegList, cfgdata.saveIntermediateVolumes, cfgdata.cacheDir);
-
 }

@@ -517,6 +517,7 @@ void CcboostTask::applyEspinaSettings(ConfigData<itkVolumeType> cfgdata){
 void CcboostTask::runCore(const ConfigData<itkVolumeType>& ccboostconfig,
              std::vector<itkVolumeType::Pointer>& outSegList){
 
+    itkVolumeType::Pointer outputSegmentation;
     CcboostAdapter::FloatTypeImage::Pointer probabilisticOutputSegmentation;
 
     // modify ITK number of  s for speed up
@@ -527,7 +528,7 @@ void CcboostTask::runCore(const ConfigData<itkVolumeType>& ccboostconfig,
     try {
 
         // MultipleROIData allROIs = preprocess(channels, groundTruths, cacheDir, featuresList);
-        if(!CcboostAdapter::core(ccboostconfig, probabilisticOutputSegmentation, outSegList)) {
+        if(!CcboostAdapter::core(ccboostconfig, probabilisticOutputSegmentation, outSegList, outputSegmentation)) {
             itk::MultiThreader::SetGlobalDefaultNumberOfThreads( prevITKNumberOfThreads );
             return;
         }

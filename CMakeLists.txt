@@ -163,5 +163,5 @@ install(
   DESTINATION "${INSTALL_BIN_DIR}/plugins"
   )
 
-add_executable(postprocess Filter/CcboostAdapter.cpp ${auxItkFilters})
-target_link_libraries(postprocess ${ITK_LIBRARIES} ${RANDOMLIB_LIB})
+add_executable(ccbooststandalone Filter/main.cpp Filter/CcboostAdapter.cpp ${auxItkFilters})
+target_link_libraries(ccbooststandalone ${ITK_LIBRARIES} ${RANDOMLIB_LIB})
