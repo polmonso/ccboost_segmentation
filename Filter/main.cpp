@@ -2,7 +2,7 @@
 
 #include <stdio.h>
 #include <argp.h>
-
+#include <sys/stat.h>
 
 typedef itk::Image<unsigned char , 3> itkVolumeType;
 
@@ -20,7 +20,7 @@ enum {
 /* This structure is used by main to communicate with parse_opt. */
 struct arguments
 {
-  char *args[2];            /* ARG1 and ARG2 */
+//  char *args[2];            /* ARG1 and ARG2 */
   int verbose;              /* The -v flag */
   char *outfile;            /* Argument for -o */
   char *inputVolume, *inputVolumeGT;  /* Arguments for -i and -g */
@@ -34,7 +34,7 @@ struct arguments
 static struct argp_option options[] =
 {
     {"verbose", 'v', 0, 0, "Produce verbose output"},
-    {"inputvolume",   'i', "STRING1", 0,
+    {"inputvolume", 'i', "STRING1", 0,
      "Input volume to segment"},
     {"groundtruthvolume",   'g', "STRING2", 0,
      "Ground truth with labels: unknown=0, background=128, element=255"},
@@ -75,10 +75,10 @@ parse_opt (int key, char *arg, struct argp_state *state)
     {
       argp_usage(state);
     }
-      arguments->args[state->arg_num] = arg;
+//      arguments->args[state->arg_num] = arg;
       break;
     case ARGP_KEY_END:
-      if (state->arg_num < 3)
+      if (state->arg_num < 0)
     {
       argp_usage (state);
     }
@@ -190,7 +190,7 @@ int main (int argc, char **argv)
   struct arguments arguments;
 
   /* Set argument defaults */
-  arguments.outfile = NULL;
+  arguments.outfile = "predict.tif";
   arguments.inputVolume = "";
   arguments.inputVolumeGT = "";
   arguments.verbose = 0;
@@ -202,11 +202,11 @@ int main (int argc, char **argv)
   /* Where do we send output? */
 
   /* Print argument values */
-  fprintf (stdout, "-i = %s\n-g = %s\n\n",
-       arguments.inputVolume, arguments.inputVolumeGT);
-  fprintf (stdout, "InputVolume = %s\nInputeVolumeGT = %s\n\n",
-       arguments.args[0],
-       arguments.args[1]);
+  fprintf (stdout, "-i = %s\n-g = %s\n-o = %s\n\n",
+       arguments.inputVolume, arguments.inputVolumeGT, arguments.outfile);
+//  fprintf (stdout, "InputVolume = %s\nInputeVolumeGT = %s\n\n",
+//       arguments.args[0],
+//       arguments.args[1]);
 
   ConfigData<itkVolumeType> cfgdata;
 
@@ -219,6 +219,9 @@ int main (int argc, char **argv)
   SetConfigData<itkVolumeType> trainData;
   SetConfigData<itkVolumeType>::setDefaultSet(trainData);
   trainData.zAnisotropyFactor = 1;
+
+  //FIXME put mkdir inside the core
+  mkdir(cfgdata.cacheDir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH );
 
   try {
       if(arguments.onlypostprocess) {

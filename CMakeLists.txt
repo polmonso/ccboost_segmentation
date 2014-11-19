@@ -34,7 +34,7 @@ endif ()
 find_package(OpenMP REQUIRED)
 
 #TODO fix FIndXlslib or remove dependency
-find_package(XLSLIB)
+#find_package(XLSLIB)
 #set(XLSLIB_INCLUDE_DIR "/home/monso/code/espina-project2/xlslib/src/")
 #set(XLSLIB_LIBRARY "/home/monso/code/espina-project2/xlslib/src/.libs/libxls.so")
 
@@ -82,6 +82,8 @@ add_executable(ccbooststandalone Filter/main.cpp Filter/CcboostAdapter.cpp ${aux
 target_link_libraries(ccbooststandalone ${ITK_LIBRARIES} ${RANDOMLIB_LIB} )
 
 else()
+
+find_package(XLSLIB)
 
 qt4_add_resources (RCC_BUILT_SOURCES 
   GUI/rsc/CcboostSegmentation.qrc
