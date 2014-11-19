@@ -59,7 +59,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
                           std::vector<itkVolumeType::Pointer>& outSegList,
                           itkVolumeType::Pointer& outputSegmentation) {
 #ifndef WORKINGASIMPORTER
-//#define WORK
+#define WORK
 #ifdef WORK
     MultipleROIData allROIs;
 
@@ -211,7 +211,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
 bool CcboostAdapter::automaticCore(const ConfigData<itkVolumeType>& cfgdata,
                           FloatTypeImage::Pointer& probabilisticOutSeg,
                           std::vector<itkVolumeType::Pointer>& outSegList) {
-#define WORK2
+#define WORK
 #ifdef WORK2
     MultipleROIData allROIs;
 
@@ -284,7 +284,10 @@ bool CcboostAdapter::automaticCore(const ConfigData<itkVolumeType>& cfgdata,
         int stumpindex = 0;
         do {
 
-            cfgdata.train.reserve(cfgdata.train.size() + cfgdata.pendingTrain.size());
+            int sizetrain = cfgdata.train.size();
+            int pendingTrain = cfgdata.pendingTrain.size();
+
+            cfgdata.train.reserve(sizetrain + pendingTrain);
             if(!cfgdata.pendingTrain.empty()){
                 std::move(std::begin(cfgdata.train), std::end(cfgdata.train), std::back_inserter(cfgdata.pendingTrain));
                 cfgdata.pendingTrain.clear();
@@ -446,7 +449,6 @@ void CcboostAdapter::splitSegmentations(const itkVolumeType::Pointer outputSegme
 
     }
 
-    return true;
 }
 
 void CcboostAdapter::postprocessing(const ConfigData<itkVolumeType>& cfgData,

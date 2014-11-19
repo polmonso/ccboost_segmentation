@@ -15,11 +15,10 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/CMake/Modules/")
 
 if (NOT COMPILING_ESPINA)
 
-    find_package(ESPINA REQUIRED)
-    include(${ESPINA_USE_FILE})
-
-  find_package(Espina REQUIRED)
+  find_package(Espina)
+  if(Espina_DIR)
   include(${ESPINA_USE_FILE})
+  endif()
     
     find_package(Qt4 REQUIRED)
     include(${QT_USE_FILE})
@@ -77,7 +76,12 @@ include_directories(${RANDOMLIB_INCPATH})
 # RANDOMLIB
 
 #ccboost done
+if(NOT COMPILING_ESPINA)
 
+add_executable(ccbooststandalone Filter/main.cpp Filter/CcboostAdapter.cpp ${auxItkFilters})
+target_link_libraries(ccbooststandalone ${ITK_LIBRARIES} ${RANDOMLIB_LIB} )
+
+else()
 
 qt4_add_resources (RCC_BUILT_SOURCES 
   GUI/rsc/CcboostSegmentation.qrc
@@ -162,6 +166,6 @@ install(
   TARGETS CcboostSegmentationPlugin
   DESTINATION "${INSTALL_BIN_DIR}/plugins"
   )
-
 add_executable(ccbooststandalone Filter/main.cpp Filter/CcboostAdapter.cpp ${auxItkFilters})
 target_link_libraries(ccbooststandalone ${ITK_LIBRARIES} ${RANDOMLIB_LIB})
+endif()

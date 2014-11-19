@@ -28,7 +28,7 @@ private:
     using BigWriterType = itk::ImageFileWriter< bigVolumeType >;
 
 signals:
-    updatePrediction(FloatTypeImage::Pointer itkVolumeType);
+    void updatePrediction(FloatTypeImage::Pointer itkVolumeType);
 
 public:
     explicit CcboostAdapter() {};
