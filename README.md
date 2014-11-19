@@ -15,6 +15,21 @@ VTK (probably 4)
 qt4
 openmp
 
+
+*build
+
+
+```
+#!bash
+
+ccmake ..
+make
+
+```
+If you compile with -j the first time, it will fail because it has to download some dependencies
+You'll get a Espina missing warning, it's fine if you want to use the standalone version only.
+
+
 *Deployment instructions
 
 the binary is ccbooststandalone and is ran like this:
