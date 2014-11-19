@@ -18,10 +18,11 @@ openmp
 
 *build
 
-
+On the ccboost-segmentation directory
 ```
 #!bash
-
+mkdir build
+cd build
 ccmake ..
 make
 
