@@ -10,16 +10,10 @@ add -std=c++11 flag
 * Dependencies
 
 deps directory on iiboost
-ITK4
+ITK (probably 4)
+VTK (probably 4)
 qt4
 openmp
-vtk4
-xlslib
-
-i.e.
-VTK_DIR                          /home/monso/code/espina-project2/VTK-6.1.0/build                                                                                                                                                                   
- XLSLIB_INCLUDE_DIR               /home/monso/code/espina-project2/xlslib/src                                                                                                                                                                        
- XLSLIB_LIBRARY                   /home/monso/code/espina-project2/xlslib/src/.libs/libxls.so 
 
 *Deployment instructions
 
