@@ -8,9 +8,6 @@ include(ExternalProject)
 find_package(ITK REQUIRED NO_DEFAULT_PATH)
 include(${ITK_USE_FILE})
 
-find_package(Eigen3 REQUIRED)
-include_directories(${EIGEN3_INCLUDE_DIR})
-
 if( "${ITK_VERSION_MAJOR}" LESS 4 )
   message(FATAL_ERROR "ITK version 4 required")
 endif()
