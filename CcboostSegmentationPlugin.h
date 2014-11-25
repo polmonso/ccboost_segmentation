@@ -36,6 +36,10 @@
 #include <Tasks/CcboostTask.h>
 #include <Tasks/ImportTask.h>
 
+//Qt
+#include <QMessageBox>
+
+
 namespace ESPINA
 {
   class CcboostSegmentationPlugin_EXPORT CcboostSegmentationPlugin
@@ -98,7 +102,8 @@ namespace ESPINA
     void segmentationsAdded(SegmentationAdapterSList segmentations);
     void finishedTask();
     void finishedImportTask();
-    void publishMsg(std::string msg);
+    void publishMsg(QString msg);
+    void questionContinue(QString msg);
 
   private:
     struct Data2

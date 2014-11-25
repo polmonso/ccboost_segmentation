@@ -271,11 +271,6 @@ int main (int argc, char **argv)
                                outSegList,
                                outputSegmentation);
 
-          typedef itk::ImageFileWriter< CcboostAdapter::FloatTypeImage > fWriterType;
-          fWriterType::Pointer fwriter = fWriterType::New();
-          fwriter->SetFileName(arguments.outfile);
-          fwriter->SetInput(probabilisticOutSeg);
-          fwriter->Update();
           typedef itk::ImageFileWriter< itkVolumeType > WriterType;
           WriterType::Pointer writer = WriterType::New();
           writer->SetFileName(std::string("binary") + arguments.outfile);
@@ -283,10 +278,26 @@ int main (int argc, char **argv)
           writer->Update();
 
 
+          typedef itk::ImageFileWriter< CcboostAdapter::FloatTypeImage > fWriterType;
+          fWriterType::Pointer fwriter = fWriterType::New();
+          fwriter->SetFileName(arguments.outfile);
+          fwriter->SetInput(probabilisticOutSeg);
+          try {
+
+              fwriter->Update();
+
+          } catch(itk::ExceptionObject &exp){
+              std::cout << "Warning: Error writing probabilistic output. what(): " << exp << std::endl;
+              return EXIT_FAILURE;
+          } catch(...) {
+              std::cout << "Warning: Error writing probabilistic output" << std::endl;
+              return EXIT_FAILURE;
+          }
+
       }
 
   } catch(itk::ExceptionObject &exp){
-      std::cout << exp << std::endl;
+      std::cerr << exp << std::endl;
       return EXIT_FAILURE;
   }
 

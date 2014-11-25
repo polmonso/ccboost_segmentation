@@ -80,15 +80,16 @@ namespace ESPINA
     virtual ToolSList tools();
 
   public slots:
-    void createSimpleCcboostSegmentation();
+    void createSimpleMitochondriaSegmentation();
+    void createSimpleSynapseSegmentation();
     void createSegmentationImport();
 
   private:
     ModelAdapterSPtr         m_model;
     ModelFactorySPtr         m_factory;
     QUndoStack              *m_undoStack;
-    CVLToolSPtr              m_tool;
-    CVLToolSPtr              m_tool_ccboost;
+    CVLToolSPtr              m_tool_mitochondria;
+    CVLToolSPtr              m_tool_synapse;
     CVLToolSPtr              m_tool_import;
     bool                     m_enabled;
     CcboostSegmentationPlugin *m_plugin;

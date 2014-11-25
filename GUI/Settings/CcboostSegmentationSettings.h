@@ -41,9 +41,9 @@ namespace ESPINA
     explicit CcboostSegmentationSettings();
     virtual ~CcboostSegmentationSettings() {};
 
-    virtual const QString shortDescription() { return tr("Synapse Detection"); }
-    virtual const QString longDescription()  { return tr("Synapse Detection with ccboost"); }
-    virtual const QIcon icon()               { return QIcon(":/CcboostSegmentation.svg"); }
+    virtual const QString shortDescription() { return tr("CVLab Plugins"); }
+    virtual const QString longDescription()  { return tr("CVLab Plugins, mostly with ccboost"); }
+    virtual const QIcon icon()               { return QIcon(":/SynapseDetection.svg"); }
 
     virtual void acceptChanges();
     virtual void rejectChanges();

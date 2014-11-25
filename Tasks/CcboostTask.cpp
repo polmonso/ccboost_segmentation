@@ -37,7 +37,6 @@
 
 // Qt
 #include <QtGlobal>
-#include <QMessageBox>
 #include <QSettings>
 #include <Support/Settings/EspinaSettings.h>
 
@@ -105,11 +104,19 @@ CcboostTask::CcboostTask(ChannelAdapterPtr channel,
      //FIXME we're not on the main thread, dialog creation will crash
 //      QMessageBox::warning(NULL,"RAM Memory check", QString("The amount of RAM memory couldn't be detected or very low (info.totalram = %1 Bytes). "
 //                                                            "Running the Synapse Segmentation Plugin might lead to crash").arg(info.totalram));
+
+      emit message(QString("The amount of RAM memory couldn't be detected or very low (info.totalram = %1 Bytes). "
+                   "Running the Synapse Segmentation Plugin might lead to crash").arg(info.totalram));
+
+
   }
 #else
   memoryAvailableMB = numeric_limits<unsigned int>::max();
-  QMessageBox::warning(NULL,"RAM Memory check", "The amount of RAM memory couldn't be detected."
-                       "Running the Synapse Segmentation Plugin might lead to crash");
+//  QMessageBox::warning(NULL,"RAM Memory check", "The amount of RAM memory couldn't be detected."
+//                       "Running the Synapse Segmentation Plugin might lead to crash");
+  emit message(QString("The amount of RAM memory couldn't be detected or very low (info.totalram = %1 Bytes). "
+               "Running the Synapse Segmentation Plugin might lead to crash").arg(info.totalram));
+
 #endif
 
 
@@ -163,10 +170,8 @@ void CcboostTask::run()
                                                                    m_backgroundGroundTruthSegList);
   //save itk image (volume) as binary/classed volume here
      WriterType::Pointer writer = WriterType::New();
- //TODO espina2
      if(ccboostconfig.saveIntermediateVolumes){
        writer->SetFileName(ccboostconfig.cacheDir + "labelmap.tif");
-       writer->SetFileName("labelmap.tif");
        writer->SetInput(segmentedGroundTruth);
        writer->Update();
        qDebug() << "labelmap.tif created";
@@ -249,6 +254,9 @@ void CcboostTask::run()
 
   qDebug("%s", "cc boost segmentation");
 
+  emit progress(30);
+  if (!canExecute()) return;
+
   //CCBOOST here
     //TODO add const-correctness
   std::vector<itkVolumeType::Pointer> outSegList;
@@ -291,25 +299,20 @@ bool CcboostTask::enoughMemory(const itkVolumeType::Pointer channelItk, const it
     qDebug() << QString("The volume will be splitted in %1 / %2 = %3 regions of size %4 MB on prediction").arg(memoryNeededMBpredict).arg(memoryAvailableMB).arg(numPredictRegions).arg(pieceSize);
 
     if(memoryAvailableMB < memoryNeededMB){
-        //FIXME we're not on the main thread, creating a dialog will provoke a crash
 //       if(QMessageBox::critical(NULL, "Synapse Segmentation Memory check",
 //                         QString("The estimated amount of memory required has an upper bound of %1 Mb"
 //                                 "and you have %2 Mb. We will process by pieces and ESPina might crash."
 //                                 "(You should reduce it by constraining the Ground truth to a smaller 3d Cube)."
 //                                 "Continue anyway?").arg(memoryNeededMB).arg(memoryAvailableMB), QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) == QMessageBox::Cancel)
 //           return false;
-        std::string msg = QString("The estimated amount of memory required has an upper bound of %1 Mb"
+
+        QString msg = QString("The estimated amount of memory required has an upper bound of %1 Mb"
                             "and you have %2 Mb. We will process by pieces and ESPina might crash."
                             "(You should reduce it by constraining the Ground truth to a smaller 3d Cube)."
-                            "Continue anyway?").arg(memoryNeededMB).arg(memoryAvailableMB).toStdString();
-        qDebug() << QString::fromUtf8(msg.c_str());
-        emit(message(msg));
+                            "Continue anyway?").arg(memoryNeededMB).arg(memoryAvailableMB);
+        qDebug() << msg;
+        emit questionContinue(msg);
     }
-
-    //FIXME //TODO remove this
-    qDebug() << "remove this test ccboosttask.cpp:310";
-    std::string test = "test dialog message";
-    emit(message(test));
 
     return true;
 }
@@ -339,35 +342,28 @@ bool CcboostTask::enoughGroundTruth(){
         mintruth = MINTRUTHSYNAPSES;
     }
 
-    //FIXME filter is no longer in the main thread, so it will fail everytime it tries to popup a dialog
-//    if(m_groundTruthSegList.size() == 0){
+    if(m_groundTruthSegList.size() == 0){
 
-//                QMessageBox::critical(NULL, CcboostTask::ELEMENT + " Segmentation Annotation Check",
-//                                      QString("Insufficient positive examples provided. Found none."
-//                                              " Make sure the %1 category exists in the model taxonomy"
-//                                              " or that you are using the tags 'positive' and 'negative'."
-//                                              " Aborting.").arg(CcboostTask::ELEMENT));
-//        return false;
-//    }else if(numBgPx == 0){
+        emit message(QString("Insufficient positive examples provided. Found none."
+                          " Make sure the %1 category exists in the model taxonomy"
+                          " or that you are using the tags 'positive' and 'negative'."
+                          " Aborting.").arg(CcboostTask::ELEMENT));
+        return false;
+    }else if(numBgPx == 0){
 
-//                QMessageBox::critical(NULL, CcboostTask::ELEMENT +  " Segmentation Annotation Check",
-//                                      QString("Insufficient background examples provided. Found none."
-//                                              " Make sure the Background category exists in the model taxonomy."
-//                                              " or that you are using the tags 'yes%1' and 'no%1'."
-//                                              " Aborting.").arg(CcboostTask::ELEMENT));
-//        return false;
-//    }else if(m_groundTruthSegList.size() < mintruth || numBgPx < MINNUMBGPX){
+        emit message(QString("Insufficient background examples provided. Found none."
+                          " Make sure the Background category exists in the model taxonomy."
+                          " or that you are using the tags 'yes%1' and 'no%1'."
+                          " Aborting.").arg(CcboostTask::ELEMENT));
+        return false;
+    }else if(m_groundTruthSegList.size() < mintruth || numBgPx < MINNUMBGPX){
 
-//        QMessageBox::StandardButton reply
-//                = QMessageBox::question(NULL, CcboostTask::ELEMENT +  " Segmentation Annotation Check",
-//                                      QString("Not enough annotations were provided "
-//                                              "(%1 positive elements %2 background pixels while %3 and %4 are recommended)."
-//                                              " Increase the background or positive annotation provided."
-//                                              " Continue anyway?").arg(m_groundTruthSegList.size()).arg(numBgPx).arg(mintruth).arg(MINNUMBGPX),
-//                                              QMessageBox::Yes|QMessageBox::No);
-//        if (reply == QMessageBox::No)
-//            return false;
-//    }
+        //FIXME we can no longer create dialogs, so we have to adhere to the async calls
+        emit questionContinue(QString("Not enough annotations were provided "
+                          "(%1 positive elements %2 background pixels while %3 and %4 are recommended)."
+                          " Increase the background or positive annotation provided."
+                          " Continue anyway?").arg(m_groundTruthSegList.size()).arg(numBgPx).arg(mintruth).arg(MINNUMBGPX));
+    }
 
     qDebug() << QString("Annotation provided: "
                       "%1 elements > %2 background pixels (%3 and %4 are required). "
@@ -539,8 +535,7 @@ void CcboostTask::runCore(const ConfigData<itkVolumeType>& ccboostconfig,
 
         qDebug() << QObject::tr("Itk exception on ccboost caught. Error: %1.").arg(err.what());
 
-        //FIXME we're not on main thread, dialog will crash
-//        QMessageBox::warning(NULL, "ESPINA", QString("Itk exception when running ccboost. Message: %1").arg(err.what()));
+        emit message(QString("Itk exception when running ccboost. Message: %1").arg(err.what()));
         return;
     }
 
@@ -548,7 +543,6 @@ void CcboostTask::runCore(const ConfigData<itkVolumeType>& ccboostconfig,
     itk::MultiThreader::SetGlobalDefaultNumberOfThreads( prevITKNumberOfThreads );
 
     try {
-        //FIXME TODO why probabilisticOutput is empty?
         if(ccboostconfig.saveIntermediateVolumes){
             typedef itk::ImageFileWriter<CcboostAdapter::FloatTypeImage> FloatWriterType;
             FloatWriterType::Pointer fwriter = FloatWriterType::New();
@@ -563,8 +557,7 @@ void CcboostTask::runCore(const ConfigData<itkVolumeType>& ccboostconfig,
 
         qDebug() << QObject::tr("Itk exception on ccboost caught. Error: %1. From %2:%3").arg(err.what()).arg(__FILE__).arg(__LINE__);
 
-        //FIXME we're not on main thread, dialog will crash
-        //        QMessageBox::warning(NULL, "ESPINA", QString("Itk exception when running ccboost. Message: %1").arg(err.what()));
+        emit message(QString("Itk exception when running ccboost. Message: %1").arg(err.what()));
         return;
     }
 

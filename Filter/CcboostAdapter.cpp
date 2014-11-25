@@ -47,6 +47,7 @@
 #include <itkSignedMaurerDistanceMapImageFilter.h>
 #include <itkImageToVTKImageFilter.h>
 #include <itkSmoothingRecursiveGaussianImageFilter.h>
+#include "itkImageDuplicator.h"
 
 //using namespace ESPINA;
 
@@ -58,10 +59,8 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
                           FloatTypeImage::Pointer& probabilisticOutSeg,
                           std::vector<itkVolumeType::Pointer>& outSegList,
                           itkVolumeType::Pointer& outputSegmentation) {
-#ifndef WORKINGASIMPORTER
 #define WORK
 #ifdef WORK
-    MultipleROIData allROIs;
 
     //    for(auto imgItk: channels) {
     //        for(auto gtItk: groundTruths) {
@@ -81,6 +80,38 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
     ii.compute( img );
     roi.addII( ii.internalImage().data() );
 
+    //nofeatures add
+    #define NOFEATURESTEST
+    #ifdef NOFEATURESTEST
+    {
+        MultipleROIData allROIssimple;
+        allROIssimple.add( &roi );
+
+        qDebug() << "running core plugin";
+
+        BoosterInputData bdatasimple;
+        bdatasimple.init( &allROIssimple );
+        bdatasimple.showInfo();
+
+        Booster adaboostsimple;
+        qDebug() << "training";
+        adaboostsimple.train( bdatasimple, 100 );
+        qDebug() << "predict";
+        Matrix3D<float> predImgsimple;
+        adaboostsimple.predict( &allROIssimple, &predImgsimple );
+
+        qDebug() << "output image without features";
+
+        typedef itk::ImageFileWriter< FloatTypeImage > fWriterType;
+            fWriterType::Pointer writerf = fWriterType::New();
+            writerf->SetFileName(cfgdata.cacheDir + "simplepredicted.tif");
+            writerf->SetInput(predImgsimple.asItkImage());
+            writerf->Update();
+        qDebug() << "simplepredicted.tif created";
+    }
+    #endif
+    //no features end
+
     //features
     TimerRT timerF; timerF.reset();
 
@@ -94,6 +125,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
 
     qDebug("Add all features Elapsed: %f", timerF.elapsed());
 
+    MultipleROIData allROIs;
     allROIs.add( &roi );
 
     // }
@@ -128,8 +160,13 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
     if (!adaboost.saveModelToFile( "/tmp/model.json" ))
         std::cout << "Error saving JSON model" << std::endl;
 
-    probabilisticOutSeg = predImg.asItkImage();
-//    probabilisticOutSeg->DisconnectPipeline();
+    typedef itk::ImageDuplicator< FloatTypeImage > DuplicatorType;
+      DuplicatorType::Pointer duplicator = DuplicatorType::New();
+      duplicator->SetInputImage(predImg.asItkImage());
+      duplicator->Update();
+      probabilisticOutSeg = duplicator->GetModifiableOutput();
+
+    probabilisticOutSeg->DisconnectPipeline();
 
 #else
     typedef itk::ImageFileReader< FloatTypeImage > ReaderType;
@@ -139,6 +176,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
     probabilisticOutSeg = reader->GetOutput();
     probabilisticOutSeg->DisconnectPipeline();
 #endif
+
     qDebug() << "output image";
 
     typedef itk::ImageFileWriter< FloatTypeImage > fWriterType;
@@ -153,9 +191,11 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
     }
     qDebug() << "predicted.tif created";
 
+
     typedef itk::BinaryThresholdImageFilter <Matrix3D<float>::ItkImageType, itkVolumeType>
             fBinaryThresholdImageFilterType;
 
+    //float lowerThreshold = 0.0;
     float lowerThreshold = 0.0;
 
     fBinaryThresholdImageFilterType::Pointer thresholdFilter
@@ -190,15 +230,6 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
      postprocessing(cfgdata, outputSegmentation);
 
      outputSegmentation->SetSpacing(cfgdata.train.at(0).rawVolumeImage->GetSpacing());
-
-#else
-     typedef itk::ImageFileReader< itkVolumeType > ReaderType;
-       ReaderType::Pointer reader = ReaderType::New();
-       reader->SetFileName(cfgdata.cacheDir + "predicted.tif");
-       reader->Update();
-       auto outputSegmentation = reader->GetOutput();
-       probabilisticOutSeg = outputSegmentation;
-#endif
 
      splitSegmentations(outputSegmentation, outSegList, cfgdata.saveIntermediateVolumes, cfgdata.cacheDir);
 

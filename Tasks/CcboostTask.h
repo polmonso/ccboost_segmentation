@@ -44,6 +44,8 @@
 #include <itkSignedMaurerDistanceMapImageFilter.h>
 #include <itkSmoothingRecursiveGaussianImageFilter.h>
 
+//Qt
+#include <QMessageBox>
 
 namespace ESPINA {
   namespace CCB {
@@ -89,7 +91,8 @@ namespace ESPINA {
                                                             const SegmentationAdapterSList& backgroundSegList);
 
     signals:
-      void message(std::string);
+      void message(QString);
+      void questionContinue(QString);
 
     protected:
       virtual void run();

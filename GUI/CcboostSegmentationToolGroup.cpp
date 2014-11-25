@@ -57,17 +57,17 @@ CcboostSegmentationToolGroup::CcboostSegmentationToolGroup(ModelAdapterSPtr mode
 , m_model    {model}
 , m_factory  {factory}
 , m_undoStack{undoStack}
-, m_tool     {CVLToolSPtr{new CcboostSegmentationTool{QIcon(":/AppSurface.svg"), tr("Create a synaptic ccboost segmentation from selected segmentations.")}}}
-, m_tool_ccboost    {CVLToolSPtr{new CcboostSegmentationTool{QIcon(":/SynapseDetection.svg"), tr("Create a simple synaptic ccboost segmentation from selected segmentations.")}}}
-, m_tool_import     {CVLToolSPtr{new CcboostSegmentationTool{QIcon(":/SegmentationImporter.svg"), tr("Create a simple synaptic ccboost segmentation from selected segmentations.")}}}
+, m_tool_mitochondria     {CVLToolSPtr{new CcboostSegmentationTool{QIcon(":/MitochondriaDetection.svg"), tr("Create a mitochondric ccboost segmentation from Mitochondria segmentations.")}}}
+, m_tool_synapse    {CVLToolSPtr{new CcboostSegmentationTool{QIcon(":/SynapseDetection.svg"), tr("Create a simple synaptic ccboost segmentation from Synapse segmentations.")}}}
+, m_tool_import     {CVLToolSPtr{new CcboostSegmentationTool{QIcon(":/SegmentationImporter.svg"), tr("Import segmentations from greyscale volume.")}}}
 , m_enabled  {true}
 , m_plugin   {plugin}
 {
-  m_tool->setToolTip("Create a synaptic ccboost segmentation from selected segmentations.");
-//  connect(m_tool.get(), SIGNAL(triggered()), this, SLOT(createSimpleMitochondriaCcboostSegmentation()));
+  m_tool_mitochondria->setToolTip("Create a synaptic ccboost segmentation from selected segmentations.");
+  connect(m_tool_mitochondria.get(), SIGNAL(triggered()), this, SLOT(createSimpleMitochondriaSegmentation()));
 
-  m_tool_ccboost->setToolTip("Create a simple synaptic ccboost segmentation from selected segmentations.");
-  connect(m_tool_ccboost.get(), SIGNAL(triggered()), this, SLOT(createSimpleCcboostSegmentation()));
+  m_tool_synapse->setToolTip("Create a simple synaptic ccboost segmentation from selected segmentations.");
+  connect(m_tool_synapse.get(), SIGNAL(triggered()), this, SLOT(createSimpleSynapseSegmentation()));
 
   m_tool_import->setToolTip("Import segmentation from segmented greyscale image");
   connect(m_tool_import.get(), SIGNAL(triggered()), this, SLOT(createSegmentationImport()));
@@ -78,8 +78,8 @@ CcboostSegmentationToolGroup::CcboostSegmentationToolGroup(ModelAdapterSPtr mode
 CcboostSegmentationToolGroup::~CcboostSegmentationToolGroup()
 {
 
-//  disconnect(m_tool.get(), SIGNAL(triggered()), this, SLOT(createSAS()));
-  disconnect(m_tool_ccboost.get(), SIGNAL(triggered()), this, SLOT(createSimpleCcboostSegmentation()));
+  disconnect(m_tool_mitochondria.get(), SIGNAL(triggered()), this, SLOT(createSimpleMitochondriaSegmentation()));
+  disconnect(m_tool_synapse.get(), SIGNAL(triggered()), this, SLOT(createSimpleSynapseSegmentation()));
   disconnect(m_tool_import.get(), SIGNAL(triggered()), this, SLOT(createSegmentationImport()));
 
 }
@@ -101,8 +101,8 @@ ToolSList CcboostSegmentationToolGroup::tools()
 {
   ToolSList tools;
 
-  tools << m_tool;
-  tools << m_tool_ccboost;
+  tools << m_tool_mitochondria;
+  tools << m_tool_synapse;
   tools << m_tool_import;
 
   return tools;
@@ -116,7 +116,18 @@ void CcboostSegmentationToolGroup::createSegmentationImport()
 }
 
 //-----------------------------------------------------------------------------
-void CcboostSegmentationToolGroup::createSimpleCcboostSegmentation()
+void CcboostSegmentationToolGroup::createSimpleMitochondriaSegmentation()
+{
+    //FIXME Move the element setting to the plugin and load it from settings.
+    //      This has to be set before merging the segmentations
+    CcboostTask::ELEMENT = CcboostTask::MITOCHONDRIA;
+    qWarning() << "Detecting " << CcboostTask::ELEMENT;
+
+    m_plugin->createCcboostTask(m_model->segmentations());
+}
+
+//-----------------------------------------------------------------------------
+void CcboostSegmentationToolGroup::createSimpleSynapseSegmentation()
 {
     //FIXME Move the element setting to the plugin and load it from settings.
     //      This has to be set before merging the segmentations

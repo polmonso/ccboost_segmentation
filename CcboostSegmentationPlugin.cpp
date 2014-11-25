@@ -255,7 +255,8 @@ void CcboostSegmentationPlugin::createCcboostTask(SegmentationAdapterSList segme
     struct CcboostSegmentationPlugin::Data2 data;
     m_executingTasks.insert(ccboostTask.get(), data);
     connect(ccboostTask.get(), SIGNAL(finished()), this, SLOT(finishedTask()));
-    connect(ccboostTask.get(), SIGNAL(message(std::string)), this, SLOT(publishMsg(std::string)));
+    connect(ccboostTask.get(), SIGNAL(message(QString)), this, SLOT(publishMsg(QString)));
+    connect(ccboostTask.get(), SIGNAL(questionContinue(QString)), this, SLOT(publishCritical(QString)));
     Task::submit(ccboostTask);
 
     return;
@@ -370,13 +371,37 @@ void CcboostSegmentationPlugin::segmentationsAdded(SegmentationAdapterSList segm
     }
 }
 
-void CcboostSegmentationPlugin::publishMsg(std::string msg){
+void CcboostSegmentationPlugin::publishMsg(QString msg){
 
-    qDebug() << "Show message: " << QString::fromUtf8(msg.c_str());
+    qDebug() << "Show message: " << msg;
 
-    if(!msg.empty())
+    if(!msg.isEmpty())
         QMessageBox::critical(NULL, "Synapse Segmentation Message Box",
-                             QString(msg.c_str()), QMessageBox::Yes, QMessageBox::Yes);
+                             msg, QMessageBox::Yes, QMessageBox::Yes);
+
+}
+
+void CcboostSegmentationPlugin::questionContinue(QString msg){
+
+    qDebug() << "Show message: " << msg;
+
+    if(!msg.isEmpty()) {
+        if(QMessageBox::critical(NULL, "Synapse Segmentation Message Box",
+                             msg, QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) == QMessageBox::Cancel){
+
+            //Option 1
+            //SchedulerSPtr scheduler = getScheduler();
+            //scheduler->abortExecutingTasks();
+
+            //Option 2
+            CcboostTaskPtr ccboostTask = dynamic_cast<CcboostTaskPtr>(sender());
+            ccboostTask->abort();
+
+            //Option 3
+            //emit aborted();
+        }
+    }
+
 
 }
 
@@ -386,6 +411,7 @@ void CcboostSegmentationPlugin::finishedTask()
 
     CcboostTaskPtr ccboostTask = dynamic_cast<CcboostTaskPtr>(sender());
     disconnect(ccboostTask, SIGNAL(finished()), this, SLOT(finishedTask()));
+
     if(!ccboostTask->isAborted())
         m_finishedTasks.insert(ccboostTask, m_executingTasks[ccboostTask]);
 
