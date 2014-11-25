@@ -81,7 +81,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
     roi.addII( ii.internalImage().data() );
 
     //nofeatures add
-    #define NOFEATURESTEST
+    //#define NOFEATURESTEST
     #ifdef NOFEATURESTEST
     {
         MultipleROIData allROIssimple;
