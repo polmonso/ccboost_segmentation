@@ -9,11 +9,11 @@ add -std=c++11 flag
 
 * Dependencies
 
-deps directory on iiboost here: https://github.com/quimnuss/iiboost/tree/master/deps
-ITK (probably 4)
-VTK (probably 4)
-qt4
-openmp
+- deps directory on iiboost. Find it here: https://github.com/quimnuss/iiboost/tree/master/deps
+- ITK (probably 4)
+- VTK (probably 4)
+- qt4
+- openmp
 
 
 *build
