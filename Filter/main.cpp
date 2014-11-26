@@ -218,7 +218,7 @@ int main (int argc, char **argv)
   cfgdata.rawVolume = "supervoxelcache-";
   SetConfigData<itkVolumeType> trainData;
   SetConfigData<itkVolumeType>::setDefaultSet(trainData);
-  trainData.zAnisotropyFactor = 1;
+  trainData.zAnisotropyFactor = 5;
 
   //FIXME put mkdir inside the core
   mkdir(cfgdata.cacheDir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH );

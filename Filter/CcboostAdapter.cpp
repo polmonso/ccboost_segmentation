@@ -143,7 +143,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
 
     timerF.reset();
 
-    adaboost.train( bdata, 100 );
+    adaboost.train( bdata, 500 );
 
     qDebug("train Elapsed: %f", timerF.elapsed());
 
@@ -833,7 +833,15 @@ void CcboostAdapter::addFeatures(const std::string& cacheDir,
                 origin[i] = 0;
 
             img->SetOrigin( origin );
+
         }
+
+        #warning temporary hack of spacing
+
+        ItkVectorImageType::SpacingType spacing = img->GetSpacing();
+        spacing[2] = 5.0;
+        std::cout << "Using spacing: " << spacing << std::endl;
+        img->SetSpacing(spacing);
 
         unsigned int mWidth = imSize[0];
         unsigned int mHeight = imSize[1];
