@@ -79,7 +79,9 @@ include_directories(${RANDOMLIB_INCPATH})
 if(NOT COMPILING_ESPINA)
 
 add_executable(ccbooststandalone Filter/main.cpp Filter/CcboostAdapter.cpp ${auxItkFilters})
-target_link_libraries(ccbooststandalone ${ITK_LIBRARIES} ${RANDOMLIB_LIB} )
+target_link_libraries(ccbooststandalone randomlib ${ITK_LIBRARIES} ${RANDOMLIB_LIB} )
+add_dependencies(ccbooststandalone randomlibBuild) 
+add_dependencies(ccbooststandalone randomlib) 
 
 else()
 
