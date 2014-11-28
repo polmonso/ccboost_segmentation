@@ -1,3 +1,5 @@
 [submodule "Core/iiboost"]
 	path = Core/iiboost
 	url = https://github.com/quimnuss/iiboost.git
+[submodule "Core.iiboost"]
+	branch = master
