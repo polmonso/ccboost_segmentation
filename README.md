@@ -3,8 +3,6 @@
 
 * Configuration
 
-use the *task-based* branch
-
 add -std=c++11 flag
 
 * Dependencies
@@ -43,11 +41,9 @@ cmake .. -DCMAKE_CXX_FLAGS="-std=c++11"
 make
 
 ```
-If you compile with -j the first time, it will fail because it has to download some dependencies
 You'll get a Espina missing warning, it's fine if you want to use the standalone version only.
 
 If you need to add the dependencies path use `ccmake ..` to add them
-
 
 * Running
 
