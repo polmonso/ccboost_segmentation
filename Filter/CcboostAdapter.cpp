@@ -76,15 +76,21 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
     roi.init( img.data(), gt.data(), 0, 0, img.width(), img.height(), img.depth(), cfgdata.train.at(0).zAnisotropyFactor );
 
     // raw image integral image
-    ROIData::IntegralImageType ii;
-    ii.compute( img );
-    roi.addII( ii.internalImage().data() );
+    {
+        ROIData::IntegralImageType ii;
+        ii.compute( img );
+        roi.addII( std::move(ii), ROIData::ChannelType::GAUSS );
+    }
 
     //nofeatures add
     //#define NOFEATURESTEST
     #ifdef NOFEATURESTEST
     {
         MultipleROIData allROIssimple;
+
+        // set anisotropy factor
+        allROIs.init( cfgdata.train.at(0).zAnisotropyFactor );
+
         allROIssimple.add( &roi );
 
         qDebug() << "running core plugin";
@@ -98,7 +104,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
         adaboostsimple.train( bdatasimple, 100 );
         qDebug() << "predict";
         Matrix3D<float> predImgsimple;
-        adaboostsimple.predict( &allROIssimple, &predImgsimple );
+        adaboostsimple.predictDoublePolarity( &allROIssimple, &predImgsimple );
 
         qDebug() << "output image without features";
 
@@ -126,6 +132,10 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
     qDebug("Add all features Elapsed: %f", timerF.elapsed());
 
     MultipleROIData allROIs;
+    
+    // set anisotropy factor
+    allROIs.init( cfgdata.train.at(0).zAnisotropyFactor );
+
     allROIs.add( &roi );
 
     // }
@@ -152,7 +162,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
     // predict
     Matrix3D<float> predImg;
     TimerRT timer; timer.reset();
-    adaboost.predict( &allROIs, &predImg );
+    adaboost.predictDoublePolarity( &allROIs, &predImg );
     qDebug("Elapsed: %f", timer.elapsed());
     predImg.save("/tmp/test.nrrd");
 
@@ -246,6 +256,9 @@ bool CcboostAdapter::automaticCore(const ConfigData<itkVolumeType>& cfgdata,
 #ifdef WORK2
     MultipleROIData allROIs;
 
+    // set anisotropy factor
+    allROIs.init( cfgdata.train.at(0).zAnisotropyFactor );
+
     //    for(auto imgItk: channels) {
     //        for(auto gtItk: groundTruths) {
     Matrix3D<ImagePixelType> img, gt;
@@ -307,7 +320,7 @@ bool CcboostAdapter::automaticCore(const ConfigData<itkVolumeType>& cfgdata,
         qDebug() << "predict";
 
         TimerRT timer; timer.reset();
-        adaboost.predict( &allROIs, &predImg );
+        adaboost.predictDoublePolarity( &allROIs, &predImg );
         qDebug("Elapsed: %f", timer.elapsed());
 
     } else {
@@ -327,7 +340,7 @@ bool CcboostAdapter::automaticCore(const ConfigData<itkVolumeType>& cfgdata,
 
             Matrix3D<float> predImg;
             TimerRT timer; timer.reset();
-            adaboost.predict( &allROIs, &predImg );
+            adaboost.predictDoublePolarity( &allROIs, &predImg );
             qDebug("Elapsed: %f", timer.elapsed());
 
             //emit(updatePrediction(predImg.asItkImage()));
@@ -836,11 +849,9 @@ void CcboostAdapter::addFeatures(const std::string& cacheDir,
 
         }
 
-        #warning temporary hack of spacing
-
+        // reset spacing so that we read pixels directly
         ItkVectorImageType::SpacingType spacing = img->GetSpacing();
-        spacing[2] = 5.0;
-        std::cout << "Using spacing: " << spacing << std::endl;
+        spacing[0] = spacing[1] = spacing[2] = 1.0;
         img->SetSpacing(spacing);
 
         unsigned int mWidth = imSize[0];
