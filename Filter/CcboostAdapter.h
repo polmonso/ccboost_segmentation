@@ -22,10 +22,15 @@ class CcboostAdapter : public QObject
 
 public:
     typedef itk::Image<float, 3> FloatTypeImage;
+
+    //TODO this goes somewhere else
+    static const unsigned int FREEMEMORYREQUIREDPROPORTIONPREDICT = 180;
+
 private:
     typedef itk::ImageFileWriter< itkVolumeType > WriterType;
     using bigVolumeType = itk::Image<unsigned short, 3>;
     using BigWriterType = itk::ImageFileWriter< bigVolumeType >;
+
 
 signals:
     void updatePrediction(FloatTypeImage::Pointer itkVolumeType);
@@ -48,15 +53,29 @@ public:
 
     static void computeFeatures(const ConfigData<itkVolumeType> cfgData, const SetConfigData<itkVolumeType> cfgDataROI);
 
-    static void addAllFeatures(const ConfigData<itkVolumeType>& cfgData, ROIData &roi);
+    static void computeFeature(const SetConfigData<itkVolumeType> cfgDataROI,
+                                        const std::string cacheDir,
+                                        const std::string featureFile);
 
-    static void addFeatures(const std::string& cacheDir, const SetConfigData<itkVolumeType>& cfgDataROI, ROIData& roi);
+    static void addAllFeatures(const ConfigData<itkVolumeType>& cfgData, MultipleROIData::ROIDataPtr roi);
+
+    static void addFeatures(const std::string& cacheDir, const SetConfigData<itkVolumeType>& cfgDataROI, MultipleROIData::ROIDataPtr roi);
 
     //TODO add const-correctness
     static bool core(const ConfigData<itkVolumeType>& cfg,
                      FloatTypeImage::Pointer &probabilisticOutSeg,
                      std::vector<itkVolumeType::Pointer>& outSegList,
-                     itkVolumeType::Pointer& outputSegmentation);
+                     itkVolumeType::Pointer &outputSegmentation);
+
+    static bool testcore(const ConfigData<itkVolumeType>& cfg,
+                         std::vector<FloatTypeImage::Pointer>& probabilisticOutSegs,
+                         std::vector<itkVolumeType::Pointer>& outSegList,
+                         std::vector<itkVolumeType::Pointer>& outputSegmentations);
+
+    static bool core(const ConfigData<itkVolumeType>& cfg,
+                         std::vector<FloatTypeImage::Pointer>& probabilisticOutSegs,
+                         std::vector<itkVolumeType::Pointer>& outSegList,
+                         std::vector<itkVolumeType::Pointer>& outputSegmentations);
 
     static bool automaticCore(const ConfigData<itkVolumeType>& cfgdata,
                               FloatTypeImage::Pointer& probabilisticOutSeg,

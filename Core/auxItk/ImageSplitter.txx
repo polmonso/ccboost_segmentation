@@ -6,8 +6,6 @@
 #include "itkImageRegionIterator.h"
 #include "itkImageRegionConstIterator.h"
  
-#include "itkExtractImageFilter.h"
-
 #include "itkImageFileWriter.h"
 #include "itkPasteImageFilter.h"
 
@@ -57,12 +55,9 @@ void ImageSplitter< TImage >::computeNumSplits(const typename TImage::SizeType o
 }
 
 template< class TImage>
-void ImageSplitter< TImage>::getCroppedRegions(const typename TImage::SizeType originalSize,
+void ImageSplitter< TImage>::computeCropRegions(const typename TImage::SizeType originalSize,
                        const typename TImage::OffsetType overlap,
-                       const typename TImage::SizeType numSplits,
-                       std::vector<typename TImage::RegionType>& cropRegions,
-                       std::vector<typename TImage::RegionType>& pasteDRegions,
-                       std::vector<typename TImage::RegionType>& pasteORegions) {
+                       const typename TImage::SizeType numSplits) {
 
     typedef typename TImage::SizeType MySizeType;
     const unsigned int dim = MySizeType::Dimension;
@@ -192,27 +187,16 @@ void ImageSplitter< TImage>::saveCroppedRegions(const typename TImage::ConstPoin
 
 }
 
-//TODO does TImage need to be float? (as it originally was in the previous code)
 template< class TImage>
-void ImageSplitter< TImage>::pasteCroppedRegions(const typename TImage::ConstPointer rawVolume,
-                                                       const typename TImage::SizeType originalSize,
-                                                       const typename TImage::OffsetType overlap,
-                                                       const typename TImage::SizeType numSplits,
-                                                       std::vector<typename TImage::RegionType>& cropRegions,
-                                                       std::vector<typename TImage::RegionType>& pasteDRegions,
-                                                       std::vector<typename TImage::RegionType>& pasteORegions){
+void ImageSplitter< TImage>::pasteCroppedRegions(std::vector<typename TImage::Pointer>& outSegs,
+                                                 typename TImage::Pointer& outputImage){
 
-    typename TImage::RegionType rawRegion = rawVolume->GetLargestPossibleRegion();
-
-    typename TImage::SizeType rawSize = rawVolume->GetLargestPossibleRegion().GetSize();
-
-    typename TImage::Pointer outputImage = TImage::New();
     typename TImage::RegionType region;
     typename TImage::IndexType index;
-    index = rawRegion.GetIndex();
+    index = volumeLargestRegion.GetIndex();
     region.SetIndex(index);
-    region.SetSize(rawRegion.GetSize());
-    outputImage->SetRegions(rawRegion);
+    region.SetSize(volumeLargestRegion.GetSize());
+    outputImage->SetRegions(volumeLargestRegion);
     outputImage->Allocate();
 
     typedef typename TImage::SizeType MySizeType;
@@ -221,24 +205,16 @@ void ImageSplitter< TImage>::pasteCroppedRegions(const typename TImage::ConstPoi
         numRegions *= numSplits[i];
     }
 
+    assert( numRegions == cropRegions.size());
+
     for(int i=0; i<numRegions; i++){
-
-        typedef itk::ImageFileReader< TImage > ReaderType;
-        typename ReaderType::Pointer floatReader = ReaderType::New();
-
-        std::stringstream filename;
-        filename << "cropRegion-"<< i << ".tif";
-
-        floatReader->SetFileName(filename.str().c_str());
-        floatReader->Update();
-        typename TImage::Pointer cropImage = floatReader->GetOutput();
 
         typedef itk::PasteImageFilter <TImage, TImage >
           PasteImageFilterType;
 
         //TODO copy the volume to the output volume
         typename PasteImageFilterType::Pointer pasteFilter = PasteImageFilterType::New ();
-        pasteFilter->SetSourceImage(cropImage);
+        pasteFilter->SetSourceImage(outSegs.at(i));
         pasteFilter->SetDestinationImage(outputImage);
 
         pasteFilter->SetSourceRegion(pasteORegions.at(i));
@@ -263,21 +239,22 @@ void ImageSplitter< TImage>::pasteCroppedRegions(const typename TImage::ConstPoi
         outputImage = pasteFilter->GetOutput();
         outputImage->DisconnectPipeline();
 
-        typename  itk::ImageFileWriter< TImage>::Pointer floatWriter = itk::ImageFileWriter< TImage>::New();
+        typename  itk::ImageFileWriter< TImage>::Pointer writer = itk::ImageFileWriter< TImage>::New();
 
         std::stringstream filenameOut;
         filenameOut << "pastedOutput" << i << ".tif";
-        floatWriter->SetFileName(filenameOut.str().c_str());
-        floatWriter->SetInput( outputImage );
+        writer->SetFileName(filenameOut.str().c_str());
+        writer->SetInput( outputImage );
 
         try {
-          floatWriter->Update();
+          writer->Update();
         } catch( itk::ExceptionObject & err ) {
           std::cerr << "ExceptionObject caught when writing!" << std::endl;
           std::cerr << err << std::endl;
           return;
         }
     }
+
 }
 
 //TODO does TImage need to be float? (as it originally was in the previous code)

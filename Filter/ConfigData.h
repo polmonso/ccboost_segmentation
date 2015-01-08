@@ -38,6 +38,8 @@ struct SetConfigData
 
     std::string groundTruth;
 
+    std::string id;
+
 //    std::string cacheDir;
 
     std::string orientEstimate;
@@ -58,25 +60,27 @@ struct SetConfigData
             std::cout << "Otherfeature[" << i << "]: " << otherFeatures[i] << std::endl;
     }
 
-    static void setDefaultSet(SetConfigData& setCfgData){
+    static void setDefaultSet(SetConfigData& setCfgData, const std::string id = ""){
 
+        setCfgData.id = id;
 
-           setCfgData.featuresRawVolumeImageHash = "";
+        setCfgData.featuresRawVolumeImageHash = "";
 
-           // orientation estimate, take the "-repolarized" output of computeSynapseFeatures.py
-           setCfgData.orientEstimate = std::string("hessOrient-s3.5-repolarized") + FEATUREEXTENSION;
+        // orientation estimate, take the "-repolarized" output of computeSynapseFeatures.py
+        setCfgData.orientEstimate = id + std::string("hessOrient-s3.5-repolarized") + FEATUREEXTENSION;
 
-           // these are the feature channels, which must be precomputed with computeSynapseFeatures.py
-           setCfgData.otherFeatures.push_back(std::string("gradient-magnitude-s1.0") + FEATUREEXTENSION);
-           setCfgData.otherFeatures.push_back(std::string("gradient-magnitude-s1.6") + FEATUREEXTENSION);
-           setCfgData.otherFeatures.push_back(std::string("gradient-magnitude-s3.5") + FEATUREEXTENSION);
-           setCfgData.otherFeatures.push_back(std::string("gradient-magnitude-s5.0") + FEATUREEXTENSION);
-           setCfgData.otherFeatures.push_back(std::string("stensor-s0.5-r1.0") + FEATUREEXTENSION);
-           setCfgData.otherFeatures.push_back(std::string("stensor-s0.8-r1.6") + FEATUREEXTENSION);
-           setCfgData.otherFeatures.push_back(std::string("stensor-s1.8-r3.5") + FEATUREEXTENSION);
-           setCfgData.otherFeatures.push_back(std::string("stensor-s2.5-r5.0") + FEATUREEXTENSION);
+        setCfgData.otherFeatures.clear();
+        // these are the feature channels, which must be precomputed with computeSynapseFeatures.py
+        setCfgData.otherFeatures.push_back(id + std::string("gradient-magnitude-s1.0") + FEATUREEXTENSION);
+        setCfgData.otherFeatures.push_back(id + std::string("gradient-magnitude-s1.6") + FEATUREEXTENSION);
+        setCfgData.otherFeatures.push_back(id + std::string("gradient-magnitude-s3.5") + FEATUREEXTENSION);
+        setCfgData.otherFeatures.push_back(id + std::string("gradient-magnitude-s5.0") + FEATUREEXTENSION);
+        setCfgData.otherFeatures.push_back(id + std::string("stensor-s0.5-r1.0") + FEATUREEXTENSION);
+        setCfgData.otherFeatures.push_back(id + std::string("stensor-s0.8-r1.6") + FEATUREEXTENSION);
+        setCfgData.otherFeatures.push_back(id + std::string("stensor-s1.8-r3.5") + FEATUREEXTENSION);
+        setCfgData.otherFeatures.push_back(id + std::string("stensor-s2.5-r5.0") + FEATUREEXTENSION);
 
-       }
+    }
 
 };
 

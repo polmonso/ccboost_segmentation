@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <argp.h>
 #include <sys/stat.h>
+#include <ImageSplitter.h>
 
 typedef itk::Image<unsigned char , 3> itkVolumeType;
 
@@ -216,9 +217,6 @@ int main (int argc, char **argv)
 
   cfgdata.cacheDir = "./output/";
   cfgdata.rawVolume = "supervoxelcache-";
-  SetConfigData<itkVolumeType> trainData;
-  SetConfigData<itkVolumeType>::setDefaultSet(trainData);
-  trainData.zAnisotropyFactor = 5;
 
   //FIXME put mkdir inside the core
   mkdir(cfgdata.cacheDir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH );
@@ -258,30 +256,114 @@ int main (int argc, char **argv)
           itkVolumeType::Pointer inputVolumeGTITK = reader->GetOutput();
           inputVolumeGTITK->DisconnectPipeline();
 
-          CcboostAdapter::FloatTypeImage::Pointer probabilisticOutSeg;
-          itkVolumeType::Pointer outputSegmentation;
+          cfgdata.originalVolumeImage = inputVolumeITK;
+
+          std::vector<CcboostAdapter::FloatTypeImage::Pointer> probabilisticOutSegs;
+          std::vector<itkVolumeType::Pointer> outputSegmentations;
           std::vector<itkVolumeType::Pointer> outSegList;
+          itkVolumeType::Pointer outputSegmentation = itkVolumeType::New();
+          CcboostAdapter::FloatTypeImage::Pointer probOutputSegmentation = CcboostAdapter::FloatTypeImage::New();
 
-          trainData.groundTruthImage = inputVolumeGTITK;
-          trainData.rawVolumeImage = inputVolumeITK;
-          cfgdata.train.push_back(trainData);
+          //volume spliting
+          //FIXME decide whether or not to divide the volume depending on the memory available and size of it
+          bool divideVolume = true;
 
-          CcboostAdapter::core(cfgdata,
-                               probabilisticOutSeg,
-                               outSegList,
-                               outputSegmentation);
+          if(!divideVolume) {
 
-          typedef itk::ImageFileWriter< itkVolumeType > WriterType;
-          WriterType::Pointer writer = WriterType::New();
-          writer->SetFileName(std::string("binary") + arguments.outfile);
-          writer->SetInput(outputSegmentation);
-          writer->Update();
+              SetConfigData<itkVolumeType> trainData;
+              SetConfigData<itkVolumeType>::setDefaultSet(trainData);
+
+              trainData.zAnisotropyFactor = 5;
+              trainData.groundTruthImage = inputVolumeGTITK;
+              trainData.rawVolumeImage = inputVolumeITK;
+              cfgdata.train.push_back(trainData);
+
+              SetConfigData<itkVolumeType> testData(trainData);
+              SetConfigData<itkVolumeType>::setDefaultSet(testData);
+              testData.zAnisotropyFactor = 5;
+              testData.rawVolumeImage = trainData.rawVolumeImage;
+              cfgdata.test.push_back(testData);
+
+
+              CcboostAdapter::core(cfgdata,
+                                   probabilisticOutSegs,
+                                   outSegList,
+                                   outputSegmentations);
+
+              outputSegmentation = outputSegmentations.at(0);
+
+          } else {
+
+              itkVolumeType::RegionType region = inputVolumeITK->GetLargestPossibleRegion();
+
+              std::cout << region << std::endl;
+
+              itkVolumeType::OffsetType overlap{30,30.0};
+
+              typedef itk::ImageSplitter< itkVolumeType > SplitterType;
+
+              cfgdata.numPredictRegions = SplitterType::numRegionsFittingInMemory( region.GetSize(),
+                                                                                   CcboostAdapter::FREEMEMORYREQUIREDPROPORTIONPREDICT);
+
+              //cfgdata.numPredictRegions++;
+
+              SplitterType splitter(region, cfgdata.numPredictRegions, overlap);
+
+              for(int i=0; i < splitter.getCropRegions().size(); i++){
+
+                  std::string id = QString::number(i).toStdString();
+
+                  SetConfigData<itkVolumeType> trainData;
+                  SetConfigData<itkVolumeType>::setDefaultSet(trainData, id);
+                #warning remove this default setting of zAnisotropyFactor
+                  trainData.zAnisotropyFactor = 5;
+                  trainData.rawVolumeImage = splitter.crop(cfgdata.originalVolumeImage,
+                                                           splitter.getCropRegions().at(i));
+                  trainData.groundTruthImage = splitter.crop(inputVolumeGTITK,
+                                                             splitter.getCropRegions().at(i));
+
+                  cfgdata.train.push_back(trainData);
+
+                  SetConfigData<itkVolumeType> testData(trainData);
+                  SetConfigData<itkVolumeType>::setDefaultSet(testData, id);
+                  testData.zAnisotropyFactor = 5;
+                  testData.rawVolumeImage = trainData.rawVolumeImage;
+                  testData.orientEstimate = trainData.orientEstimate;
+
+                  cfgdata.test.push_back(testData);
+              }
+
+              //
+              CcboostAdapter::core(cfgdata,
+                                   probabilisticOutSegs,
+                                   outSegList,
+                                   outputSegmentations);
+
+              //
+
+              std::cout << "Core finished" << std::endl;
+
+              //repaste
+              splitter.pasteCroppedRegions(outputSegmentations, outputSegmentation);
+
+              typedef CcboostAdapter::FloatTypeImage FloatTypeImage;
+              typedef itk::ImageSplitter< FloatTypeImage > FloatSplitterType;
+
+              FloatTypeImage::RegionType fregion(region);
+
+              FloatSplitterType fsplitter(fregion,
+                                          cfgdata.numPredictRegions,
+                                          FloatTypeImage::OffsetType{30,30.0});
+
+              fsplitter.pasteCroppedRegions(probabilisticOutSegs, probOutputSegmentation);
+
+          }
 
 
           typedef itk::ImageFileWriter< CcboostAdapter::FloatTypeImage > fWriterType;
           fWriterType::Pointer fwriter = fWriterType::New();
           fwriter->SetFileName(arguments.outfile);
-          fwriter->SetInput(probabilisticOutSeg);
+          fwriter->SetInput(probOutputSegmentation);
           try {
 
               fwriter->Update();
@@ -293,6 +375,13 @@ int main (int argc, char **argv)
               std::cout << "Warning: Error writing probabilistic output" << std::endl;
               return EXIT_FAILURE;
           }
+
+
+          typedef itk::ImageFileWriter< itkVolumeType > WriterType;
+                 WriterType::Pointer writer = WriterType::New();
+                 writer->SetFileName(std::string("binary") + arguments.outfile);
+                 writer->SetInput(outputSegmentation);
+                 writer->Update();
 
       }
 

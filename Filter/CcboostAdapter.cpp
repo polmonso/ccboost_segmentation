@@ -59,92 +59,301 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
                           FloatTypeImage::Pointer& probabilisticOutSeg,
                           std::vector<itkVolumeType::Pointer>& outSegList,
                           itkVolumeType::Pointer& outputSegmentation) {
+
+    std::vector<FloatTypeImage::Pointer> probabilisticOutSegs;
+    std::vector<itkVolumeType::Pointer> outputSegmentations;
+
+    core(cfgdata, probabilisticOutSegs, outSegList, outputSegmentations);
+
+    probabilisticOutSeg = probabilisticOutSegs.at(0);
+    outputSegmentation = outputSegmentations.at(0);
+
+}
+
+bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
+                          std::vector<FloatTypeImage::Pointer>& probabilisticOutSegs,
+                          std::vector<itkVolumeType::Pointer>& outSegList,
+                          std::vector<itkVolumeType::Pointer>& outputSegmentations) {
 #define WORK
 #ifdef WORK
 
-    //    for(auto imgItk: channels) {
-    //        for(auto gtItk: groundTruths) {
-    Matrix3D<ImagePixelType> img, gt;
+    BoosterInputData::MultipleROIDataPtr allTrainROIs = std::make_shared<MultipleROIData>();
 
-    //itkVolumeType::Pointer annotatedImage = Splitter::crop<itkVolumeType>(cfgData.train.groundTruthImage,cfgData.train.annotatedRegion);
+    #warning allTrainROIs->init function doesnt exist?
+    //allTrainROIs->init( cfgdata.train.at(0).zAnisotropyFactor );
 
-    img.loadItkImage(cfgdata.train.at(0).rawVolumeImage, true);
+    for(SetConfigData<itkVolumeType> trainData: cfgdata.train) {
 
-    gt.loadItkImage(cfgdata.train.at(0).groundTruthImage, true);
+        Matrix3D<ImagePixelType> img, gt;
 
-    ROIData roi;
-    roi.init( img.data(), gt.data(), 0, 0, img.width(), img.height(), img.depth(), cfgdata.train.at(0).zAnisotropyFactor );
+        //itkVolumeType::Pointer annotatedImage = Splitter::crop<itkVolumeType>(cfgData.train.groundTruthImage,cfgData.train.annotatedRegion);
 
-    // raw image integral image
-    {
-        ROIData::IntegralImageType ii;
-        ii.compute( img );
-        roi.addII( std::move(ii), ROIData::ChannelType::GAUSS );
-    }
+        img.loadItkImage(trainData.rawVolumeImage, true);
+        gt.loadItkImage(trainData.groundTruthImage, true);
 
-    //nofeatures add
-    //#define NOFEATURESTEST
-    #ifdef NOFEATURESTEST
-    {
-        MultipleROIData allROIssimple;
+        MultipleROIData::ROIDataPtr roi = std::make_shared<ROIData>();;
+        roi->init( img.data(), gt.data(), 0, 0, img.width(), img.height(), img.depth(), cfgdata.train.at(0).zAnisotropyFactor );
 
-        // set anisotropy factor
-        allROIs.init( cfgdata.train.at(0).zAnisotropyFactor );
+        // raw image integral image
+        {
+            ROIData::IntegralImageType ii;
+            ii.compute( img );
+            roi->addII( std::move(ii), ROIData::ChannelType::GAUSS );
+        }
 
-        allROIssimple.add( &roi );
+        //nofeatures add
+        //#define NOFEATURESTEST
+        #ifdef NOFEATURESTEST
+        {
+            MultipleROIData allROIssimple;
 
-        qDebug() << "running core plugin";
+            // set anisotropy factor
+            allROIs.init( cfgdata.train.at(0).zAnisotropyFactor );
 
-        BoosterInputData bdatasimple;
-        bdatasimple.init( &allROIssimple );
-        bdatasimple.showInfo();
+            allROIssimple.add( &roi );
 
-        Booster adaboostsimple;
-        qDebug() << "training";
-        adaboostsimple.train( bdatasimple, 100 );
-        qDebug() << "predict";
-        Matrix3D<float> predImgsimple;
-        adaboostsimple.predictDoublePolarity( &allROIssimple, &predImgsimple );
+            qDebug() << "running core plugin";
 
-        qDebug() << "output image without features";
+            BoosterInputData bdatasimple;
+            bdatasimple.init( &allROIssimple );
+            bdatasimple.showInfo();
 
-        typedef itk::ImageFileWriter< FloatTypeImage > fWriterType;
+            Booster adaboostsimple;
+            qDebug() << "training";
+            adaboostsimple.train( bdatasimple, 100 );
+            qDebug() << "predict";
+            Matrix3D<float> predImgsimple;
+            adaboostsimple.predictDoublePolarity( &allROIssimple, &predImgsimple );
+
+            qDebug() << "output image without features";
+
+            typedef itk::ImageFileWriter< FloatTypeImage > fWriterType;
             fWriterType::Pointer writerf = fWriterType::New();
             writerf->SetFileName(cfgdata.cacheDir + "simplepredicted.tif");
             writerf->SetInput(predImgsimple.asItkImage());
             writerf->Update();
-        qDebug() << "simplepredicted.tif created";
-    }
-    #endif
-    //no features end
+            qDebug() << "simplepredicted.tif created";
+        }
+        #endif
+        //no features end
 
-    //features
+        //features
+        TimerRT timerF; timerF.reset();
+
+        computeFeatures(cfgdata, trainData);
+
+        qDebug("Compute all features Elapsed: %f", timerF.elapsed());
+
+        timerF.reset();
+
+        addFeatures(cfgdata.cacheDir, trainData, roi);
+
+        qDebug("Add all features Elapsed: %f", timerF.elapsed());
+
+        allTrainROIs->add( roi );
+
+    }
+
+    qDebug() << "running core plugin";
+
+    BoosterInputData bdata;
+    bdata.init( allTrainROIs );
+    bdata.showInfo();
+
+    Booster adaboost;
+
+    qDebug() << "training";
+
     TimerRT timerF; timerF.reset();
 
-    computeAllFeatures(cfgdata);
+    adaboost.train( bdata, 100 );
+
+    qDebug("train Elapsed: %f", timerF.elapsed());
+
+#warning @Carlos, why was save the model AFTER predict? Any particular reason? otherwise, moving it here
+    // save JSON model
+      if (!adaboost.saveModelToFile( "/tmp/model.json" ))
+          std::cout << "Error saving JSON model" << std::endl;
+
+      // predict
+
+    qDebug() << "predict";
+
+    for(SetConfigData<itkVolumeType> testData: cfgdata.test) {
+
+        Matrix3D<ImagePixelType> img, gt;
+
+        img.loadItkImage(testData.rawVolumeImage, true);
+        gt.loadItkImage(testData.groundTruthImage, true);
+
+        MultipleROIData::ROIDataPtr roi = std::make_shared<ROIData>();
+        roi->init( img.data(), gt.data(), 0, 0, img.width(), img.height(), img.depth(), cfgdata.train.at(0).zAnisotropyFactor );
+
+        // raw image integral image
+        {
+            ROIData::IntegralImageType ii;
+            ii.compute( img );
+            roi->addII( std::move(ii), ROIData::ChannelType::GAUSS );
+        }
+
+        //features
+        TimerRT timerF; timerF.reset();
+
+        computeFeatures(cfgdata, testData);
+
+        qDebug("Compute all features Elapsed: %f", timerF.elapsed());
+
+        timerF.reset();
+
+        addFeatures(cfgdata.cacheDir, testData, roi);
+
+        qDebug("Add all features Elapsed: %f", timerF.elapsed());
+        //predict one at a time
+        MultipleROIData testROI;
+        testROI.add( roi );
+
+        Matrix3D<float> predImg;
+        TimerRT timer; timer.reset();
+        adaboost.predictDoublePolarity( testROI, &predImg );
+        //predImg.save("/tmp/test.nrrd");
+
+        qDebug("Elapsed: %f", timer.elapsed());
+
+        typedef itk::ImageDuplicator< FloatTypeImage > DuplicatorType;
+        DuplicatorType::Pointer duplicator = DuplicatorType::New();
+        duplicator->SetInputImage(predImg.asItkImage());
+        duplicator->Update();
+        FloatTypeImage::Pointer probabilisticOutSeg = duplicator->GetModifiableOutput();
+
+        probabilisticOutSeg->DisconnectPipeline();
+
+        probabilisticOutSegs.push_back(probabilisticOutSeg);
+
+    }
+
+#else
+    typedef itk::ImageFileReader< FloatTypeImage > ReaderType;
+    ReaderType::Pointer reader = ReaderType::New();
+    reader->SetFileName(cfgdata.cacheDir + "predicted.tif");
+    reader->Update();
+    probabilisticOutSeg = reader->GetOutput();
+    probabilisticOutSeg->DisconnectPipeline();
+#endif
+
+    //provisory test, assume that we have the full volume and paste it into one volume
+
+    //TODO handle multiple output ROIs
+
+    qDebug() << "output image";
+
+    for(int roiidx; roiidx<cfgdata.test.size(); roiidx++) {
+
+        typedef itk::ImageFileWriter< FloatTypeImage > fWriterType;
+        if(cfgdata.saveIntermediateVolumes && probabilisticOutSegs[roiidx]->VerifyRequestedRegion()) {
+            fWriterType::Pointer writerf = fWriterType::New();
+            writerf->SetFileName(cfgdata.cacheDir + "predicted.tif");
+            writerf->SetInput(probabilisticOutSegs[roiidx]);
+            writerf->Update();
+        } else {
+            //TODO what to do when region fails Verify? is return false enough?
+            //return false;
+        }
+        qDebug() << "predicted.tif created";
+
+        typedef itk::BinaryThresholdImageFilter <Matrix3D<float>::ItkImageType, itkVolumeType>
+                fBinaryThresholdImageFilterType;
+
+        float lowerThreshold = 0.0;
+
+        fBinaryThresholdImageFilterType::Pointer thresholdFilter
+                = fBinaryThresholdImageFilterType::New();
+        thresholdFilter->SetInput(probabilisticOutSegs[0]);
+        thresholdFilter->SetLowerThreshold(lowerThreshold);
+        thresholdFilter->SetInsideValue(255);
+        thresholdFilter->SetOutsideValue(0);
+        thresholdFilter->Update();
+
+        WriterType::Pointer writer = WriterType::New();
+        if(cfgdata.saveIntermediateVolumes && thresholdFilter->GetOutput()->VerifyRequestedRegion()) {
+            writer->SetFileName(cfgdata.cacheDir + std::to_string(roiidx) + "-1" + "predicted-thresholded.tif");
+            writer->SetInput(thresholdFilter->GetOutput());
+            writer->Update();
+        }
+
+        itkVolumeType::Pointer outputSegmentation = thresholdFilter->GetOutput();
+
+        if(cfgdata.saveIntermediateVolumes && outputSegmentation->VerifyRequestedRegion()){
+            writer->SetFileName(cfgdata.cacheDir + std::to_string(roiidx) + "-2" + "thread-outputSegmentation.tif");
+            writer->SetInput(outputSegmentation);
+            writer->Update();
+        }
+
+
+        outputSegmentation->DisconnectPipeline();
+
+        postprocessing(cfgdata, outputSegmentation);
+
+        outputSegmentation->SetSpacing(cfgdata.train.at(0).rawVolumeImage->GetSpacing());
+
+        splitSegmentations(outputSegmentation, outSegList, cfgdata.saveIntermediateVolumes, cfgdata.cacheDir);
+
+        outputSegmentation->DisconnectPipeline();
+
+        outputSegmentations.push_back(outputSegmentation);
+
+    }
+
+     ESPINA_SETTINGS(settings);
+     settings.beginGroup("ccboost segmentation");
+     settings.setValue("Channel Hash", QString(cfgdata.train.at(0).featuresRawVolumeImageHash.c_str()));
+
+     return true;
+}
+
+bool CcboostAdapter::testcore(const ConfigData<itkVolumeType>& cfgdata,
+                          std::vector<FloatTypeImage::Pointer>& probabilisticOutSegs,
+                          std::vector<itkVolumeType::Pointer>& outSegList,
+                          std::vector<itkVolumeType::Pointer>& outputSegmentations) {
+
+    BoosterInputData::MultipleROIDataPtr allTrainROIs = std::make_shared<MultipleROIData>();
+
+    SetConfigData<itkVolumeType> trainData = cfgdata.train.at(0);
+
+    Matrix3D<ImagePixelType> trainimg, traingt;
+
+    //itkVolumeType::Pointer annotatedImage = Splitter::crop<itkVolumeType>(cfgData.train.groundTruthImage,cfgData.train.annotatedRegion);
+
+    trainimg.loadItkImage(trainData.rawVolumeImage, true);
+    traingt.loadItkImage(trainData.groundTruthImage, true);
+
+    MultipleROIData::ROIDataPtr trainroi = std::make_shared<ROIData>();;
+    trainroi->init( trainimg.data(), traingt.data(), 0, 0, trainimg.width(), trainimg.height(), trainimg.depth(), cfgdata.train.at(0).zAnisotropyFactor );
+
+    // raw image integral image
+    {
+        ROIData::IntegralImageType ii;
+        ii.compute( trainimg );
+        trainroi->addII( std::move(ii), ROIData::ChannelType::GAUSS );
+    }
+
+    TimerRT timerF; timerF.reset();
+
+    computeFeatures(cfgdata, trainData);
 
     qDebug("Compute all features Elapsed: %f", timerF.elapsed());
 
     timerF.reset();
 
-    addAllFeatures(cfgdata, roi);
+    addFeatures(cfgdata.cacheDir, trainData, trainroi);
 
     qDebug("Add all features Elapsed: %f", timerF.elapsed());
 
-    MultipleROIData allROIs;
-    
-    // set anisotropy factor
-    allROIs.init( cfgdata.train.at(0).zAnisotropyFactor );
-
-    allROIs.add( &roi );
-
-    // }
-    // }
+    allTrainROIs->add( trainroi );
 
     qDebug() << "running core plugin";
 
     BoosterInputData bdata;
-    bdata.init( &allROIs );
+    bdata.init( allTrainROIs );
     bdata.showInfo();
 
     Booster adaboost;
@@ -157,43 +366,77 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
 
     qDebug("train Elapsed: %f", timerF.elapsed());
 
-    qDebug() << "predict";
-
-    // predict
-    Matrix3D<float> predImg;
-    TimerRT timer; timer.reset();
-    adaboost.predictDoublePolarity( &allROIs, &predImg );
-    qDebug("Elapsed: %f", timer.elapsed());
-    predImg.save("/tmp/test.nrrd");
-
+#warning @Carlos, why was save the model AFTER predict? Any particular reason? otherwise, moving it here
     // save JSON model
-    if (!adaboost.saveModelToFile( "/tmp/model.json" ))
-        std::cout << "Error saving JSON model" << std::endl;
+      if (!adaboost.saveModelToFile( "/tmp/model.json" ))
+          std::cout << "Error saving JSON model" << std::endl;
 
-    typedef itk::ImageDuplicator< FloatTypeImage > DuplicatorType;
+      // predict
+
+      qDebug() << "predict";
+
+      SetConfigData<itkVolumeType> testData = cfgdata.test.at(0);
+
+      Matrix3D<ImagePixelType> img, gt;
+
+      img.loadItkImage(testData.rawVolumeImage, true);
+      gt.loadItkImage(testData.groundTruthImage, true);
+
+      MultipleROIData::ROIDataPtr roi = std::make_shared<ROIData>();
+      roi->init( img.data(), gt.data(), 0, 0, img.width(), img.height(), img.depth(), cfgdata.train.at(0).zAnisotropyFactor );
+
+      // raw image integral image
+      {
+          ROIData::IntegralImageType ii;
+          ii.compute( img );
+          roi->addII( std::move(ii), ROIData::ChannelType::GAUSS );
+      }
+
+      //features
+      timerF; timerF.reset();
+
+      computeFeatures(cfgdata, testData);
+
+      qDebug("Compute all features Elapsed: %f", timerF.elapsed());
+
+      timerF.reset();
+
+      addFeatures(cfgdata.cacheDir, testData, roi);
+
+      qDebug("Add all features Elapsed: %f", timerF.elapsed());
+      //predict one at a time
+      MultipleROIData testROI;
+      testROI.add( roi );
+
+      Matrix3D<float> predImg;
+      TimerRT timer; timer.reset();
+      adaboost.predictDoublePolarity( testROI, &predImg );
+      //predImg.save("/tmp/test.nrrd");
+
+      qDebug("Elapsed: %f", timer.elapsed());
+
+      typedef itk::ImageDuplicator< FloatTypeImage > DuplicatorType;
       DuplicatorType::Pointer duplicator = DuplicatorType::New();
       duplicator->SetInputImage(predImg.asItkImage());
       duplicator->Update();
-      probabilisticOutSeg = duplicator->GetModifiableOutput();
+      FloatTypeImage::Pointer probabilisticOutSeg = duplicator->GetModifiableOutput();
 
-    probabilisticOutSeg->DisconnectPipeline();
+      probabilisticOutSeg->DisconnectPipeline();
 
-#else
-    typedef itk::ImageFileReader< FloatTypeImage > ReaderType;
-    ReaderType::Pointer reader = ReaderType::New();
-    reader->SetFileName(cfgdata.cacheDir + "predicted.tif");
-    reader->Update();
-    probabilisticOutSeg = reader->GetOutput();
-    probabilisticOutSeg->DisconnectPipeline();
-#endif
+      probabilisticOutSegs.push_back(probabilisticOutSeg);
+
+
+    //provisory test, assume that we have the full volume and paste it into one volume
+
+    //TODO handle multiple output ROIs
 
     qDebug() << "output image";
 
     typedef itk::ImageFileWriter< FloatTypeImage > fWriterType;
-    if(cfgdata.saveIntermediateVolumes && probabilisticOutSeg->VerifyRequestedRegion()) {
+    if(cfgdata.saveIntermediateVolumes && probabilisticOutSegs[0]->VerifyRequestedRegion()) {
         fWriterType::Pointer writerf = fWriterType::New();
         writerf->SetFileName(cfgdata.cacheDir + "predicted.tif");
-        writerf->SetInput(probabilisticOutSeg);
+        writerf->SetInput(probabilisticOutSegs[0]);
         writerf->Update();
     } else {
         //TODO what to do when region fails Verify? is return false enough?
@@ -210,7 +453,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
 
     fBinaryThresholdImageFilterType::Pointer thresholdFilter
             = fBinaryThresholdImageFilterType::New();
-    thresholdFilter->SetInput(probabilisticOutSeg);
+    thresholdFilter->SetInput(probabilisticOutSegs[0]);
     thresholdFilter->SetLowerThreshold(lowerThreshold);
     thresholdFilter->SetInsideValue(255);
     thresholdFilter->SetOutsideValue(0);
@@ -223,7 +466,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
         writer->Update();
     }
 
-    outputSegmentation = thresholdFilter->GetOutput();
+    itkVolumeType::Pointer outputSegmentation = thresholdFilter->GetOutput();
 
      if(cfgdata.saveIntermediateVolumes && outputSegmentation->VerifyRequestedRegion()){
          writer->SetFileName(cfgdata.cacheDir + "2" + "thread-outputSegmentation.tif");
@@ -231,9 +474,6 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
          writer->Update();
      }
 
-     ESPINA_SETTINGS(settings);
-     settings.beginGroup("ccboost segmentation");
-     settings.setValue("Channel Hash", QString(cfgdata.train.at(0).featuresRawVolumeImageHash.c_str()));
 
      outputSegmentation->DisconnectPipeline();
 
@@ -245,9 +485,14 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
 
      outputSegmentation->DisconnectPipeline();
 
+     outputSegmentations.push_back(outputSegmentation);
+
+     ESPINA_SETTINGS(settings);
+     settings.beginGroup("ccboost segmentation");
+     settings.setValue("Channel Hash", QString(cfgdata.train.at(0).featuresRawVolumeImageHash.c_str()));
+
      return true;
 }
-
 
 bool CcboostAdapter::automaticCore(const ConfigData<itkVolumeType>& cfgdata,
                           FloatTypeImage::Pointer& probabilisticOutSeg,
@@ -734,55 +979,9 @@ void CcboostAdapter::computeFeatures(const ConfigData<itkVolumeType> cfgData,
        ifstream featureStream(featureFilepath.c_str());
        //TODO check hash to prevent recomputing
        if(!featureStream.good() || cfgData.forceRecomputeFeatures){
-           //TODO do this in a more flexible way
-           int stringPos;
-           if( (stringPos = featureFile.find(std::string("hessOrient-"))) != std::string::npos){
-               float sigma;
-               std::string filename(featureFile.substr(stringPos));
-               std::string matchStr = std::string("hessOrient-s%f-repolarized") + FEATUREEXTENSION;
-               int result = sscanf(filename.c_str(),matchStr.c_str(),&sigma);
-              //FIXME break if error
-               if(result < 0)
-                   qDebug() << "Error scanning feature name " << featureFile.c_str();
 
-               qDebug() << QString("Either you requested recomputing the features, "
-                                   "the current channel is new or has changed or "
-                                   "Hessian Orient Estimate feature not found at "
-                                   "path: %2. Creating with sigma %1").arg(sigma).arg(QString::fromStdString(featureFilepath));
+           computeFeature(cfgDataROI, cfgData.cacheDir, featureFile);
 
-
-               AllEigenVectorsOfHessian2Execute(sigma, cfgDataROI.rawVolumeImage, featureFilepath, EByMagnitude, cfgDataROI.zAnisotropyFactor);
-
-               RepolarizeYVersorWithGradient2Execute(sigma, cfgDataROI.rawVolumeImage, featureFilepath, featureFilepath, cfgDataROI.zAnisotropyFactor);
-
-          } else if ( (stringPos = featureFile.find(std::string("gradient-magnitude"))) != std::string::npos ) {
-               float sigma;
-               std::string filename(featureFile.substr(stringPos));
-               std::string matchStr = std::string("gradient-magnitude-s%f") + FEATUREEXTENSION;
-               int result = sscanf(filename.c_str(),matchStr.c_str(),&sigma);
-               if(result < 0)
-                   qDebug() << "Error scanning feature name " << featureFile.c_str();
-
-               qDebug() << QString("Current  or channel is new or has changed or gradient magnitude feature not found at path: %2. Creating with sigma %1").arg(sigma).arg(QString::fromStdString(featureFilepath));
-
-               GradientMagnitudeImageFilter2Execute(sigma, cfgDataROI.rawVolumeImage, featureFilepath, cfgDataROI.zAnisotropyFactor);
-
-           } else if( (stringPos = featureFile.find(std::string("stensor"))) != std::string::npos ) {
-               float rho,sigma;
-               std::string filename(featureFile.substr(stringPos));
-               std::string matchStr = std::string("stensor-s%f-r%f") + FEATUREEXTENSION;
-               int result = sscanf(filename.c_str(),matchStr.c_str(),&sigma,&rho);
-               if(result < 0)
-                   qDebug() << "Error scanning feature name" << featureFile.c_str();
-
-               qDebug() << QString("Current channel is new or has changed or tensor feature not found at path %3. Creating with rho %1 and sigma %2").arg(rho).arg(sigma).arg(QString::fromStdString(featureFilepath));
-
-               bool sortByMagnitude = true;
-               EigenOfStructureTensorImageFilter2Execute(sigma, rho, cfgDataROI.rawVolumeImage, featureFilepath, sortByMagnitude, cfgDataROI.zAnisotropyFactor );
-
-           } else {
-               qDebug() << QString("feature %1 is not recognized.").arg(featureFile.c_str()).toUtf8();
-           }
        }
     }
 
@@ -790,7 +989,63 @@ void CcboostAdapter::computeFeatures(const ConfigData<itkVolumeType> cfgData,
 //    stateDescription->setTime("");
 }
 
-void CcboostAdapter::addAllFeatures(const ConfigData<itkVolumeType> &cfgData, ROIData &roi ) {
+void CcboostAdapter::computeFeature(const SetConfigData<itkVolumeType> cfgDataROI,
+                                    const std::string cacheDir,
+                                    const std::string featureFile){
+        std::string featureFilepath(cacheDir + featureFile);
+
+        //TODO do this in a more flexible way
+        int stringPos;
+        if( (stringPos = featureFile.find(std::string("hessOrient-"))) != std::string::npos){
+            float sigma;
+            std::string filename(featureFile.substr(stringPos));
+            std::string matchStr = std::string("hessOrient-s%f-repolarized") + FEATUREEXTENSION;
+            int result = sscanf(filename.c_str(),matchStr.c_str(),&sigma);
+           //FIXME break if error
+            if(result < 0)
+                qDebug() << "Error scanning feature name " << featureFile.c_str();
+
+            qDebug() << QString("Either you requested recomputing the features, "
+                                "the current channel is new or has changed or "
+                                "Hessian Orient Estimate feature not found at "
+                                "path: %2. Creating with sigma %1").arg(sigma).arg(QString::fromStdString(featureFilepath));
+
+
+            AllEigenVectorsOfHessian2Execute(sigma, cfgDataROI.rawVolumeImage, featureFilepath, EByMagnitude, cfgDataROI.zAnisotropyFactor);
+
+            RepolarizeYVersorWithGradient2Execute(sigma, cfgDataROI.rawVolumeImage, featureFilepath, featureFilepath, cfgDataROI.zAnisotropyFactor);
+
+       } else if ( (stringPos = featureFile.find(std::string("gradient-magnitude"))) != std::string::npos ) {
+            float sigma;
+            std::string filename(featureFile.substr(stringPos));
+            std::string matchStr = std::string("gradient-magnitude-s%f") + FEATUREEXTENSION;
+            int result = sscanf(filename.c_str(),matchStr.c_str(),&sigma);
+            if(result < 0)
+                qDebug() << "Error scanning feature name " << featureFile.c_str();
+
+            qDebug() << QString("Current  or channel is new or has changed or gradient magnitude feature not found at path: %2. Creating with sigma %1").arg(sigma).arg(QString::fromStdString(featureFilepath));
+
+            GradientMagnitudeImageFilter2Execute(sigma, cfgDataROI.rawVolumeImage, featureFilepath, cfgDataROI.zAnisotropyFactor);
+
+        } else if( (stringPos = featureFile.find(std::string("stensor"))) != std::string::npos ) {
+            float rho,sigma;
+            std::string filename(featureFile.substr(stringPos));
+            std::string matchStr = std::string("stensor-s%f-r%f") + FEATUREEXTENSION;
+            int result = sscanf(filename.c_str(),matchStr.c_str(),&sigma,&rho);
+            if(result < 0)
+                qDebug() << "Error scanning feature name" << featureFile.c_str();
+
+            qDebug() << QString("Current channel is new or has changed or tensor feature not found at path %3. Creating with rho %1 and sigma %2").arg(rho).arg(sigma).arg(QString::fromStdString(featureFilepath));
+
+            bool sortByMagnitude = true;
+            EigenOfStructureTensorImageFilter2Execute(sigma, rho, cfgDataROI.rawVolumeImage, featureFilepath, sortByMagnitude, cfgDataROI.zAnisotropyFactor );
+
+        } else {
+            qDebug() << QString("feature %1 is not recognized.").arg(featureFile.c_str()).toUtf8();
+        }
+}
+
+void CcboostAdapter::addAllFeatures(const ConfigData<itkVolumeType> &cfgData, MultipleROIData::ROIDataPtr roi ) {
 
     //do this first thing tomorrow
     //FIXME //TODO add Orient "feature"
@@ -804,7 +1059,7 @@ void CcboostAdapter::addAllFeatures(const ConfigData<itkVolumeType> &cfgData, RO
 
 void CcboostAdapter::addFeatures(const std::string& cacheDir,
                                  const SetConfigData<itkVolumeType>& cfgDataROI,
-                                 ROIData& roi ) {
+                                 MultipleROIData::ROIDataPtr roi ) {
     // now add channels
     typedef itk::VectorImage<float, 3>  ItkVectorImageType;
     for ( const auto& chanFName: cfgDataROI.otherFeatures )
@@ -818,13 +1073,48 @@ void CcboostAdapter::addFeatures(const std::string& cacheDir,
             reader->Update();
         } catch(std::exception &e)
         {
-            qFatal("Reading feature exception, at: %s", featFName.c_str());
+            std::cerr << "Error reading feature " << featFName << ". Message: " << e.what() << std::endl;
+            continue;
         }
 
         ItkVectorImageType::Pointer img = reader->GetOutput();
 
-
         ItkVectorImageType::SizeType imSize = img->GetLargestPossibleRegion().GetSize();
+
+        unsigned int mWidth = imSize[0];
+        unsigned int mHeight = imSize[1];
+        unsigned int mDepth = imSize[2];
+
+        if ( (mWidth != roi->rawImage.width()) || (mHeight != roi->rawImage.height()) || (mDepth != roi->rawImage.depth()) ) {
+            qDebug("Feature image size differs from raw image: %s. (%dx%dx%d vs %dx%dx%d). Recomputing.",featFName.c_str(), mWidth, mHeight, mDepth,
+                                   roi->rawImage.width(), roi->rawImage.height(), roi->rawImage.depth());
+
+            computeFeature(cfgDataROI, cacheDir, chanFName);
+
+            try {
+                reader->SetFileName( featFName );
+                reader->Modified(); //Since filename (or else) didn't change, we must manually notify the filter that the file changed
+                //reader->UpdateOutputInformation();
+                reader->UpdateLargestPossibleRegion();
+                reader->Update();
+            } catch(std::exception &e){
+                std::cerr << "Error reading feature " << featFName << ". Message: " << e.what() << std::endl;
+                continue;
+            }
+
+            img = reader->GetOutput();
+
+            imSize = img->GetLargestPossibleRegion().GetSize();
+
+            mWidth = imSize[0];
+            mHeight = imSize[1];
+            mDepth = imSize[2];
+
+            if ( (mWidth != roi->rawImage.width()) || (mHeight != roi->rawImage.height()) || (mDepth != roi->rawImage.depth()) )
+                qFatal("Feature image size still differs from raw image: %s. (%dx%dx%d vs %dx%dx%d). Aborting.",featFName.c_str(), mWidth, mHeight, mDepth,
+                       roi->rawImage.width(), roi->rawImage.height(), roi->rawImage.depth());
+        }
+
 
         // we want raw pixel access
         {
@@ -849,24 +1139,18 @@ void CcboostAdapter::addFeatures(const std::string& cacheDir,
 
         }
 
+        unsigned int mComp = img->GetNumberOfComponentsPerPixel();
+
         // reset spacing so that we read pixels directly
         ItkVectorImageType::SpacingType spacing = img->GetSpacing();
         spacing[0] = spacing[1] = spacing[2] = 1.0;
         img->SetSpacing(spacing);
 
-        unsigned int mWidth = imSize[0];
-        unsigned int mHeight = imSize[1];
-        unsigned int mDepth = imSize[2];
-        unsigned int mComp = img->GetNumberOfComponentsPerPixel();
-
-
-        if ( (mWidth != roi.rawImage.width()) || (mHeight != roi.rawImage.height()) || (mDepth != roi.rawImage.depth()) )
-            qFatal("Feature image size differs from raw image: %s", featFName.c_str());
 
         for (unsigned q=0; q < mComp; q++)
         {
             Matrix3D<float> auxImg;
-            auxImg.reallocSizeLike( roi.rawImage );
+            auxImg.reallocSizeLike( roi->rawImage );
 
             // II itself
             IntegralImage<IntegralImagePixelType>	ii;
@@ -897,7 +1181,8 @@ void CcboostAdapter::addFeatures(const std::string& cacheDir,
             if ( strContains("grad") ) chanType = ROIData::ChannelType::GRADIENT;
             if ( strContains("hess") ) chanType = ROIData::ChannelType::HESS_EIGVAL;
 
-            roi.addII( std::move(ii), chanType );
+            roi->
+                    addII( std::move(ii), chanType );
         }
     }
 }
