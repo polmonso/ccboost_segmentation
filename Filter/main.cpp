@@ -230,7 +230,7 @@ int main (int argc, char **argv)
                       arguments.inputVolume,
                       outputVolumeITK,
                       arguments.outfile);
-      } else{
+      } else {
 
           typedef itk::ImageFileReader< itkVolumeType > ReaderType;
            ReaderType::Pointer reader = ReaderType::New();
@@ -305,7 +305,6 @@ int main (int argc, char **argv)
               cfgdata.numPredictRegions = SplitterType::numRegionsFittingInMemory( region.GetSize(),
                                                                                    CcboostAdapter::FREEMEMORYREQUIREDPROPORTIONPREDICT);
 
-              //cfgdata.numPredictRegions++;
 
               SplitterType splitter(region, cfgdata.numPredictRegions, overlap);
 
@@ -359,7 +358,6 @@ int main (int argc, char **argv)
 
           }
 
-
           typedef itk::ImageFileWriter< CcboostAdapter::FloatTypeImage > fWriterType;
           fWriterType::Pointer fwriter = fWriterType::New();
           fwriter->SetFileName(arguments.outfile);
@@ -376,12 +374,11 @@ int main (int argc, char **argv)
               return EXIT_FAILURE;
           }
 
-
           typedef itk::ImageFileWriter< itkVolumeType > WriterType;
-                 WriterType::Pointer writer = WriterType::New();
-                 writer->SetFileName(std::string("binary") + arguments.outfile);
-                 writer->SetInput(outputSegmentation);
-                 writer->Update();
+          WriterType::Pointer writer = WriterType::New();
+          writer->SetFileName(std::string("binary") + arguments.outfile);
+          writer->SetInput(outputSegmentation);
+          writer->Update();
 
       }
 

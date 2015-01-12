@@ -64,7 +64,7 @@ public:
     //TODO add const-correctness
     static bool core(const ConfigData<itkVolumeType>& cfg,
                      FloatTypeImage::Pointer &probabilisticOutSeg,
-                     std::vector<itkVolumeType::Pointer>& outSegList,
+                     std::vector<itkVolumeType::Pointer>& outputSplittedSegList,
                      itkVolumeType::Pointer &outputSegmentation);
 
     static bool testcore(const ConfigData<itkVolumeType>& cfg,
@@ -72,9 +72,17 @@ public:
                          std::vector<itkVolumeType::Pointer>& outSegList,
                          std::vector<itkVolumeType::Pointer>& outputSegmentations);
 
+    /**
+     * @brief core interface with ccboost with automatic postprocessing
+     * @param cfg configuration data
+     * @param probabilisticOutSegs unsplitted, unbinarized probabilistic chunk list
+     * @param outSegList connected component list
+     * @param outputSegmentations unsplitted segmented binarized chunk list
+     * @return true on success false on error
+     */
     static bool core(const ConfigData<itkVolumeType>& cfg,
                          std::vector<FloatTypeImage::Pointer>& probabilisticOutSegs,
-                         std::vector<itkVolumeType::Pointer>& outSegList,
+                         std::vector<itkVolumeType::Pointer>& outputSplittedSegList,
                          std::vector<itkVolumeType::Pointer>& outputSegmentations);
 
     static bool automaticCore(const ConfigData<itkVolumeType>& cfgdata,
