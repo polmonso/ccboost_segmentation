@@ -295,7 +295,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
 
         outputSegmentation->SetSpacing(cfgdata.train.at(0).rawVolumeImage->GetSpacing());
 
-        splitSegmentations(outputSegmentation, outSplittedSegList, cfgdata.saveIntermediateVolumes, cfgdata.cacheDir);
+        splitSegmentations(outputSegmentation, outputSplittedSegList, cfgdata.saveIntermediateVolumes, cfgdata.cacheDir);
 
         outputSegmentation->DisconnectPipeline();
 

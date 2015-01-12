@@ -70,6 +70,8 @@
 #include <itkImageToVTKImageFilter.h>
 #include <itkSmoothingRecursiveGaussianImageFilter.h>
 
+#include <ImageSplitter.h>
+
 using namespace ESPINA;
 using namespace CCB;
 using namespace std;
@@ -238,7 +240,6 @@ void CcboostTask::run()
 
   if(!divideVolume) {
 
-
       SetConfigData<itkVolumeType> trainData;
       SetConfigData<itkVolumeType>::setDefaultSet(trainData);
       trainData.rawVolumeImage = ccboostconfig.originalVolumeImage;
@@ -276,7 +277,7 @@ void CcboostTask::run()
 
       SplitterType trainSplitter(annotatedRegion, ccboostconfig.numPredictRegions, overlap);
 
-      trainSize = trainSplitter.getCropRegions().size();
+      int trainSize = trainSplitter.getCropRegions().size();
 
       for(int i=0; i < trainSize; i++){
 
@@ -288,7 +289,7 @@ void CcboostTask::run()
                   + channelItk->GetSpacing()[1]);
           trainData.rawVolumeImage = trainSplitter.crop(ccboostconfig.originalVolumeImage,
                                                         trainSplitter.getCropRegions().at(i));
-          trainData.groundTruthImage = trainSplitter.crop(inputVolumeGTITK,
+          trainData.groundTruthImage = trainSplitter.crop(segmentedGroundTruth,
                                                           trainSplitter.getCropRegions().at(i));
 
           ccboostconfig.train.push_back(trainData);
@@ -296,24 +297,24 @@ void CcboostTask::run()
       }
 
       //TODO we could reuse if regions match
-      SplitterType testSplitter(annotatedRegion, ccboostconfig.numPredictRegions, overlap);
+      itkVolumeType::RegionType region = ccboostconfig.originalVolumeImage->GetLargestPossibleRegion();
+      SplitterType testSplitter(region, ccboostconfig.numPredictRegions, overlap);
 
-      testSize = testSplitter.getCropRegions().size();
+      int testSize = testSplitter.getCropRegions().size();
 
-      for(int i=trainSize; i < trainSize+testSize; i++){
+      for(int i= 0; i < testSize; i++){
 
-          std::string id = QString::number(i).toStdString();
+          std::string id = QString::number( trainSize + i).toStdString();
 
-          SetConfigData<itkVolumeType> testData(trainData);
+          SetConfigData<itkVolumeType> testData;
           SetConfigData<itkVolumeType>::setDefaultSet(testData, id);
-          trainData.zAnisotropyFactor = 2*channelItk->GetSpacing()[2]/(channelItk->GetSpacing()[0]
+          testData.zAnisotropyFactor = 2*channelItk->GetSpacing()[2]/(channelItk->GetSpacing()[0]
                   + channelItk->GetSpacing()[1]);
-          testData.rawVolumeImage = trainData.rawVolumeImage;
-          testData.orientEstimate = trainData.orientEstimate;
-          testData.rawVolumeImage = testSplitter.crop(cfgdata.originalVolumeImage,
+          testData.rawVolumeImage = ccboostconfig.originalVolumeImage;
+          testData.rawVolumeImage = testSplitter.crop(ccboostconfig.originalVolumeImage,
                                                       testSplitter.getCropRegions().at(i));
-          testData.groundTruthImage = testSplitter.crop(inputVolumeGTITK,
-                                                        testSplitter.getCropRegions().at(i));
+//          testData.groundTruthImage = testSplitter.crop(inputVolumeGTITK,
+//                                                        testSplitter.getCropRegions().at(i));
           ccboostconfig.test.push_back(testData);
       }
   }
@@ -334,45 +335,7 @@ void CcboostTask::run()
 
   //CCBOOST finished
 
-  if(ccboostconfig.saveIntermediateVolumes) {
 
-      std::cout << "Core finished" << std::endl;
-
-      //repaste
-      splitter.pasteCroppedRegions(outputSegmentations, outputSegmentation);
-
-      typedef CcboostAdapter::FloatTypeImage FloatTypeImage;
-      typedef itk::ImageSplitter< FloatTypeImage > FloatSplitterType;
-
-      FloatTypeImage::RegionType fregion(region);
-
-      FloatSplitterType fsplitter(fregion,
-                                  cfgdata.numPredictRegions,
-                                  FloatTypeImage::OffsetType{30,30.0});
-
-      fsplitter.pasteCroppedRegions(probabilisticOutSegs, probOutputSegmentation);
-
-      typedef itk::ImageFileWriter< CcboostAdapter::FloatTypeImage > fWriterType;
-      fWriterType::Pointer fwriter = fWriterType::New();
-      fwriter->SetFileName(arguments.outfile);
-      fwriter->SetInput(probOutputSegmentation);
-
-      typedef itk::ImageFileWriter< itkVolumeType > WriterType;
-      WriterType::Pointer writer = WriterType::New();
-      writer->SetFileName(std::string("binary") + arguments.outfile);
-      writer->SetInput(outputSegmentation);
-
-      try {
-
-          fwriter->Update();
-          writer->Update();
-
-      } catch(itk::ExceptionObject &exp){
-          std::cout << "Warning: Error writing output. what(): " << exp << std::endl;
-      } catch(...) {
-          std::cout << "Warning: Error writing output" << std::endl;
-      }
-  }
 
   qDebug() << outSegList.size();
 
@@ -620,7 +583,6 @@ void CcboostTask::runCore(const ConfigData<itkVolumeType>& ccboostconfig,
              std::vector<itkVolumeType::Pointer>& outputSplittedSegList){
 
     std::vector<itkVolumeType::Pointer> outputSegmentations;
-    CcboostAdapter::FloatTypeImage::Pointer probabilisticOutputSegmentation = CcboostAdapter::FloatTypeImage::New();
     std::vector<CcboostAdapter::FloatTypeImage::Pointer> probabilisticOutputSegmentations;
 
     // modify ITK number of  s for speed up
@@ -650,12 +612,54 @@ void CcboostTask::runCore(const ConfigData<itkVolumeType>& ccboostconfig,
     itk::MultiThreader::SetGlobalDefaultNumberOfThreads( prevITKNumberOfThreads );
 
     try {
-        if(ccboostconfig.saveIntermediateVolumes){
-            typedef itk::ImageFileWriter<CcboostAdapter::FloatTypeImage> FloatWriterType;
-            FloatWriterType::Pointer fwriter = FloatWriterType::New();
+        if(ccboostconfig.saveIntermediateVolumes) {
+
+            std::cout << "Saving predicted data to disk" << std::endl;
+
+            itkVolumeType::Pointer outputSegmentation;
+
+            //FIXME reuse splitter / this will fail if not splitted volume but series of ROIs
+            typedef itk::ImageSplitter< itkVolumeType > SplitterType;
+            itkVolumeType::OffsetType overlap{30,30.0};
+            itkVolumeType::RegionType region = ccboostconfig.originalVolumeImage->GetLargestPossibleRegion();
+            SplitterType testSplitter(region, ccboostconfig.numPredictRegions, overlap);
+
+            //repaste test
+            testSplitter.pasteCroppedRegions(outputSegmentations, outputSegmentation);
+
+            typedef CcboostAdapter::FloatTypeImage FloatTypeImage;
+            typedef itk::ImageSplitter< FloatTypeImage > FloatSplitterType;
+
+            CcboostAdapter::FloatTypeImage::Pointer probabilisticOutputSegmentation = CcboostAdapter::FloatTypeImage::New();
+
+            FloatTypeImage::RegionType fregion(region);
+
+            FloatSplitterType fsplitter(fregion,
+                                        ccboostconfig.numPredictRegions,
+                                        FloatTypeImage::OffsetType{30,30.0});
+
+            fsplitter.pasteCroppedRegions(probabilisticOutputSegmentations, probabilisticOutputSegmentation);
+
+            typedef itk::ImageFileWriter< CcboostAdapter::FloatTypeImage > fWriterType;
+            fWriterType::Pointer fwriter = fWriterType::New();
             fwriter->SetFileName(ccboostconfig.cacheDir + "ccboost-probabilistic-output.tif");
             fwriter->SetInput(probabilisticOutputSegmentation);
-            fwriter->Update();
+
+            typedef itk::ImageFileWriter< itkVolumeType > WriterType;
+            WriterType::Pointer writer = WriterType::New();
+            fwriter->SetFileName(ccboostconfig.cacheDir + "ccboost-binarized-output.tif");
+            writer->SetInput(outputSegmentation);
+
+            try {
+
+                fwriter->Update();
+                writer->Update();
+
+            } catch(itk::ExceptionObject &exp){
+                std::cout << "Warning: Error writing output. what(): " << exp << std::endl;
+            } catch(...) {
+                std::cout << "Warning: Error writing output" << std::endl;
+            }
         }
 
     } catch( itk::ExceptionObject & err ) {
