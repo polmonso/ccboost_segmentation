@@ -107,7 +107,7 @@ namespace ESPINA {
       static void applyEspinaSettings(ConfigData<itkVolumeType> cfgdata);
 
       void runCore(const ConfigData<itkVolumeType>& ccboostconfig,
-                   std::vector<itkVolumeType::Pointer>& outSegList);
+                   std::vector<itkVolumeType::Pointer>& outputSplittedSegList);
     public:
       //TODO espina2. this is a hack to get the segmentations in the filter.
       //Find out how to do it properly

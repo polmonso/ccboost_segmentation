@@ -57,13 +57,13 @@
 
 bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
                           FloatTypeImage::Pointer& probabilisticOutSeg,
-                          std::vector<itkVolumeType::Pointer>& outSegList,
+                          std::vector<itkVolumeType::Pointer>& outputSplittedSegList,
                           itkVolumeType::Pointer& outputSegmentation) {
 
     std::vector<FloatTypeImage::Pointer> probabilisticOutSegs;
     std::vector<itkVolumeType::Pointer> outputSegmentations;
 
-    core(cfgdata, probabilisticOutSegs, outSegList, outputSegmentations);
+    core(cfgdata, probabilisticOutSegs, outputSplittedSegList, outputSegmentations);
 
     probabilisticOutSeg = probabilisticOutSegs.at(0);
     outputSegmentation = outputSegmentations.at(0);
@@ -72,7 +72,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
 
 bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
                           std::vector<FloatTypeImage::Pointer>& probabilisticOutSegs,
-                          std::vector<itkVolumeType::Pointer>& outSegList,
+                          std::vector<itkVolumeType::Pointer>& outputSplittedSegList,
                           std::vector<itkVolumeType::Pointer>& outputSegmentations) {
 #define WORK
 #ifdef WORK
@@ -246,7 +246,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
 
     qDebug() << "output image";
 
-    for(int roiidx; roiidx<cfgdata.test.size(); roiidx++) {
+    for(int roiidx; roiidx < cfgdata.test.size(); roiidx++) {
 
         typedef itk::ImageFileWriter< FloatTypeImage > fWriterType;
         if(cfgdata.saveIntermediateVolumes && probabilisticOutSegs[roiidx]->VerifyRequestedRegion()) {
@@ -295,7 +295,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
 
         outputSegmentation->SetSpacing(cfgdata.train.at(0).rawVolumeImage->GetSpacing());
 
-        splitSegmentations(outputSegmentation, outSegList, cfgdata.saveIntermediateVolumes, cfgdata.cacheDir);
+        splitSegmentations(outputSegmentation, outSplittedSegList, cfgdata.saveIntermediateVolumes, cfgdata.cacheDir);
 
         outputSegmentation->DisconnectPipeline();
 
@@ -722,7 +722,7 @@ void CcboostAdapter::splitSegmentations(const itkVolumeType::Pointer outputSegme
     labelThresholdFilter->SetInsideValue(255);
     labelThresholdFilter->SetOutsideValue(0);
 
-    qDebug("Create ESPina segmentations");
+    qDebug("Create Itk segmentations");
 
     //TODO espina2 ccboostconfig
 //    for(int i=1; i < connected->GetObjectCount() && i < ccboostconfig.maxNumObjects; i++){
