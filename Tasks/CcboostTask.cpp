@@ -171,13 +171,13 @@ void CcboostTask::run()
                                                                    m_groundTruthSegList,
                                                                    m_backgroundGroundTruthSegList);
   //save itk image (volume) as binary/classed volume here
-     WriterType::Pointer writer = WriterType::New();
-     if(ccboostconfig.saveIntermediateVolumes){
-       writer->SetFileName(ccboostconfig.cacheDir + "labelmap.tif");
-       writer->SetInput(segmentedGroundTruth);
-       writer->Update();
-       qDebug() << "labelmap.tif created";
-     }
+  WriterType::Pointer writer = WriterType::New();
+  if(ccboostconfig.saveIntermediateVolumes){
+      writer->SetFileName(ccboostconfig.cacheDir + "labelmap.tif");
+      writer->SetInput(segmentedGroundTruth);
+      writer->Update();
+      qDebug() << "labelmap.tif created";
+  }
 
   //Get bounding box of annotated data
   typedef itk::ImageMaskSpatialObject< 3 > ImageMaskSpatialObjectType;
@@ -310,11 +310,10 @@ void CcboostTask::run()
           SetConfigData<itkVolumeType>::setDefaultSet(testData, id);
           testData.zAnisotropyFactor = 2*channelItk->GetSpacing()[2]/(channelItk->GetSpacing()[0]
                   + channelItk->GetSpacing()[1]);
-          testData.rawVolumeImage = ccboostconfig.originalVolumeImage;
           testData.rawVolumeImage = testSplitter.crop(ccboostconfig.originalVolumeImage,
                                                       testSplitter.getCropRegions().at(i));
-//          testData.groundTruthImage = testSplitter.crop(inputVolumeGTITK,
-//                                                        testSplitter.getCropRegions().at(i));
+          testData.groundTruthImage = testSplitter.crop(segmentedGroundTruth,
+                                                        testSplitter.getCropRegions().at(i));
           ccboostconfig.test.push_back(testData);
       }
   }
@@ -616,7 +615,7 @@ void CcboostTask::runCore(const ConfigData<itkVolumeType>& ccboostconfig,
 
             std::cout << "Saving predicted data to disk" << std::endl;
 
-            itkVolumeType::Pointer outputSegmentation;
+            itkVolumeType::Pointer outputSegmentation = itkVolumeType::New();
 
             //FIXME reuse splitter / this will fail if not splitted volume but series of ROIs
             typedef itk::ImageSplitter< itkVolumeType > SplitterType;
@@ -647,7 +646,7 @@ void CcboostTask::runCore(const ConfigData<itkVolumeType>& ccboostconfig,
 
             typedef itk::ImageFileWriter< itkVolumeType > WriterType;
             WriterType::Pointer writer = WriterType::New();
-            fwriter->SetFileName(ccboostconfig.cacheDir + "ccboost-binarized-output.tif");
+            writer->SetFileName(ccboostconfig.cacheDir + "ccboost-binarized-output.tif");
             writer->SetInput(outputSegmentation);
 
             try {

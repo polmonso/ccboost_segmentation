@@ -184,6 +184,8 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
         Matrix3D<ImagePixelType> img, gt;
 
         img.loadItkImage(testData.rawVolumeImage, true);
+        //FIXME why do we need ground truth on predict?
+#warning why do we need ground truth on predict?
         gt.loadItkImage(testData.groundTruthImage, true);
 
         MultipleROIData::ROIDataPtr roi = std::make_shared<ROIData>();

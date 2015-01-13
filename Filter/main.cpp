@@ -362,9 +362,16 @@ int main (int argc, char **argv)
           fWriterType::Pointer fwriter = fWriterType::New();
           fwriter->SetFileName(arguments.outfile);
           fwriter->SetInput(probOutputSegmentation);
+
+          typedef itk::ImageFileWriter< itkVolumeType > WriterType;
+          WriterType::Pointer writer = WriterType::New();
+          writer->SetFileName(std::string("binary") + arguments.outfile);
+          writer->SetInput(outputSegmentation);
+
           try {
 
               fwriter->Update();
+              writer->Update();
 
           } catch(itk::ExceptionObject &exp){
               std::cout << "Warning: Error writing probabilistic output. what(): " << exp << std::endl;
@@ -373,12 +380,6 @@ int main (int argc, char **argv)
               std::cout << "Warning: Error writing probabilistic output" << std::endl;
               return EXIT_FAILURE;
           }
-
-          typedef itk::ImageFileWriter< itkVolumeType > WriterType;
-          WriterType::Pointer writer = WriterType::New();
-          writer->SetFileName(std::string("binary") + arguments.outfile);
-          writer->SetInput(outputSegmentation);
-          writer->Update();
 
       }
 
