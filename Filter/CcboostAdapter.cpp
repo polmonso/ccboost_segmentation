@@ -120,7 +120,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
 
             Booster adaboostsimple;
             qDebug() << "training";
-            adaboostsimple.train( bdatasimple, 100 );
+            adaboostsimple.train( bdatasimple, 500 );
             qDebug() << "predict";
             Matrix3D<float> predImgsimple;
             adaboostsimple.predictDoublePolarity( &allROIssimple, &predImgsimple );
@@ -166,7 +166,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
 
     TimerRT timerF; timerF.reset();
 
-    adaboost.train( bdata, 100 );
+    adaboost.train( bdata, 500 );
 
     qDebug("train Elapsed: %f", timerF.elapsed());
 
@@ -214,7 +214,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
 
         Matrix3D<float> predImg;
         TimerRT timer; timer.reset();
-        adaboost.predictDoublePolarity( testROI, &predImg );
+        adaboost.predictDoublePolarity<true>( testROI, &predImg );
         //predImg.save("/tmp/test.nrrd");
 
         qDebug("Elapsed: %f", timer.elapsed());
@@ -295,7 +295,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
 
         outputSegmentation->SetSpacing(cfgdata.train.at(0).rawVolumeImage->GetSpacing());
 
-        splitSegmentations(outputSegmentation, outSplittedSegList, cfgdata.saveIntermediateVolumes, cfgdata.cacheDir);
+        splitSegmentations(outputSegmentation, outputSplittedSegList, cfgdata.saveIntermediateVolumes, cfgdata.cacheDir);
 
         outputSegmentation->DisconnectPipeline();
 
@@ -558,7 +558,7 @@ bool CcboostAdapter::automaticCore(const ConfigData<itkVolumeType>& cfgdata,
     //TODO provide a stumped train
     if(!cfgdata.automaticComputation) {
 
-        adaboost.train( bdata, 100 );
+        adaboost.train( bdata, 500 );
 
         qDebug("train Elapsed: %f", timerF.elapsed());
 
