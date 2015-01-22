@@ -273,14 +273,14 @@ int main (int argc, char **argv)
               SetConfigData<itkVolumeType> trainData;
               SetConfigData<itkVolumeType>::setDefaultSet(trainData);
 
-              trainData.zAnisotropyFactor = 5;
+              trainData.zAnisotropyFactor = 2.71296798698;
               trainData.groundTruthImage = inputVolumeGTITK;
               trainData.rawVolumeImage = inputVolumeITK;
               cfgdata.train.push_back(trainData);
 
               SetConfigData<itkVolumeType> testData(trainData);
               SetConfigData<itkVolumeType>::setDefaultSet(testData);
-              testData.zAnisotropyFactor = 5;
+              testData.zAnisotropyFactor = 2.71296798698;
               testData.rawVolumeImage = trainData.rawVolumeImage;
               cfgdata.test.push_back(testData);
 
@@ -298,7 +298,7 @@ int main (int argc, char **argv)
 
               std::cout << region << std::endl;
 
-              itkVolumeType::OffsetType overlap{30,30.0};
+              itkVolumeType::OffsetType overlap{30,30,0};
 
               typedef itk::ImageSplitter< itkVolumeType > SplitterType;
 
@@ -315,7 +315,8 @@ int main (int argc, char **argv)
                   SetConfigData<itkVolumeType> trainData;
                   SetConfigData<itkVolumeType>::setDefaultSet(trainData, id);
                 #warning remove this default setting of zAnisotropyFactor
-                  trainData.zAnisotropyFactor = 5;
+
+                  trainData.zAnisotropyFactor = 2.71296798698;
                   trainData.rawVolumeImage = splitter.crop(cfgdata.originalVolumeImage,
                                                            splitter.getCropRegions().at(i));
                   trainData.groundTruthImage = splitter.crop(inputVolumeGTITK,
@@ -325,7 +326,7 @@ int main (int argc, char **argv)
 
                   SetConfigData<itkVolumeType> testData(trainData);
                   SetConfigData<itkVolumeType>::setDefaultSet(testData, id);
-                  testData.zAnisotropyFactor = 5;
+                  testData.zAnisotropyFactor = 2.71296798698;
                   testData.rawVolumeImage = trainData.rawVolumeImage;
                   testData.orientEstimate = trainData.orientEstimate;
 
@@ -352,7 +353,7 @@ int main (int argc, char **argv)
 
               FloatSplitterType fsplitter(fregion,
                                           cfgdata.numPredictRegions,
-                                          FloatTypeImage::OffsetType{30,30.0});
+                                          FloatTypeImage::OffsetType{30,30,0});
 
               fsplitter.pasteCroppedRegions(probabilisticOutSegs, probOutputSegmentation);
 
