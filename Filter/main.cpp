@@ -197,6 +197,9 @@ int main (int argc, char **argv)
   arguments.verbose = 0;
   arguments.onlypostprocess = CCBOOST;
 
+#warning remove this default setting of zAnisotropyFactor and add it as a parameter
+double zAnisotropyFactor = 2.71296798698;
+
   /* Where the magic happens */
   argp_parse (&argp, argc, argv, 0, 0, &arguments);
 
@@ -273,14 +276,14 @@ int main (int argc, char **argv)
               SetConfigData<itkVolumeType> trainData;
               SetConfigData<itkVolumeType>::setDefaultSet(trainData);
 
-              trainData.zAnisotropyFactor = 2.71296798698;
+              trainData.zAnisotropyFactor = zAnisotropyFactor;
               trainData.groundTruthImage = inputVolumeGTITK;
               trainData.rawVolumeImage = inputVolumeITK;
               cfgdata.train.push_back(trainData);
 
               SetConfigData<itkVolumeType> testData(trainData);
               SetConfigData<itkVolumeType>::setDefaultSet(testData);
-              testData.zAnisotropyFactor = 2.71296798698;
+              testData.zAnisotropyFactor = zAnisotropyFactor;
               testData.rawVolumeImage = trainData.rawVolumeImage;
               cfgdata.test.push_back(testData);
 
@@ -314,9 +317,8 @@ int main (int argc, char **argv)
 
                   SetConfigData<itkVolumeType> trainData;
                   SetConfigData<itkVolumeType>::setDefaultSet(trainData, id);
-                #warning remove this default setting of zAnisotropyFactor
 
-                  trainData.zAnisotropyFactor = 2.71296798698;
+                  trainData.zAnisotropyFactor = zAnisotropyFactor;
                   trainData.rawVolumeImage = splitter.crop(cfgdata.originalVolumeImage,
                                                            splitter.getCropRegions().at(i));
                   trainData.groundTruthImage = splitter.crop(inputVolumeGTITK,
@@ -326,7 +328,7 @@ int main (int argc, char **argv)
 
                   SetConfigData<itkVolumeType> testData(trainData);
                   SetConfigData<itkVolumeType>::setDefaultSet(testData, id);
-                  testData.zAnisotropyFactor = 2.71296798698;
+                  testData.zAnisotropyFactor = zAnisotropyFactor;
                   testData.rawVolumeImage = trainData.rawVolumeImage;
                   testData.orientEstimate = trainData.orientEstimate;
 

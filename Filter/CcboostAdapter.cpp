@@ -79,9 +79,6 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
 
     BoosterInputData::MultipleROIDataPtr allTrainROIs = std::make_shared<MultipleROIData>();
 
-    #warning allTrainROIs->init function doesnt exist?
-    //allTrainROIs->init( cfgdata.train.at(0).zAnisotropyFactor );
-
     for(SetConfigData<itkVolumeType> trainData: cfgdata.train) {
 
         Matrix3D<ImagePixelType> img, gt;
@@ -367,7 +364,6 @@ bool CcboostAdapter::testcore(const ConfigData<itkVolumeType>& cfgdata,
 
     qDebug("train Elapsed: %f", timerF.elapsed());
 
-#warning @Carlos, why was save the model AFTER predict? Any particular reason? otherwise, moving it here
     // save JSON model
       if (!adaboost.saveModelToFile( "/tmp/model.json" ))
           std::cout << "Error saving JSON model" << std::endl;
