@@ -140,6 +140,8 @@ namespace ESPINA
 
     SegmentationAdapterSList createSegmentations(std::vector<itkVolumeType::Pointer>&  predictedSegmentationsList, const QString &categoryName);
 
+    typedef std::shared_ptr<CcboostSegmentation> CcboostSegmentationSPtr;
+
 
     friend class CcboostSegmentationToolGroup;
   };
