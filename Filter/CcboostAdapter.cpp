@@ -170,7 +170,6 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
 
     qDebug("train Elapsed: %f", timerF.elapsed());
 
-#warning @Carlos, why was save the model AFTER predict? Any particular reason? otherwise, moving it here
     // save JSON model
       if (!adaboost.saveModelToFile( "/tmp/model.json" ))
           std::cout << "Error saving JSON model" << std::endl;
@@ -216,7 +215,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
 
         Matrix3D<float> predImg;
         TimerRT timer; timer.reset();
-        adaboost.predictDoublePolarity<true>( testROI, &predImg );
+        adaboost.predictWithFeatureOrdering<true>( testROI, &predImg );
         //predImg.save("/tmp/test.nrrd");
 
         qDebug("Elapsed: %f", timer.elapsed());
