@@ -96,6 +96,7 @@ qt4_wrap_ui (UI_BUILT_SOURCES
   ${ESPINA_INCLUDE}/Support/Widgets/TabularReportEntry.ui
   GUI/Settings/CcboostSegmentationSettings.ui
 #  GUI/FilterInspector/CcboostSegmentationFilterInspector.ui
+  DockWidget/CvlabPanel.ui
 )
 
 QT4_WRAP_CPP(MOC_SOURCES
@@ -107,6 +108,9 @@ QT4_WRAP_CPP(MOC_SOURCES
   GUI/Settings/CcboostSegmentationSettings.h
   GUI/CcboostSegmentationToolGroup.h
 #  GUI/FilterInspector/CcboostSegmentationFilterInspector.h
+  Preview/PreviewSliceRepresentation.h
+  Preview/PreviewWidget.h
+  DockWidget/CvlabPanel.h
 
   OPTIONS -DBOOST_TT_HAS_OPERATOR_HPP_INCLUDED
 )
@@ -128,6 +132,9 @@ set (PLUGIN_SOURCES
 #  GUI/Analysis/SASInformationProxy.cpp
   GUI/CcboostSegmentationToolGroup.cpp
   GUI/Settings/CcboostSegmentationSettings.cpp
+  Preview/PreviewSliceRepresentation.cpp
+  Preview/PreviewWidget.cpp
+  DockWidget/CvlabPanel.cpp
 #  GUI/FilterInspector/CcboostSegmentationFilterInspector.cpp
   ${auxItkFilters}
 )
