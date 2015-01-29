@@ -59,7 +59,7 @@ namespace ESPINA {
       void update();
 
     private:
-      CcboostSegmentationSPtr m_ccboost;
+      CcboostSegmentationPluginSPtr m_ccboost;
       QMap<RenderView *, PreviewSliceRepresentationSPtr> m_representations;
 
       LabelImageType::Pointer m_volume;

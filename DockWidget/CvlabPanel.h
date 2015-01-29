@@ -4,7 +4,7 @@
 
 #include <Support/Widgets/DockWidget.h>
 
-#include "types.h"
+//#include "types.h"
 #include "AutoSegmentManager.h"
 #include <Preview/PreviewWidget.h>
 #include <vector>
@@ -12,7 +12,7 @@
 
 namespace ESPINA
 {
-  namespace RAS
+  namespace CCB
   {
     class LabelWidget;
 
