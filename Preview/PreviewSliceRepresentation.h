@@ -23,7 +23,7 @@
 #include <QObject>
 
 //#include "types.h"
-//s#include "Label.h"
+#include "Label.h"
 
 #include <Core/Utils/Spatial.h>
 #include <GUI/View/View2D.h>

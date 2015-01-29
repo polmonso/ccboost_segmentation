@@ -111,7 +111,7 @@ QT4_WRAP_CPP(MOC_SOURCES
   Preview/PreviewSliceRepresentation.h
   Preview/PreviewWidget.h
   DockWidget/CvlabPanel.h
-
+  Label.h
   OPTIONS -DBOOST_TT_HAS_OPERATOR_HPP_INCLUDED
 )
 
@@ -135,6 +135,7 @@ set (PLUGIN_SOURCES
   Preview/PreviewSliceRepresentation.cpp
   Preview/PreviewWidget.cpp
   DockWidget/CvlabPanel.cpp
+  Label.cpp
 #  GUI/FilterInspector/CcboostSegmentationFilterInspector.cpp
   ${auxItkFilters}
 )

@@ -23,7 +23,7 @@
 #include <GUI/View/View2D.h>
 
 using namespace ESPINA;
-using namespace ESPINA::RAS;
+using namespace ESPINA::CCB;
 
 
 //-----------------------------------------------------------------------------

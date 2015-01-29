@@ -48,14 +48,8 @@ namespace ESPINA
     Q_OBJECT
     Q_INTERFACES(ESPINA::Plugin)
 
-//    class CCBFilterFactory
-//    : public FilterFactory
-//    {
-//        virtual FilterTypeList providedFilters() const;
-//        virtual FilterSPtr createFilter(InputSList inputs, const Filter::Type& filter, SchedulerSPtr scheduler) const throw (Unknown_Filter_Exception);
-//    };
-
   public:
+
     explicit CcboostSegmentationPlugin();
     virtual ~CcboostSegmentationPlugin();
 
@@ -140,11 +134,12 @@ namespace ESPINA
 
     SegmentationAdapterSList createSegmentations(std::vector<itkVolumeType::Pointer>&  predictedSegmentationsList, const QString &categoryName);
 
-    typedef std::shared_ptr<CcboostSegmentation> CcboostSegmentationSPtr;
 
 
     friend class CcboostSegmentationToolGroup;
   };
+
+  typedef std::shared_ptr<CcboostSegmentationPlugin> CcboostSegmentationPluginSPtr;
 
 } // namespace ESPINA
 
