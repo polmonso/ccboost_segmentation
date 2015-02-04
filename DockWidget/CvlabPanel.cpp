@@ -224,7 +224,7 @@ Qt::ItemFlags CvlabPanel::TableModel::flags(const QModelIndex& index) const
 
 //------------------------------------------------------------------------
 //------------------------------------------------------------------------
-CvlabPanel::CvlabPanel(AutoSegmentManager* manager,
+CvlabPanel::CvlabPanel(CcboostSegmentationPlugin* manager,
                                    ModelAdapterSPtr    model,
                                    ViewManagerSPtr     viewManager,
                                    ModelFactorySPtr    factory,
@@ -274,50 +274,9 @@ CvlabPanel::~CvlabPanel()
 //------------------------------------------------------------------------
 void CvlabPanel::reset()
 {
-  if (m_activeMRAS)
-  {
-    if (!activePreviews().isEmpty())
-    {
-      removeActivePreviews();
-    }
-
-    stopDrawingTrainingVolumes();
-
-    removeActiveLabels();
-
-    auto activeMRAS = m_manager->mrasList();
-
-    for (auto mras : activeMRAS)
-    {
-      m_manager->deleteMRAS(mras);
-
-    }
-
-    updateTableView();
-
-    m_activeMRAS = nullptr;
-
-    updateWidgetsState();
-
     m_trainingWidgets.clear();
     m_previews.clear();
   }
-}
-
-//------------------------------------------------------------------------
-void CvlabPanel::changeActiveMRAS(QModelIndex index)
-{
-  bool validIndex = index.isValid();
-
-  MRASSPtr mras;
-
-  if (validIndex)
-  {
-    mras = m_tableModel->mras(index);
-    Q_ASSERT(mras);
-  }
-
-  changeActiveMRAS(mras);
 }
 
 //------------------------------------------------------------------------
@@ -332,74 +291,22 @@ void CvlabPanel::displaySettingsDialog()
 //------------------------------------------------------------------------
 void CvlabPanel::createAutoSegmenter()
 {
-  FeaturesDialog dialog(m_model, this);
-
-  if (dialog.exec() == QDialog::Accepted) {
-
-    m_pendingFeaturesChannel = dialog.channel();
-
-    if (dialog.features() == FeaturesDialog::EXTRACT) {
-      auto scales = dialog.numberOfScales();
-      auto factor = dialog.samplingFactor();
-      auto area   = dialog.samplingArea();
-
-      m_manager->extractFeatures(m_pendingFeaturesChannel, scales, factor, area);
-    }
-    else if (dialog.features() == FeaturesDialog::LOAD)
-    {
-      QApplication::setOverrideCursor(Qt::WaitCursor);
-      m_manager->importFeatures(m_pendingFeaturesChannel);
-      QApplication::restoreOverrideCursor();
-    }
-    else
-    {
-      auto featuresFile = m_manager->featuresFile(m_pendingFeaturesChannel);
-      if (featuresFile.exists())
-      {
-        QApplication::setOverrideCursor(Qt::WaitCursor);
-        m_manager->importFeatures(m_pendingFeaturesChannel, featuresFile);
-        QApplication::restoreOverrideCursor();
-      }
-    }
-  }
 }
 
 //------------------------------------------------------------------------
 void CvlabPanel::deleteAutoSegmenter()
 {
-  if (m_activeMRAS)
-  {
-    if (!activePreviews().isEmpty())
-    {
-      removeActivePreviews();
-    }
-
-    m_manager->deleteMRAS(m_activeMRAS);
-
-    updateTableView();
-
-    //m_trainingWidgets[m_activeMRAS].clear();
-    m_trainingWidgets.remove(m_activeMRAS);
-
-    m_activeMRAS = nullptr;
-
-    updateWidgetsState();
-  }
 }
 
 //------------------------------------------------------------------------
 void CvlabPanel::changePreviewVisibility(bool visible)
 {
-  Q_ASSERT(m_activeMRAS);
+    //assert we have a volume
+//  Q_ASSERT(m_activeMRAS);
 
-  auto previews = m_previews[m_activeMRAS];
-
-  if (!previews.isEmpty())
+  if (!m_preview.isEmpty())
   {
-    for(auto preview : previews)
-    {
-      preview->setVisibility(visible);
-    }
+      m_preview->setVisibility(visible);
 
     m_viewManager->updateViews();
   }
@@ -415,18 +322,13 @@ void CvlabPanel::changePreviewVisibility(bool visible)
 //------------------------------------------------------------------------
 void CvlabPanel::changePreviewOpacity(int opacity)
 {
-  Q_ASSERT(m_activeMRAS);
+    //assert we have a volume
+//  Q_ASSERT(m_activeMRAS);
 
-  auto previews = activePreviews();
-
-  if (!previews.isEmpty())
+  if (!m_preview.isEmpty())
   {
     double alpha = opacity/100.0;
-    for(auto preview : previews)
-    {
-      preview->setOpacity(alpha);
-    }
-
+    m_preview->setOpacity(alpha);
     m_viewManager->updateViews();
   }
 }
@@ -622,163 +524,52 @@ void CvlabPanel::updateProgress(int progress)
   }
 }
 
-//------------------------------------------------------------------------
-void CvlabPanel::onFeaturesChanged()
-{
-  if (m_manager->features(m_pendingFeaturesChannel).Data)
-  {
-    auto mras = m_manager->createMRAS(m_pendingFeaturesChannel);
-
-    m_pendingFeaturesChannel = nullptr;
-
-    auto trainingLabels = mras->trainingLabels();
-
-    if (!trainingLabels.contains(Label::Background()))
-    {
-      trainingLabels.prepend(Label::Background());
-    }
-
-    for (auto label : trainingLabels)
-    {
-      createLabelEntry(mras, label);
-    }
-
-    updateTableView();
-
-    changeActiveMRAS(mras);
-
-    m_gui->autoSegmenterTable->resizeColumnsToContents();
-    m_gui->autoSegmenterTable->resizeRowsToContents();
-    //m_gui->autoSegmenterTable->horizontalHeader()->setResizeMode(QHeaderView::ResizeToContents);
-  }
-}
 
 //------------------------------------------------------------------------
 void CvlabPanel::onActiveChannelChanged()
 {
   bool channelAvailable = m_viewManager->activeChannel() != nullptr;
 
-  m_gui->createAutoSegmenter->setEnabled(channelAvailable);
+  //hide preview?
 }
 
 //------------------------------------------------------------------------
 void CvlabPanel::abort()
 {
-  if (m_activeMRAS)
-  {
-    m_activeMRAS->abort();
 
-    setProcessingStatus(false);
-  }
+    //discard segmentation and destroy data
 }
 
 //------------------------------------------------------------------------
-void CvlabPanel::updateActiveMRASPreview()
+/**
+* @brief CvlabPanel::updatePreview
+*
+* Updates the preview by reloading the Volume
+*
+* @deprecated It is probably unnecessary if we assume there's only one preview
+*             and it is created/destroyed or updated on demand
+*
+*/
+void CvlabPanel::updatePreview()
 {
-  if (m_activeMRAS)
+  //TODO properly check that volume exists?
+  if (volume)
   {
     setProcessingStatus(true);
-
-    LabelList labels;
-    for (auto widget : activeTrainingWidgets())
-    {
-      widget->stopDrawing();
-      labels << widget->label();
-    }
-
-    m_activeMRAS->setTrainingLabels(labels);
-
-    m_timer.start();
-
-    m_activeMRAS->update();
 
     updateActivePreviews();
   }
 }
 
 //------------------------------------------------------------------------
-void CvlabPanel::updateActiveWidgetsState()
-{
-  bool mrasIsActive = m_activeMRAS != nullptr;
-
-  m_gui->setAutoSegmentWidgetsEnabled(mrasIsActive);
-
-  setProcessingStatus(mrasIsActive && m_activeMRAS->isRunning());
-}
-
-//------------------------------------------------------------------------
-void CvlabPanel::updateTrainingWidgetState()
-{
-  int numValidLabels = 0;
-
-  for (auto widget : activeTrainingWidgets())
-  {
-    if (widget->label().trainingVoxelsCount() > 50) ++numValidLabels;
-  }
-
-  bool processing = m_gui->progressBar->isVisible();
-  bool canUpdateSingleTrainer = !processing && numValidLabels > 1;
-  bool canUpdateMultiTrainer  = !processing && numValidLabels > 2;
-
-  m_gui->updateTrainer->setEnabled(canUpdateSingleTrainer);
-  m_gui->SingleTrainer->setEnabled(canUpdateSingleTrainer);
-  m_gui->MultiTrainer ->setEnabled(canUpdateMultiTrainer);
-
-  bool canCreateSegmentations = m_activeMRAS && m_activeMRAS->isRunning()
-                             //&& !m_activeMRAS->isAborted()
-                             && !processing;
-
-  m_gui->createSegmentations->setEnabled(canCreateSegmentations);
-}
-
-//------------------------------------------------------------------------
-void CvlabPanel::stopDrawingTrainingVolumes()
-{
-  for (auto widget : activeTrainingWidgets())
-  {
-    widget->stopDrawing();
-  }
-}
-
-//------------------------------------------------------------------------
 void CvlabPanel::updateWidgetsState()
 {
-  bool mrasRemaining = m_tableModel->rowCount() > 0;
-
-  if (mrasRemaining)
-  {
-    changeActiveMRAS(m_tableModel->index(0, 0));
-  } else {
-    removeActiveLabels();
-  }
+  bool mrasRemaining = m_volume exists;
 
   m_gui->createAutoSegmenter->setEnabled(!m_model->channels().isEmpty());
   m_gui->deleteAutoSegmenter->setEnabled(mrasRemaining);
   updateActiveWidgetsState();
 }
-
-//------------------------------------------------------------------------
-void CvlabPanel::updateUsingSingleRAS()
-{
-  if (m_activeMRAS)
-  {
-    m_activeMRAS->setUsePartitions(false);
-
-    updateActiveMRASPreview();
-  }
-}
-
-//------------------------------------------------------------------------
-void CvlabPanel::updateUsingMultipleRAS()
-{
-  if (m_activeMRAS)
-  {
-    m_activeMRAS->setUsePartitions(true);
-
-    updateActiveMRASPreview();
-  }
-}
-
 
 //------------------------------------------------------------------------
 void CvlabPanel::extractSegmentations()
@@ -792,12 +583,6 @@ void CvlabPanel::extractSegmentations()
 }
 
 //------------------------------------------------------------------------
-void CvlabPanel::onTrainingVolumeChanged()
-{
-  updateTrainingWidgetState();
-}
-
-//------------------------------------------------------------------------
 void CvlabPanel::onFinished()
 {
   setProcessingStatus(false);
@@ -806,198 +591,13 @@ void CvlabPanel::onFinished()
 //------------------------------------------------------------------------
 void CvlabPanel::bindGUISignals()
 {
-  connect(m_gui->autoSegmenterTable, SIGNAL(clicked(QModelIndex)),
-          this,                      SLOT(changeActiveMRAS(QModelIndex)));
-
-  connect(m_gui->settings,           SIGNAL(clicked(bool)),
-          this,                      SLOT(displaySettingsDialog()));
-
-  connect(m_gui->createAutoSegmenter,SIGNAL(clicked(bool)),
-          this,                      SLOT(createAutoSegmenter()));
-
-  connect(m_gui->deleteAutoSegmenter,SIGNAL(clicked(bool)),
-          this,                      SLOT(deleteAutoSegmenter()));
-
   connect(m_gui->previewVisibility,  SIGNAL(toggled(bool)),
           this,                      SLOT(changePreviewVisibility(bool)));
 
   connect(m_gui->previewOpacity,     SIGNAL(valueChanged(int)),
           this,                      SLOT(changePreviewOpacity(int)));
 
-  connect(m_gui->addLabels,          SIGNAL(clicked(bool)),
-          this,                      SLOT(addLabels()));
-
-  connect(m_gui->loadLabels,         SIGNAL(clicked(bool)),
-          this,                      SLOT(loadLabels()));
-
-  connect(m_gui->exportLabels,       SIGNAL(clicked(bool)),
-          this,                      SLOT(exportLabels()));
-
-  connect(m_gui->abortAutoSegmenter, SIGNAL(clicked(bool)),
-          this,                      SLOT(abort()));
-
-  connect(m_gui->SingleTrainer,      SIGNAL(triggered(bool)),
-          this,                      SLOT(updateUsingSingleRAS()));
-
-  connect(m_gui->MultiTrainer,       SIGNAL(triggered(bool)),
-          this,                      SLOT(updateUsingMultipleRAS()));
-
   connect(m_gui->createSegmentations,SIGNAL(clicked(bool)),
           this,                      SLOT(extractSegmentations()));
 
 }
-
-//------------------------------------------------------------------------
-void CvlabPanel::changeActiveMRAS(MRASSPtr mras)
-{
-  if (m_activeMRAS == mras) return;
-
-  if (m_activeMRAS)
-  {
-    disconnect(m_activeMRAS.get(), SIGNAL(progress(int)),
-               this,               SLOT(updateProgress(int)));
-    disconnect(m_activeMRAS.get(), SIGNAL(finished()),
-               this,               SLOT(onFinished()));
-
-    removeActivePreviews();
-
-    removeActiveLabels();
-  }
-
-  m_activeMRAS = mras;
-
-  if (m_activeMRAS)
-  {
-    connect(m_activeMRAS.get(), SIGNAL(progress(int)),
-            this,               SLOT(updateProgress(int)));
-
-    connect(m_activeMRAS.get(), SIGNAL(finished()),
-            this,               SLOT(onFinished()));
-
-    addActivePreviews();
-
-    changePreviewOpacity(m_gui->previewOpacity->value());
-
-    showActiveLabels();
-  }
-
-  updateActiveWidgetsState();
-}
-
-//------------------------------------------------------------------------
-void CvlabPanel::createLabelEntry(MRASSPtr mras, Label label)
-{
-  setTrainingWidget(mras, label, nullptr);
-}
-
-//------------------------------------------------------------------------
-LabelWidget* CvlabPanel::updateLabelControls(MRASSPtr mras, Label label)
-{
-  auto oldWidget = trainingWidget(mras, label);
-
-  if (oldWidget)
-  {
-    label = oldWidget->label();
-
-    delete oldWidget;
-  }
-
-  auto widget = new LabelWidget(label, mras->channel(), m_viewManager, m_undoStack);
-  setTrainingWidget(mras, label, widget);
-
-  connect(widget, SIGNAL(trainingVolumeChanged()),
-          this,   SLOT(onTrainingVolumeChanged()));
-
-  connect(widget, SIGNAL(labelRemoved(Label)),
-          this,   SLOT(removeLabel(Label)));
-
-  return widget;
-}
-
-//------------------------------------------------------------------------
-void CvlabPanel::showLabelControls(MRASSPtr mras, Label label)
-{
-  auto widget = updateLabelControls(m_activeMRAS, label);
-
-  m_gui->labels->addItem(widget, label.name());
-}
-
-//------------------------------------------------------------------------
-bool CvlabPanel::useSelectionForTraining()
-{
-  QMessageBox msg;
-  msg.setWindowTitle(tr("Refined Auto Segmentation"));
-  msg.setText(tr("Do you want to use selected segmentations to train RAS."));
-  msg.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-
-  return msg.exec() == QMessageBox::Yes;
-}
-
-//------------------------------------------------------------------------
-void CvlabPanel::setProcessingStatus(bool processing)
-{
-  m_gui->abortAutoSegmenter->setEnabled(true);
-  m_gui->abortAutoSegmenter->setVisible(processing);
-  m_gui->progressBar       ->setVisible(processing);
-
-  updateTrainingWidgetState();
-}
-
-//------------------------------------------------------------------------
-void CvlabPanel::addActivePreviews()
-{
-  for (auto ras : m_activeMRAS->regularizerAutoSegmenters())
-  {
-    auto preview = PreviewWidgetSPtr{new PreviewWidget(ras)};
-
-    m_viewManager->addWidget(preview);
-    preview->setPreviewVolume(ras->classification());
-    preview->setLabels(ras->trainingLabels());
-
-    addActiveTrainingPreview(preview);
-  }
-}
-
-//------------------------------------------------------------------------
-void CvlabPanel::removeActivePreviews()
-{
-  for (auto preview : activePreviews())
-  {
-    m_viewManager->removeWidget(preview);
-  }
-
-  m_previews[m_activeMRAS].clear();
-}
-
-//------------------------------------------------------------------------
-void CvlabPanel::updateActivePreviews()
-{
-  removeActivePreviews();
-  addActivePreviews();
-}
-
-//------------------------------------------------------------------------
-void CvlabPanel::showActiveLabels()
-{
-  for (auto label : m_trainingWidgets[m_activeMRAS].keys())
-  {
-    showLabelControls(m_activeMRAS, label);
-  }
-}
-
-//------------------------------------------------------------------------
-void CvlabPanel::removeActiveLabels()
-{
-  while (m_gui->labels->count() > 0)
-  {
-    m_gui->labels->removeItem(0);
-  }
-}
-
-//------------------------------------------------------------------------
-void CvlabPanel::updateTableView()
-{
-  m_gui->autoSegmenterTable->setModel(nullptr);
-  m_gui->autoSegmenterTable->setModel(m_tableModel);
-}
-

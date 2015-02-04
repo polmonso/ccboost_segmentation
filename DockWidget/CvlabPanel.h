@@ -22,18 +22,11 @@ namespace ESPINA
       Q_OBJECT
 
       class GUI;
-      class TableModel;
       class AddAutoSegmentationCommand;
       class RemoveAutoSegmentationCommand;
 
-      using MRASSPtr           = MultiRegularizerAutoSegmenterSPtr;
-      using TrainingWidgets    = QMap<Label, LabelWidget *>;
-      using MRASTrainingWigets = QMap<MRASSPtr, TrainingWidgets>;
-      using PreviewSList       = QList<PreviewWidgetSPtr>;
-      using MRASPreviews       = QMap<MRASSPtr, PreviewSList>;
-
     public:
-      explicit CvlabPanel(AutoSegmentManager* manager,
+      explicit CvlabPanel(CcboostSegmentationPlugin* manager,
                                 ModelAdapterSPtr    model,
                                 ViewManagerSPtr     viewManager,
                                 ModelFactorySPtr    factory,
@@ -43,9 +36,7 @@ namespace ESPINA
 
       virtual void reset();
 
-    private slots:
-      void changeActiveMRAS(QModelIndex index);
-
+    private slots:      
       void displaySettingsDialog();
 
       void createAutoSegmenter();
@@ -72,93 +63,37 @@ namespace ESPINA
 
       void abort();
 
-      void updateActiveMRASPreview();
-
-      void updateUsingSingleRAS();
-
-      void updateUsingMultipleRAS();
+      void updatePreview();
 
       void extractSegmentations();
-
-      void onTrainingVolumeChanged();
 
       void onFinished();
 
     private:
       void bindGUISignals();
 
-      void changeActiveMRAS(MRASSPtr mras);
-
-      void addActiveTrainingWidget(const Label& label, LabelWidget* widget)
-      { setTrainingWidget(m_activeMRAS, label, widget); }
-
-      void setTrainingWidget(MRASSPtr mras, const Label& label, LabelWidget* widget)
-      { m_trainingWidgets[mras][label] = widget; }
-
-      TrainingWidgets activeTrainingWidgets() const
-      { return trainingWidgets(m_activeMRAS); }
-
-      TrainingWidgets trainingWidgets(MRASSPtr mras) const
-      { return m_trainingWidgets[mras]; }
-
-      LabelWidget * activeTrainingWidget(const Label& label) const
-      { return trainingWidget(m_activeMRAS, label); }
-
-      LabelWidget * trainingWidget(MRASSPtr mras, const Label& label) const
-      { return m_trainingWidgets[mras][label]; }
-
-
-      void addActiveTrainingPreview(PreviewWidgetSPtr preview)
-      { m_previews[m_activeMRAS] << preview; }
-
-      PreviewSList activePreviews() const
-      { return m_previews[m_activeMRAS]; }
-
-      void createLabelEntry(MRASSPtr mras, Label label);
-
-      LabelWidget *updateLabelControls(MRASSPtr mras, Label label);
-
-      void showLabelControls(MRASSPtr mras, Label label);
-
-      bool useSelectionForTraining();
-
-      void setProcessingStatus(bool processing);
-
-      void addActivePreviews();
-      void removeActivePreviews();
-      void updateActivePreviews();
-
-      void showActiveLabels();
-      void removeActiveLabels();
-
-      void updateTableView();
-
-      void updateActiveWidgetsState();
+      PreviewWidgetSPtr getPreview() const
+      { return m_preview; }
 
       void updateWidgetsState();
 
-      void updateTrainingWidgetState();
-
-      void stopDrawingTrainingVolumes();
-
     private:
-      GUI*        m_gui;
-      TableModel* m_tableModel;
 
-      AutoSegmentManager* m_manager;
+      ItkFloatVolumeTypeSPtr m_volume;
+
+      GUI*        m_gui;
+
+      CcboostSegmentationPlugin* m_manager;
 
       ModelAdapterSPtr m_model;
       ViewManagerSPtr  m_viewManager;
       ModelFactorySPtr m_factory;
       QUndoStack*      m_undoStack;
 
-      MRASSPtr           m_activeMRAS;
-      MRASTrainingWigets m_trainingWidgets;
-      MRASPreviews       m_previews;
+      PreviewWidgetSPtr  m_preview;
 
       ChannelAdapterPtr  m_pendingFeaturesChannel;
 
-      QElapsedTimer m_timer;
     };
   } // namespace RAS
 } // namespace ESPINA

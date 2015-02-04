@@ -33,6 +33,8 @@
 #include <itkChangeInformationImageFilter.h>
 #include <itkImageMaskSpatialObject.h>
 
+#include "DockWidget/CvlabPanel.h"
+
 // ESPINA
 #include <GUI/Model/ModelAdapter.h>
 #include <Core/IO/FetchBehaviour/RasterizedVolumeFromFetchedMeshData.h>
@@ -63,7 +65,7 @@ const QString CVLTAG_PREPEND = QObject::tr("CVL ");
 const QString IMPORTEDTAG_PREPEND = QObject::tr("IMPORTED ");
 
 using namespace ESPINA;
-using namespace CCB;
+using namespace ESPINA::CCB;
 
 //-----------------------------------------------------------------------------
 CcboostSegmentationPlugin::CcboostSegmentationPlugin()
@@ -159,7 +161,12 @@ QList<ToolGroup *> CcboostSegmentationPlugin::toolGroups() const
 //-----------------------------------------------------------------------------
 QList<DockWidget *> CcboostSegmentationPlugin::dockWidgets() const
 {
-  return QList<DockWidget *>();
+  return QList<DockWidget *> docks;
+
+  //FIXME use a manager or a pointer to the output instead of passing the this pointer
+  docks << new CvlabPanel(this, m_model, m_viewManager, m_factory, m_undoStack);
+
+  return docks;
 }
 
 //-----------------------------------------------------------------------------
