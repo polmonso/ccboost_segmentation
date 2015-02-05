@@ -39,7 +39,8 @@ namespace ESPINA {
     {
       Q_OBJECT
     public:
-      explicit PreviewWidget(CcboostSegmentationSPtr ccboost);
+      //explicit PreviewWidget(CcboostSegmentationSPtr ccboost);
+      explicit PreviewWidget(CcboostSegmentationPluginSPtr ccboost);
 
       virtual void registerView(RenderView* view);
 
@@ -48,7 +49,7 @@ namespace ESPINA {
       virtual void setEnabled(bool enable);
 
     public slots:
-      void setPreviewVolume(LabelImageType::Pointer volume);
+      void setPreviewVolume(CcboostAdapter::FloatTypeImage::Pointer volume);
 
       void setLabels(const LabelList& labels);
 
@@ -62,7 +63,7 @@ namespace ESPINA {
       CcboostSegmentationPluginSPtr m_ccboost;
       QMap<RenderView *, PreviewSliceRepresentationSPtr> m_representations;
 
-      LabelImageType::Pointer m_volume;
+      CcboostAdapter::FloatTypeImage::Pointer m_volume;
     };
 
     using PreviewWidgetSPtr = std::shared_ptr<PreviewWidget>;

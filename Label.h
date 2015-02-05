@@ -1,6 +1,6 @@
 
-#ifndef ESPINA_RAS_LABEL_H
-#define ESPINA_RAS_LABEL_H
+#ifndef ESPINA_CCB_LABEL_H
+#define ESPINA_CCB_LABEL_H
 
 #include <QColor>
 #include <GUI/Model/CategoryAdapter.h>

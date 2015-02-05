@@ -135,7 +135,6 @@ namespace ESPINA
     SegmentationAdapterSList createSegmentations(std::vector<itkVolumeType::Pointer>&  predictedSegmentationsList, const QString &categoryName);
 
 
-
     friend class CcboostSegmentationToolGroup;
   };
 

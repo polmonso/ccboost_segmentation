@@ -5,7 +5,7 @@
 #include <Support/Widgets/DockWidget.h>
 
 //#include "types.h"
-#include "AutoSegmentManager.h"
+#include "CcboostSegmentationPlugin.h"
 #include <Preview/PreviewWidget.h>
 #include <vector>
 #include <QElapsedTimer>
@@ -14,16 +14,12 @@ namespace ESPINA
 {
   namespace CCB
   {
-    class LabelWidget;
-
     class CvlabPanel
     : public DockWidget
     {
       Q_OBJECT
 
       class GUI;
-      class AddAutoSegmentationCommand;
-      class RemoveAutoSegmentationCommand;
 
     public:
       explicit CvlabPanel(CcboostSegmentationPlugin* manager,
@@ -37,8 +33,6 @@ namespace ESPINA
       virtual void reset();
 
     private slots:      
-      void displaySettingsDialog();
-
       void createAutoSegmenter();
 
       void deleteAutoSegmenter();
@@ -46,14 +40,6 @@ namespace ESPINA
       void changePreviewVisibility(bool value);
 
       void changePreviewOpacity(int opacity);
-
-      void addLabels();
-
-      void loadLabels();
-
-      void exportLabels();
-
-      void removeLabel(Label label);
 
       void updateProgress(int progress);
 
@@ -75,11 +61,9 @@ namespace ESPINA
       PreviewWidgetSPtr getPreview() const
       { return m_preview; }
 
-      void updateWidgetsState();
-
     private:
 
-      ItkFloatVolumeTypeSPtr m_volume;
+      CcboostAdapter::FloatTypeImage::Pointer m_volume;
 
       GUI*        m_gui;
 
@@ -94,6 +78,7 @@ namespace ESPINA
 
       ChannelAdapterPtr  m_pendingFeaturesChannel;
 
+      QElapsedTimer m_timer;
     };
   } // namespace RAS
 } // namespace ESPINA

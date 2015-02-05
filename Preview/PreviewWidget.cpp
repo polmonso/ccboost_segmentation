@@ -25,9 +25,8 @@
 using namespace ESPINA;
 using namespace ESPINA::CCB;
 
-
 //-----------------------------------------------------------------------------
-PreviewWidget::PreviewWidget(CcboostSegmentationSPtr ccboost)
+PreviewWidget::PreviewWidget(CcboostSegmentationPluginSPtr ccboost)
 : m_ccboost(ccboost)
 {
 }
@@ -44,7 +43,7 @@ void PreviewWidget::registerView(RenderView* view)
     if (Plane::XY == view2D->plane())
     {
       connect(view2D,      SIGNAL(sliceChanged(Plane,Nm)),
-              m_ras.get(), SLOT(onSliceChanged(Plane,Nm)));
+              m_ccboost.get(), SLOT(onSliceChanged(Plane,Nm)));
     }
   }
 }
@@ -63,7 +62,7 @@ void PreviewWidget::unregisterView(RenderView* view)
       if (Plane::XY == view2D->plane())
       {
         disconnect(view2D,      SIGNAL(sliceChanged(Plane,Nm)),
-                   m_ras.get(), SLOT(onSliceChanged(Plane,Nm)));
+                   m_ccboost.get(), SLOT(onSliceChanged(Plane,Nm)));
       }
     }
   }
@@ -76,7 +75,7 @@ void PreviewWidget::setEnabled(bool enable)
 }
 
 //-----------------------------------------------------------------------------
-void PreviewWidget::setPreviewVolume(LabelImageType::Pointer volume)
+void PreviewWidget::setPreviewVolume(CcboostAdapter::FloatTypeImage::Pointer volume)
 {
   for(auto representation : m_representations)
   {
