@@ -161,7 +161,7 @@ QList<ToolGroup *> CcboostSegmentationPlugin::toolGroups() const
 //-----------------------------------------------------------------------------
 QList<DockWidget *> CcboostSegmentationPlugin::dockWidgets() const
 {
-  return QList<DockWidget *> docks;
+  QList<DockWidget *> docks;
 
   //FIXME use a manager or a pointer to the output instead of passing the this pointer
   docks << new CvlabPanel(this, m_model, m_viewManager, m_factory, m_undoStack);
