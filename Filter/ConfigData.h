@@ -94,6 +94,9 @@ public:
         TPQuantile = 0.1;
         FPQuantile = 0.01;
 
+        gtNegativeLabel = 128;
+        gtPositiveLabel = 255;
+
         // number of adaboost stumps (recommended >= 1000, but in general 400 does well enough)
         numStumps = 500;
 
@@ -140,6 +143,9 @@ public:
     // used for thresholding, see QuantilePostLearnFunctor class
     float TPQuantile, FPQuantile;
 
+    int gtNegativeLabel;
+    int gtPositiveLabel;
+
     unsigned int numStumps;
     std::string outFileName;
 
@@ -166,6 +172,9 @@ public:
 
         ccConfig.TPQuantile = 0.1;
         ccConfig.FPQuantile = 0.01;
+
+        ccConfig.gtNegativeLabel = 128;
+        ccConfig.gtPositiveLabel = 255;
 
         // number of adaboost stumps (recommended >= 1000, but in general 400 does well enough)
         ccConfig.numStumps = 500;

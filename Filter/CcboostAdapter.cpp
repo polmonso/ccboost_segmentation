@@ -88,7 +88,9 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
         img.loadItkImage(trainData.rawVolumeImage, true);
         gt.loadItkImage(trainData.groundTruthImage, true);
 
-        MultipleROIData::ROIDataPtr roi = std::make_shared<ROIData>();;
+        MultipleROIData::ROIDataPtr roi = std::make_shared<ROIData>();
+        roi->setGTNegativeSampleLabel(cfgdata.gtNegativeLabel);
+        roi->setGTPositiveSampleLabel(cfgdata.gtPositiveLabel);
         roi->init( img.data(), gt.data(), 0, 0, img.width(), img.height(), img.depth(), cfgdata.train.at(0).zAnisotropyFactor );
 
         // raw image integral image
@@ -181,11 +183,11 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
 
         img.loadItkImage(testData.rawVolumeImage, true);
         //FIXME why do we need ground truth on predict?
-#warning why do we need ground truth on predict?
-        gt.loadItkImage(testData.groundTruthImage, true);
+//#warning why do we need ground truth on predict?
+//        gt.loadItkImage(testData.groundTruthImage, true);
 
         MultipleROIData::ROIDataPtr roi = std::make_shared<ROIData>();
-        roi->init( img.data(), gt.data(), 0, 0, img.width(), img.height(), img.depth(), cfgdata.train.at(0).zAnisotropyFactor );
+        roi->init( img.data(), 0, 0, 0, img.width(), img.height(), img.depth(), cfgdata.train.at(0).zAnisotropyFactor );
 
         // raw image integral image
         {
