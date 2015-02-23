@@ -92,12 +92,17 @@ namespace ESPINA
         return m_scheduler;
     }
 
+    SegmentationAdapterSList createSegmentations(std::vector<itkVolumeType::Pointer>&  predictedSegmentationsList, const QString &categoryName);
+
   public slots:
     void segmentationsAdded(SegmentationAdapterSList segmentations);
     void finishedTask();
     void finishedImportTask();
     void publishMsg(QString msg);
     void questionContinue(QString msg);
+
+  signals:
+    void predictionChanged(QString volumeFilename);
 
   private:
     struct Data2
@@ -131,9 +136,6 @@ namespace ESPINA
 
     QMap<CCB::ImportTaskPtr, struct ImportData> m_executingImportTasks;
     QMap<CCB::ImportTaskPtr, struct ImportData> m_finishedImportTasks;
-
-    SegmentationAdapterSList createSegmentations(std::vector<itkVolumeType::Pointer>&  predictedSegmentationsList, const QString &categoryName);
-
 
     friend class CcboostSegmentationToolGroup;
   };

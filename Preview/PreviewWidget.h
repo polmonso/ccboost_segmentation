@@ -40,7 +40,7 @@ namespace ESPINA {
       Q_OBJECT
     public:
       //explicit PreviewWidget(CcboostSegmentationSPtr ccboost);
-      explicit PreviewWidget(CcboostSegmentationPluginSPtr ccboost);
+      explicit PreviewWidget();
 
       virtual void registerView(RenderView* view);
 
@@ -51,9 +51,9 @@ namespace ESPINA {
     public slots:
       void setPreviewVolume(CcboostAdapter::FloatTypeImage::Pointer volume);
 
-      void setLabels(const LabelList& labels);
-
       void setOpacity(float opacity); // opacity in [0.0, 1.0].
+
+      void setThreshold(float threshold); // threshold in [0.0, 1.0].
 
       void setVisibility(bool value);
 

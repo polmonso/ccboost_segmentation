@@ -64,6 +64,7 @@ namespace ESPINA
     void changeSynapseFeaturesPath(QString);
     void openDirectoryDialog();
     void changeAutomaticComputation(bool);
+    void changeUsePreview(bool value);
 
   private:
     int m_minCCSize;

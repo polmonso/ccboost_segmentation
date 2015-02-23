@@ -291,8 +291,6 @@ void CcboostSegmentationPlugin::createImportTask(){
 
     std::string file = fileDialog.selectedFiles().first().toStdString();
 
-
-
      SchedulerSPtr scheduler = getScheduler();
      CCB::ImportTaskSPtr importTask{new CCB::ImportTask(channel, scheduler)};
      importTask.get()->filename = file;
@@ -416,6 +414,7 @@ void CcboostSegmentationPlugin::questionContinue(QString msg){
 void CcboostSegmentationPlugin::finishedTask()
 {
 
+
     CcboostTaskPtr ccboostTask = dynamic_cast<CcboostTaskPtr>(sender());
     disconnect(ccboostTask, SIGNAL(finished()), this, SLOT(finishedTask()));
 
@@ -424,22 +423,28 @@ void CcboostSegmentationPlugin::finishedTask()
 
     m_executingTasks.remove(ccboostTask);
 
-    //if everyone did not finish yet, wait.
-    if (!m_executingTasks.empty())
-        return;
+    //we don't consider having several runs at the same time.
+    assert(m_finishedTasks.size() == 1);
+    assert(m_executingTasks.size() == 0);
+//    //if everyone did not finish yet, wait.
+//    if (!m_executingTasks.empty())
+//        return;
 
     // maybe all tasks have been aborted.
     if(m_finishedTasks.empty())
         return;
 
-    m_undoStack->beginMacro("Create Synaptic ccboost segmentations");
+    if(ccboostTask->ccboostconfig.usePreview){
+        emit predictionChanged(QString::fromStdString(ccboostTask->ccboostconfig.cacheDir + ccboostTask->ccboostconfig.probabilisticOutputFilename));
+    } else {
 
-    auto classification = m_model->classification();
-    SegmentationAdapterSList createdSegmentations;
-    for(CCB::CcboostTaskPtr ccbtask: m_finishedTasks.keys())
-    {
+        m_undoStack->beginMacro("Create Synaptic ccboost segmentations");
+
+        SegmentationAdapterSList createdSegmentations;
+        //    for(CCB::CcboostTaskPtr ccbtask: m_finishedTasks.keys())
+        //    {
         //FIXME createSegmentations removes one. makes sense on import, but not here.
-        createdSegmentations = createSegmentations(ccbtask->predictedSegmentationsList, CVL);
+        createdSegmentations = createSegmentations(ccboostTask->predictedSegmentationsList, CVL);
         int i = 1;
         for(auto segmentation: createdSegmentations){
 
@@ -452,9 +457,9 @@ void CcboostSegmentationPlugin::finishedTask()
 
         }
 
+        //    }
+        m_undoStack->endMacro();
     }
-    m_undoStack->endMacro();
-
     //FIXME TODO do I need this?
     //m_viewManager->updateSegmentationRepresentations(createdSegmentations);
     m_viewManager->updateViews();

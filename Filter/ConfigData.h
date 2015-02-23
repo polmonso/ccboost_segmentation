@@ -103,6 +103,8 @@ public:
         // output base file name. Output files will have this as the first part of their name
         outFileName = "substack";
 
+        probabilisticOutputFilename = "probabilisticOutputVolume.tif";
+        usePreview = true;
 
         //TODO turn back to not saving
         saveIntermediateVolumes = true;
@@ -154,6 +156,7 @@ public:
     
     bool saveIntermediateVolumes;
     bool forceRecomputeFeatures;
+    bool usePreview;
     bool automaticComputation;
 
     unsigned int numPredictRegions;
@@ -165,6 +168,8 @@ public:
     std::string cacheDir;
 
     std::string rawVolume;
+
+    std::string probabilisticOutputFilename;
 
 public:
     static void setDefault(ConfigData& ccConfig){
@@ -182,10 +187,10 @@ public:
         // output base file name. Output files will have this as the first part of their name
         ccConfig.outFileName = "substack";
 
-
         //TODO turn back to not saving
         ccConfig.saveIntermediateVolumes = true;
         ccConfig.forceRecomputeFeatures = false;
+        ccConfig.usePreview = true;
         ccConfig.minComponentSize = 250;
         ccConfig.maxNumObjects = 200;
 
@@ -197,6 +202,8 @@ public:
         ccConfig.svoxCubeness = 16;//16;
 
         ccConfig.rawVolume = "ccboostcache";
+
+        ccConfig.probabilisticOutputFilename = "probabilisticOutputVolume.tif";
 
         //std::string featuresPath = "/home/monso/code/data/synapse_features/";
         //FIXME architecture dependent--> add portability

@@ -59,9 +59,9 @@ namespace ESPINA {
 
       void setPreviewVolume(LabelImageType::Pointer volume);
 
-      void setLabels(const LabelList & labels);
-
       void setOpacity(float opacity);
+
+      void setThreshold(float threshold);
 
       void setVisibility(bool value);
 
@@ -77,7 +77,10 @@ namespace ESPINA {
       void updateRegion();
 
     private:
-      using ExtractFilterType       = itk::ExtractImageFilter<LabelImageType, itk::Image<unsigned int, 2>>;
+      typedef itk::BinaryThresholdImageFilter <LabelImageType, itkVolumeType>
+                  ThresholdImageFilterType;
+
+      using ExtractFilterType       = itk::ExtractImageFilter<itkVolumeType, itk::Image<unsigned int, 2>>;
       using Itk2vtkFilterType       = itk::ImageToVTKImageFilter<itk::Image<unsigned int, 2>>;
       using LUTSPtr                 = vtkSmartPointer<vtkLookupTable>;
       using vtkImageMapToColorsSPtr = vtkSmartPointer<vtkImageMapToColors>;
@@ -85,15 +88,17 @@ namespace ESPINA {
       View2D* m_view;
 
       float m_opacity;
+      float m_threshold;
+      float m_probabilityMaxValue;
+      float m_probabilityMinValue;
       bool  m_isVisible;
-
-      QList<Label> m_labelList;
 
       // vtkTextActor* m_textActor;
       vtkImageActor*          m_imageActor;
       vtkVolume*              m_vtkVolume;
       LabelImageType::Pointer m_volume;
 
+      ThresholdImageFilterType::Pointer m_thresholdFilter;
       ExtractFilterType::Pointer m_extractFilter;
       Itk2vtkFilterType::Pointer m_itk2vtk;
       LUTSPtr                    m_lut;

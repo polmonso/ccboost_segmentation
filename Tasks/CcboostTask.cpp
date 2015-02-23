@@ -271,9 +271,11 @@ void CcboostTask::run()
 
       typedef itk::ImageSplitter< itkVolumeType > SplitterType;
 
-
+// We have a better memory estimator in this class.
 //      cfgdata.numPredictRegions = SplitterType::numRegionsFittingInMemory( region.GetSize(),
 //                                                                           CcboostAdapter::FREEMEMORYREQUIREDPROPORTIONPREDICT);
+
+      std::cout << "Train pieces: " << std::endl;
 
       SplitterType trainSplitter(annotatedRegion, ccboostconfig.numPredictRegions, overlap);
 
@@ -295,6 +297,9 @@ void CcboostTask::run()
           ccboostconfig.train.push_back(trainData);
 
       }
+
+
+      std::cout << "Test pieces: " << std::endl;
 
       //TODO we could reuse if regions match
       itkVolumeType::RegionType region = ccboostconfig.originalVolumeImage->GetLargestPossibleRegion();
@@ -326,15 +331,13 @@ void CcboostTask::run()
   //CCBOOST here
     //TODO add const-correctness
   std::vector<itkVolumeType::Pointer> outSegList;
-  ccboostconfig.saveIntermediateVolumes = true;
+
   runCore(ccboostconfig, outSegList);
 
   if(!canExecute())
       return;
 
   //CCBOOST finished
-
-
 
   qDebug() << outSegList.size();
 
@@ -581,6 +584,9 @@ void CcboostTask::applyEspinaSettings(ConfigData<itkVolumeType> cfgdata){
 void CcboostTask::runCore(const ConfigData<itkVolumeType>& ccboostconfig,
              std::vector<itkVolumeType::Pointer>& outputSplittedSegList){
 
+//#warning quick return patchs
+//    return;
+
     std::vector<itkVolumeType::Pointer> outputSegmentations;
     std::vector<CcboostAdapter::FloatTypeImage::Pointer> probabilisticOutputSegmentations;
 
@@ -611,7 +617,8 @@ void CcboostTask::runCore(const ConfigData<itkVolumeType>& ccboostconfig,
     itk::MultiThreader::SetGlobalDefaultNumberOfThreads( prevITKNumberOfThreads );
 
     try {
-        if(ccboostconfig.saveIntermediateVolumes) {
+        //FIXME at the moment we are loading the probabilistic volume on the preview
+        //if(ccboostconfig.saveIntermediateVolumes) {
 
             std::cout << "Saving predicted data to disk" << std::endl;
 
@@ -641,7 +648,8 @@ void CcboostTask::runCore(const ConfigData<itkVolumeType>& ccboostconfig,
 
             typedef itk::ImageFileWriter< CcboostAdapter::FloatTypeImage > fWriterType;
             fWriterType::Pointer fwriter = fWriterType::New();
-            fwriter->SetFileName(ccboostconfig.cacheDir + "ccboost-probabilistic-output.tif");
+            fwriter->SetFileName(ccboostconfig.cacheDir + ccboostconfig.probabilisticOutputFilename);
+            std::cout << "Saving probabilistic volume at " <<  QFileInfo(QString::fromStdString(ccboostconfig.cacheDir + ccboostconfig.probabilisticOutputFilename)).absoluteFilePath() << std::endl;
             fwriter->SetInput(probabilisticOutputSegmentation);
 
             typedef itk::ImageFileWriter< itkVolumeType > WriterType;
@@ -659,7 +667,7 @@ void CcboostTask::runCore(const ConfigData<itkVolumeType>& ccboostconfig,
             } catch(...) {
                 std::cout << "Warning: Error writing output" << std::endl;
             }
-        }
+        //}
 
     } catch( itk::ExceptionObject & err ) {
         // restore default number of threads

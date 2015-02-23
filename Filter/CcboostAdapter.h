@@ -45,6 +45,8 @@ public:
 
     static void postprocessing(const ConfigData<itkVolumeType> &cfgData, itkVolumeType::Pointer& outputSegmentation);
 
+    static void postprocessing(itkVolumeType::Pointer& outputSegmentation, double zAnisotropyFactor, bool saveIntermediateVolumes = false, std::string cacheDir = ".");
+
     static void removeSmallComponents(itk::Image<unsigned char, 3>::Pointer & segmentation,
                                int minCCSize = 1000,
                                int threshold = 128);

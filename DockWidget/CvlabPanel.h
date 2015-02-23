@@ -9,6 +9,7 @@
 #include <Preview/PreviewWidget.h>
 #include <vector>
 #include <QElapsedTimer>
+#include "../Filter/ConfigData.h"
 
 namespace ESPINA
 {
@@ -23,7 +24,7 @@ namespace ESPINA
 
     public:
       explicit CvlabPanel(CcboostSegmentationPlugin* manager,
-                                ModelAdapterSPtr    model,
+                          ModelAdapterSPtr    model,
                                 ViewManagerSPtr     viewManager,
                                 ModelFactorySPtr    factory,
                                 QUndoStack*         undoStack,
@@ -32,18 +33,22 @@ namespace ESPINA
 
       virtual void reset();
 
+      void setVolume(QFileInfo volumeFile);
+
     private slots:      
       void createAutoSegmenter();
 
       void deleteAutoSegmenter();
 
+      void openOverlay();
+
       void changePreviewVisibility(bool value);
 
       void changePreviewOpacity(int opacity);
 
-      void updateProgress(int progress);
+      void changePreviewThreshold(int pthreshold);
 
-      void onFeaturesChanged();
+      void volumeOverlayChanged(QString volumeFilePath);
 
       void onActiveChannelChanged();
 
@@ -53,7 +58,7 @@ namespace ESPINA
 
       void extractSegmentations();
 
-      void onFinished();
+      void onFinished();      
 
     private:
       void bindGUISignals();
@@ -62,12 +67,10 @@ namespace ESPINA
       { return m_preview; }
 
     private:
-
+      CcboostSegmentationPlugin* m_manager;
       CcboostAdapter::FloatTypeImage::Pointer m_volume;
 
       GUI*        m_gui;
-
-      CcboostSegmentationPlugin* m_manager;
 
       ModelAdapterSPtr m_model;
       ViewManagerSPtr  m_viewManager;
@@ -78,7 +81,8 @@ namespace ESPINA
 
       ChannelAdapterPtr  m_pendingFeaturesChannel;
 
-      QElapsedTimer m_timer;
+      float m_threshold;
+
     };
   } // namespace RAS
 } // namespace ESPINA

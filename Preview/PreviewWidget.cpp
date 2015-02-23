@@ -26,8 +26,7 @@ using namespace ESPINA;
 using namespace ESPINA::CCB;
 
 //-----------------------------------------------------------------------------
-PreviewWidget::PreviewWidget(CcboostSegmentationPluginSPtr ccboost)
-: m_ccboost(ccboost)
+PreviewWidget::PreviewWidget()
 {
 }
 
@@ -40,11 +39,6 @@ void PreviewWidget::registerView(RenderView* view)
 
     m_representations[view] = PreviewSliceRepresentationSPtr{new PreviewSliceRepresentation(view2D)};
 
-    if (Plane::XY == view2D->plane())
-    {
-      connect(view2D,      SIGNAL(sliceChanged(Plane,Nm)),
-              m_ccboost.get(), SLOT(onSliceChanged(Plane,Nm)));
-    }
   }
 }
 
@@ -54,17 +48,6 @@ void PreviewWidget::unregisterView(RenderView* view)
   if (m_representations.contains(view))
   {
     m_representations.remove(view);
-
-    if (isView2D(view))
-    {
-      auto view2D = view2D_cast(view);
-
-      if (Plane::XY == view2D->plane())
-      {
-        disconnect(view2D,      SIGNAL(sliceChanged(Plane,Nm)),
-                   m_ccboost.get(), SLOT(onSliceChanged(Plane,Nm)));
-      }
-    }
   }
 }
 
@@ -84,20 +67,20 @@ void PreviewWidget::setPreviewVolume(CcboostAdapter::FloatTypeImage::Pointer vol
 }
 
 //-----------------------------------------------------------------------------
-void PreviewWidget::setLabels(const LabelList& labels)
-{
-  for(auto representation : m_representations)
-  {
-    representation->setLabels(labels);
-  }
-}
-
-//-----------------------------------------------------------------------------
 void PreviewWidget::setOpacity(float opacity)
 {
   for(auto representation : m_representations)
   {
       representation->setOpacity(opacity);
+  }
+}
+
+//-----------------------------------------------------------------------------
+void PreviewWidget::setThreshold(float threshold)
+{
+  for(auto representation : m_representations)
+  {
+      representation->setThreshold(threshold);
   }
 }
 

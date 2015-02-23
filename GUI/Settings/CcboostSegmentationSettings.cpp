@@ -65,9 +65,14 @@ namespace ESPINA
        settings.setValue("Force Recompute Features", m_settingsConfigData.forceRecomputeFeatures);
 
     if (settings.contains("Save Intermediate Volumes"))
-      m_settingsConfigData.saveIntermediateVolumes = settings.value("Save Intermediate Volumes").toBool();
+        m_settingsConfigData.saveIntermediateVolumes = settings.value("Save Intermediate Volumes").toBool();
     else
-      settings.setValue("Save Intermediate Volumes", m_settingsConfigData.saveIntermediateVolumes);
+        settings.setValue("Save Intermediate Volumes", m_settingsConfigData.saveIntermediateVolumes);
+
+    if (settings.contains("Use Preview"))
+        m_settingsConfigData.usePreview = settings.value("Use Preview").toBool();
+    else
+        settings.setValue("Use Preview", m_settingsConfigData.usePreview);
 
     if (settings.contains("Minimum synapse size (voxels)"))
        m_minCCSize = settings.value("Minimum synapse size (voxels)").toInt();
@@ -116,6 +121,7 @@ namespace ESPINA
 
     m_modified = false;
     automaticComputation->setChecked(m_settingsConfigData.automaticComputation);
+    usePreview->setChecked(m_settingsConfigData.usePreview);
     minCCSize->setValue(m_minCCSize);
     maxNumObj->setValue(m_maxNumObjects);
     numStumps->setValue(m_settingsConfigData.numStumps);
@@ -151,7 +157,9 @@ namespace ESPINA
     connect(chooseFeaturesDirectoryButton, SIGNAL(clicked()),
                   this, SLOT(openDirectoryDialog()));
     connect(automaticComputation, SIGNAL(toggled(bool)),
-                  this, SLOT(changeAutomaticComputation(bool)));
+                      this, SLOT(changeAutomaticComputation(bool)));
+    connect(usePreview, SIGNAL(toggled(bool)),
+                      this, SLOT(changeUsePreview(bool)));
   }
 
   //-----------------------------------------------------------------------------
@@ -160,6 +168,12 @@ namespace ESPINA
     m_settingsConfigData.automaticComputation = value;
     m_modified = true;
   }
+
+  void CcboostSegmentationSettings::changeUsePreview(bool value)
+    {
+      m_settingsConfigData.usePreview = value;
+      m_modified = true;
+    }
 
   void CcboostSegmentationSettings::changeMinCCSize(int value)
   {
@@ -247,6 +261,7 @@ namespace ESPINA
     settings.setValue("Save Intermediate Volumes", m_settingsConfigData.saveIntermediateVolumes);
     settings.setValue("Force Recompute Features", m_settingsConfigData.forceRecomputeFeatures);
     settings.setValue("Automatic Computation", m_settingsConfigData.automaticComputation);
+    settings.setValue("Use Preview", m_settingsConfigData.usePreview);
     settings.setValue("TP Quantile", m_settingsConfigData.TPQuantile);
     settings.setValue("FP Quantile", m_settingsConfigData.FPQuantile);
     settings.sync();

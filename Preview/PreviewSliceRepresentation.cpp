@@ -28,17 +28,29 @@ using namespace ESPINA::CCB;
 PreviewSliceRepresentation::PreviewSliceRepresentation(View2D *view)
 : m_view(view)
 , m_opacity(0.4)
+, m_threshold(0.5)
+, m_probabilityMaxValue(50)
+, m_probabilityMinValue(50)
 , m_isVisible(true)
 // m_textActor(vtkTextActor::New()),
 , m_imageActor(vtkImageActor::New())
 , m_vtkVolume(vtkVolume::New())
 , m_extractFilter(ExtractFilterType::New())
+, m_thresholdFilter(ThresholdImageFilterType::New())
 , m_itk2vtk(Itk2vtkFilterType::New())
 , m_lut(LUTSPtr::New())
 , m_mapToColors(vtkImageMapToColorsSPtr::New())
 , m_plane(view->plane())
 , m_pos(0)
 {
+
+  m_thresholdFilter->SetLowerThreshold(m_threshold);
+  m_thresholdFilter->SetInPlace(false);
+  m_thresholdFilter->ReleaseDataFlagOff();
+  m_thresholdFilter->SetInsideValue(255);
+  m_thresholdFilter->SetOutsideValue(0);
+
+  m_extractFilter->SetInput(m_thresholdFilter->GetOutput());
   m_extractFilter->SetInPlace(false);
   m_extractFilter->ReleaseDataFlagOff();
   m_extractFilter->SetDirectionCollapseToIdentity();
@@ -77,7 +89,18 @@ void PreviewSliceRepresentation::setPreviewVolume(LabelImageType::Pointer volume
 {
   m_volume = volume;
 
-  m_extractFilter->SetInput(m_volume);
+  m_thresholdFilter->SetInput(m_volume);
+
+  typedef itk::MinimumMaximumImageCalculator <LabelImageType>
+          ImageCalculatorFilterType;
+
+  ImageCalculatorFilterType::Pointer imageCalculatorFilter
+          = ImageCalculatorFilterType::New ();
+  imageCalculatorFilter->SetImage(m_volume);
+  imageCalculatorFilter->Compute();
+
+  m_probabilityMaxValue = imageCalculatorFilter->GetMaximum();
+  m_probabilityMinValue = imageCalculatorFilter->GetMinimum();
 
   if(m_volume->GetBufferedRegion() != m_region)
   {
@@ -89,17 +112,18 @@ void PreviewSliceRepresentation::setPreviewVolume(LabelImageType::Pointer volume
 }
 
 //-----------------------------------------------------------------------------
-void PreviewSliceRepresentation::setLabels(const LabelList& labels)
-{
-  m_labelList = labels;
-  updateColors();
-}
-
-//-----------------------------------------------------------------------------
 void PreviewSliceRepresentation::setOpacity(float opacity)
 {
   m_opacity = opacity;
   updateColors();
+}
+
+//-----------------------------------------------------------------------------
+void PreviewSliceRepresentation::setThreshold(float threshold)
+{
+  m_threshold = threshold;
+  updateColors(); //do we need this?
+  update(); //is this one the right function to call? or maybe updateRegion?
 }
 
 //-----------------------------------------------------------------------------
@@ -112,35 +136,28 @@ void PreviewSliceRepresentation::setVisibility(bool value)
 //-----------------------------------------------------------------------------
 void PreviewSliceRepresentation::updateColors()
 {
-  if (m_labelList.isEmpty())
-  {
-    setDefaultColors();
-  } else {
-    m_lut->SetNumberOfTableValues(m_labelList.size());
 
-    QList<Label>::ConstIterator it;
-    for(it = m_labelList.begin(); it != m_labelList.end(); ++it)
-    {
-      QColor c = (*it).color();
-      if((*it).isVisibleInPreview())
-        c.setAlphaF(m_isVisible?m_opacity:0.0);
-      else
-        c.setAlphaF(0.0);
-      m_lut->SetTableValue(it-m_labelList.begin(), c.redF(), c.greenF(), c.blueF(), c.alphaF());
-    }
+    float opacity = m_isVisible? m_opacity : 0.0;
 
-    m_lut->SetRange(0, m_labelList.size()-1);
+    m_lut->SetNumberOfTableValues(2);
+    m_lut->SetTableValue(0, 0.0, 0.0, 0.0, 0.0);
+    m_lut->SetTableValue(1, 1.0, 0.0, 0.0, opacity);
     m_lut->Build();
     m_lut->Modified();
-  }
 
-  m_imageActor->Update();
+    // m_lut->SetIndexedLookup(1);
+    m_lut->SetRange(0, 1);
+
+    m_imageActor->Update();
+
 }
 
 //-----------------------------------------------------------------------------
 void PreviewSliceRepresentation::update()
 {
   setSlice(m_plane, m_pos);
+  //TODO we can also use the SetLowerThresholdInput for automatic update
+  m_thresholdFilter->SetLowerThreshold( m_threshold*(m_probabilityMaxValue - m_probabilityMinValue) + m_probabilityMinValue);
 }
 
 //-----------------------------------------------------------------------------
@@ -173,7 +190,7 @@ void PreviewSliceRepresentation::setDefaultColors()
   m_lut->SetTableValue(1, 1.0, 0.0, 0.0, m_opacity);
   m_lut->SetTableValue(2, 0.0, 1.0, 0.0, m_opacity);
   m_lut->SetTableValue(3, 0.0, 1.0, 1.0, m_opacity);
-  m_lut->SetTableValue(4, 1.0, 1.0, 1.0, m_opacity);
+  m_lut->SetTableValue(4, 1.0, 1.0, 0.0, m_opacity);
   m_lut->Build();
   m_lut->Modified();
 

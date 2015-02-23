@@ -246,7 +246,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
 
     qDebug() << "output image";
 
-    for(int roiidx; roiidx < cfgdata.test.size(); roiidx++) {
+    for(int roiidx = 0; roiidx < cfgdata.test.size(); roiidx++) {
 
         typedef itk::ImageFileWriter< FloatTypeImage > fWriterType;
         if(cfgdata.saveIntermediateVolumes && probabilisticOutSegs[roiidx]->VerifyRequestedRegion()) {
@@ -645,40 +645,35 @@ bool CcboostAdapter::automaticCore(const ConfigData<itkVolumeType>& cfgdata,
         writer->Update();
     }
 
-    itkVolumeType::Pointer outputSegmentation = thresholdFilter->GetOutput();
+    ESPINA_SETTINGS(settings);
+    settings.beginGroup("ccboost segmentation");
+    settings.setValue("Channel Hash", QString(cfgdata.train.at(0).featuresRawVolumeImageHash.c_str()));
 
-     if(cfgdata.saveIntermediateVolumes && outputSegmentation->VerifyRequestedRegion()){
-         writer->SetFileName(cfgdata.cacheDir + "2" + "thread-outputSegmentation.tif");
-         writer->SetInput(outputSegmentation);
-         writer->Update();
-     }
+    if(!cfgdata.usePreview) {
+        itkVolumeType::Pointer outputSegmentation = thresholdFilter->GetOutput();
 
-     ESPINA_SETTINGS(settings);
-     settings.beginGroup("ccboost segmentation");
-     settings.setValue("Channel Hash", QString(cfgdata.train.at(0).featuresRawVolumeImageHash.c_str()));
+        if(cfgdata.saveIntermediateVolumes && outputSegmentation->VerifyRequestedRegion()){
+            writer->SetFileName(cfgdata.cacheDir + "2" + "thread-outputSegmentation.tif");
+            writer->SetInput(outputSegmentation);
+            writer->Update();
+        }
 
-     outputSegmentation->DisconnectPipeline();
+        outputSegmentation->DisconnectPipeline();
 
-     postprocessing(cfgdata, outputSegmentation);
+        postprocessing(cfgdata, outputSegmentation);
 
-     outputSegmentation->SetSpacing(cfgdata.train.at(0).rawVolumeImage->GetSpacing());
+        outputSegmentation->SetSpacing(cfgdata.train.at(0).rawVolumeImage->GetSpacing());
 
-     splitSegmentations(outputSegmentation, outSegList, cfgdata.saveIntermediateVolumes, cfgdata.cacheDir);
+        splitSegmentations(outputSegmentation, outSegList, cfgdata.saveIntermediateVolumes, cfgdata.cacheDir);
 
-     return true;
+    }
+    return true;
 }
 
 void CcboostAdapter::splitSegmentations(const itkVolumeType::Pointer outputSegmentation,
                                         std::vector<itkVolumeType::Pointer>& outSegList,
                                         bool saveIntermediateVolumes,
                                         std::string cacheDir){
-
-//    //If 255 components is not enough as output, switch to unsigned short
-//    typedef itk::ImageToImageFilter <itkVolumeType, bigVolumeType > ConvertFilterType;
-
-//    ConvertFilterType::Pointer convertFilter = (ConvertFilterType::New()).GetPointer();
-//    convertFilter->SetInput(outputSegmentation);
-//    convertFilter->Update();
 
     /*split the output into several segmentations*/
     typedef itk::ConnectedComponentImageFilter <itkVolumeType, bigVolumeType >
@@ -743,13 +738,24 @@ void CcboostAdapter::postprocessing(const ConfigData<itkVolumeType>& cfgData,
                                     itkVolumeType::Pointer& outputSegmentation) {
 
 
+postprocessing(outputSegmentation, cfgData.train.at(0).zAnisotropyFactor,
+               cfgData.saveIntermediateVolumes, cfgData.cacheDir);
+
+}
+
+void CcboostAdapter::postprocessing(itkVolumeType::Pointer& outputSegmentation,
+                                    double zAnisotropyFactor,
+                                    bool saveIntermediateVolumes,
+                                    std::string cacheDir) {
+
+
 
     qDebug("remove borders");
 
     itkVolumeType::SizeType outputSize = outputSegmentation->GetLargestPossibleRegion().GetSize();
 
     const int borderToRemove = 2;
-    const int borderZ = std::max((int)1, (int)(borderToRemove/cfgData.train.at(0).zAnisotropyFactor + 0.5));
+    const int borderZ = std::max((int)1, (int)(borderToRemove/zAnisotropyFactor + 0.5));
     const int borderOther = borderToRemove;
 
     // this is dimension-agnostic, though now we need to know which one is Z to handle anisotropy
@@ -802,93 +808,26 @@ void CcboostAdapter::postprocessing(const ConfigData<itkVolumeType>& cfgData,
         }
     }
 
-
     WriterType::Pointer writer = WriterType::New();
-    if(cfgData.saveIntermediateVolumes) {
-        writer->SetFileName(cfgData.cacheDir + "3" + "ccOutputSegmentation-noborders.tif");
+    if(saveIntermediateVolumes) {
+        writer->SetFileName(cacheDir + "3" + "ccOutputSegmentation-noborders.tif");
         writer->SetInput(outputSegmentation);
         writer->Update();
         qDebug("cc boost segmentation saved");
     }
 
-    qDebug("Threshold ccboost output");
-
-//    typedef itk::BinaryThresholdImageFilter <itkVolumeType, itkVolumeType>
-//            BinaryThresholdImageFilterType;
-
-//    int lowerThreshold = 128;
-//    int upperThreshold = 255;
-
-//    BinaryThresholdImageFilterType::Pointer thresholdFilter1
-//            = BinaryThresholdImageFilterType::New();
-//    thresholdFilter1->SetInput(outputSegmentation);
-//    //TODO parametrize threshold
-//    thresholdFilter1->SetLowerThreshold(lowerThreshold);
-//    thresholdFilter1->SetUpperThreshold(upperThreshold);
-//    thresholdFilter1->SetInsideValue(255);
-//    thresholdFilter1->SetOutsideValue(0);
-//    thresholdFilter1->Update();
-//    outputSegmentation = thresholdFilter1->GetOutput();
-
-//    if(cfgData.saveIntermediateVolumes) {
-//        writer->SetFileName(cfgData.cacheDir + "outputSegmentation-withsmallcomponents.tif");
-//        writer->SetInput(outputSegmentation);
-//        writer->Update();
-//    }
-
     qDebug("Remove small components");
-
-//    outputSegmentation->DisconnectPipeline();
 
     removeSmallComponents(outputSegmentation);
 
-    if(cfgData.saveIntermediateVolumes) {
-        writer->SetFileName(cfgData.cacheDir + "4" + "outputSegmentation-nosmallcomponents.tif");
+    if(saveIntermediateVolumes) {
+        writer->SetFileName(cacheDir + "4" + "outputSegmentation-nosmallcomponents.tif");
         writer->SetInput(outputSegmentation);
         writer->Update();
     }
 
     qDebug("Removed");
 
-//    BinaryThresholdImageFilterType::Pointer thresholdFilter
-//            = BinaryThresholdImageFilterType::New();
-//    thresholdFilter->SetInput(outputSegmentation);
-//    thresholdFilter->SetLowerThreshold(lowerThreshold);
-//    thresholdFilter->SetUpperThreshold(upperThreshold);
-//    thresholdFilter->SetInsideValue(255);
-//    thresholdFilter->SetOutsideValue(0);
-//    thresholdFilter->Update();
-
-//    if(cfgData.saveIntermediateVolumes) {
-//        writer->SetFileName(cfgData.cacheDir + "thresholded-segmentation.tif");
-//        writer->SetInput(thresholdFilter->GetOutput());
-//        writer->Update();
-//    }
-
-    typedef itk::BinaryBallStructuringElement< itkVolumeType::PixelType, 3> StructuringElementType;
-    StructuringElementType structuringElement;
-    int radius = 1;
-    structuringElement.SetRadius(radius);
-    structuringElement.CreateStructuringElement();
-
-    typedef itk::BinaryDilateImageFilter <itkVolumeType, itkVolumeType, StructuringElementType>
-            BinaryDilateImageFilterType;
-
-    BinaryDilateImageFilterType::Pointer dilateFilter
-            = BinaryDilateImageFilterType::New();
-
-    dilateFilter->SetInput(outputSegmentation);
-    dilateFilter->SetKernel(structuringElement);
-    dilateFilter->Update();
-
-    qDebug("Dilate Segmentation");
-    if(cfgData.saveIntermediateVolumes) {
-        writer->SetFileName(cfgData.cacheDir + "dilated-segmentation.tif");
-        writer->SetInput(dilateFilter->GetOutput());
-        writer->Update();
-    }
-
-//    outputSegmentation = thresholdFilter->GetOutput();
     outputSegmentation->DisconnectPipeline();
 
 }
