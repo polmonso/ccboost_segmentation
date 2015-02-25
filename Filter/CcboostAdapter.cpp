@@ -232,14 +232,16 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
     }
 
 #else
-    typedef itk::ImageFileReader< FloatTypeImage > ReaderType;
-    ReaderType::Pointer reader = ReaderType::New();
-    reader->SetFileName(cfgdata.cacheDir + "predicted.tif");
-    reader->Update();
-    probabilisticOutSeg = reader->GetOutput();
-    probabilisticOutSeg->DisconnectPipeline();
+    for(int roiidx = 0; roiidx < cfgdata.test.size(); roiidx++) {
+        typedef itk::ImageFileReader< FloatTypeImage > fReaderType;
+        fReaderType::Pointer freader = fReaderType::New();
+        freader->SetFileName(cfgdata.cacheDir + std::to_string(roiidx) + "-1-" + "predicted.tif");
+        freader->Update();
+        FloatTypeImage::Pointer probabilisticOutSeg = freader->GetOutput();
+        probabilisticOutSeg->DisconnectPipeline();
+        probabilisticOutSegs.push_back(probabilisticOutSeg);
+    }
 #endif
-
     //provisory test, assume that we have the full volume and paste it into one volume
 
     //TODO handle multiple output ROIs
@@ -247,18 +249,17 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
     qDebug() << "output image";
 
     for(int roiidx = 0; roiidx < cfgdata.test.size(); roiidx++) {
-
         typedef itk::ImageFileWriter< FloatTypeImage > fWriterType;
         if(cfgdata.saveIntermediateVolumes && probabilisticOutSegs[roiidx]->VerifyRequestedRegion()) {
             fWriterType::Pointer writerf = fWriterType::New();
-            writerf->SetFileName(cfgdata.cacheDir + "predicted.tif");
+            writerf->SetFileName(cfgdata.cacheDir + std::to_string(roiidx) + "-1-" + "predicted.tif");
             writerf->SetInput(probabilisticOutSegs[roiidx]);
             writerf->Update();
         } else {
             //TODO what to do when region fails Verify? is return false enough?
             //return false;
         }
-        qDebug() << "predicted.tif created";
+        qDebug() << "predicted.tif created";             
 
         typedef itk::BinaryThresholdImageFilter <Matrix3D<float>::ItkImageType, itkVolumeType>
                 fBinaryThresholdImageFilterType;
@@ -273,21 +274,14 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
         thresholdFilter->SetOutsideValue(0);
         thresholdFilter->Update();
 
-        WriterType::Pointer writer = WriterType::New();
-        if(cfgdata.saveIntermediateVolumes && thresholdFilter->GetOutput()->VerifyRequestedRegion()) {
-            writer->SetFileName(cfgdata.cacheDir + std::to_string(roiidx) + "-1" + "predicted-thresholded.tif");
-            writer->SetInput(thresholdFilter->GetOutput());
-            writer->Update();
-        }
-
         itkVolumeType::Pointer outputSegmentation = thresholdFilter->GetOutput();
 
+        WriterType::Pointer writer = WriterType::New();
         if(cfgdata.saveIntermediateVolumes && outputSegmentation->VerifyRequestedRegion()){
-            writer->SetFileName(cfgdata.cacheDir + std::to_string(roiidx) + "-2" + "thread-outputSegmentation.tif");
+            writer->SetFileName(cfgdata.cacheDir + std::to_string(roiidx) + "-2-" + "thread-outputSegmentation.tif");
             writer->SetInput(outputSegmentation);
             writer->Update();
-        }
-
+        }       
 
         outputSegmentation->DisconnectPipeline();
 

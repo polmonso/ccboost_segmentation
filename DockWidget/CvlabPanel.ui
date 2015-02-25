@@ -169,8 +169,8 @@
         <string/>
        </property>
        <property name="icon">
-        <iconset resource="../../refinedautosegment/rsc/ras.qrc">
-         <normaloff>:/ras/load_labels.svg</normaloff>:/ras/load_labels.svg</iconset>
+        <iconset resource="../GUI/rsc/CcboostSegmentation.qrc">
+         <normaloff>:/LoadLabels.svg</normaloff>:/LoadLabels.svg</iconset>
        </property>
       </widget>
      </item>
@@ -211,8 +211,8 @@
         <string/>
        </property>
        <property name="icon">
-        <iconset resource="../../refinedautosegment/rsc/ras.qrc">
-         <normaloff>:/ras/extract_segmentations.svg</normaloff>:/ras/extract_segmentations.svg</iconset>
+        <iconset resource="../GUI/rsc/CcboostSegmentation.qrc">
+         <normaloff>:/ExtractSegmentations.svg</normaloff>:/ExtractSegmentations.svg</iconset>
        </property>
        <property name="iconSize">
         <size>
@@ -287,8 +287,8 @@
   </layout>
  </widget>
  <resources>
+  <include location="../GUI/rsc/CcboostSegmentation.qrc"/>
   <include location="../../../App/rsc/espina.qrc"/>
-  <include location="../../refinedautosegment/rsc/ras.qrc"/>
  </resources>
  <connections/>
 </ui>

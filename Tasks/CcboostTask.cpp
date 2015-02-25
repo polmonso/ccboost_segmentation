@@ -195,7 +195,7 @@ void CcboostTask::run()
       return;
 
   //Create config object and retrieve settings from espina
-  ConfigData<itkVolumeType>::setDefault(ccboostconfig);
+  ccboostconfig.reset();
 
   ccboostconfig.numPredictRegions = numPredictRegions;
 
@@ -267,8 +267,6 @@ void CcboostTask::run()
 
   } else {
 
-      itkVolumeType::OffsetType overlap{30,30.0};
-
       typedef itk::ImageSplitter< itkVolumeType > SplitterType;
 
 // We have a better memory estimator in this class.
@@ -277,7 +275,7 @@ void CcboostTask::run()
 
       std::cout << "Train pieces: " << std::endl;
 
-      SplitterType trainSplitter(annotatedRegion, ccboostconfig.numPredictRegions, overlap);
+      SplitterType trainSplitter(annotatedRegion, ccboostconfig.numPredictRegions);
 
       int trainSize = trainSplitter.getCropRegions().size();
 
@@ -303,7 +301,7 @@ void CcboostTask::run()
 
       //TODO we could reuse if regions match
       itkVolumeType::RegionType region = ccboostconfig.originalVolumeImage->GetLargestPossibleRegion();
-      SplitterType testSplitter(region, ccboostconfig.numPredictRegions, overlap);
+      SplitterType testSplitter(region, ccboostconfig.numPredictRegions);
 
       int testSize = testSplitter.getCropRegions().size();
 
@@ -321,6 +319,7 @@ void CcboostTask::run()
                                                         testSplitter.getCropRegions().at(i));
           ccboostconfig.test.push_back(testData);
       }
+
   }
 
   qDebug("%s", "cc boost segmentation");
@@ -626,14 +625,15 @@ void CcboostTask::runCore(const ConfigData<itkVolumeType>& ccboostconfig,
 
             //FIXME reuse splitter / this will fail if not splitted volume but series of ROIs
             typedef itk::ImageSplitter< itkVolumeType > SplitterType;
-            itkVolumeType::OffsetType overlap{30,30.0};
             itkVolumeType::RegionType region = ccboostconfig.originalVolumeImage->GetLargestPossibleRegion();
-            SplitterType testSplitter(region, ccboostconfig.numPredictRegions, overlap);
+
+            SplitterType testSplitter(region, ccboostconfig.numPredictRegions);
 
             //repaste test
             testSplitter.pasteCroppedRegions(outputSegmentations, outputSegmentation);
 
             typedef CcboostAdapter::FloatTypeImage FloatTypeImage;
+
             typedef itk::ImageSplitter< FloatTypeImage > FloatSplitterType;
 
             CcboostAdapter::FloatTypeImage::Pointer probabilisticOutputSegmentation = CcboostAdapter::FloatTypeImage::New();
@@ -641,15 +641,15 @@ void CcboostTask::runCore(const ConfigData<itkVolumeType>& ccboostconfig,
             FloatTypeImage::RegionType fregion(region);
 
             FloatSplitterType fsplitter(fregion,
-                                        ccboostconfig.numPredictRegions,
-                                        FloatTypeImage::OffsetType{30,30.0});
+                                        ccboostconfig.numPredictRegions);
 
             fsplitter.pasteCroppedRegions(probabilisticOutputSegmentations, probabilisticOutputSegmentation);
 
             typedef itk::ImageFileWriter< CcboostAdapter::FloatTypeImage > fWriterType;
             fWriterType::Pointer fwriter = fWriterType::New();
             fwriter->SetFileName(ccboostconfig.cacheDir + ccboostconfig.probabilisticOutputFilename);
-            std::cout << "Saving probabilistic volume at " <<  QFileInfo(QString::fromStdString(ccboostconfig.cacheDir + ccboostconfig.probabilisticOutputFilename)).absoluteFilePath() << std::endl;
+
+            qDebug() << "Saving probabilistic volume at " <<  QFileInfo(QString::fromStdString(ccboostconfig.cacheDir + ccboostconfig.probabilisticOutputFilename)).absoluteFilePath();
             fwriter->SetInput(probabilisticOutputSegmentation);
 
             typedef itk::ImageFileWriter< itkVolumeType > WriterType;

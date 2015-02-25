@@ -122,7 +122,7 @@ void PreviewSliceRepresentation::setOpacity(float opacity)
 void PreviewSliceRepresentation::setThreshold(float threshold)
 {
   m_threshold = threshold;
-  updateColors(); //do we need this?
+  //updateColors(); //do we need this?
   update(); //is this one the right function to call? or maybe updateRegion?
 }
 
@@ -155,9 +155,9 @@ void PreviewSliceRepresentation::updateColors()
 //-----------------------------------------------------------------------------
 void PreviewSliceRepresentation::update()
 {
-  setSlice(m_plane, m_pos);
   //TODO we can also use the SetLowerThresholdInput for automatic update
   m_thresholdFilter->SetLowerThreshold( m_threshold*(m_probabilityMaxValue - m_probabilityMinValue) + m_probabilityMinValue);
+  setSlice(m_plane, m_pos);
 }
 
 //-----------------------------------------------------------------------------
@@ -185,17 +185,20 @@ void PreviewSliceRepresentation::setSlice(Plane plane, Nm pos)
 //-----------------------------------------------------------------------------
 void PreviewSliceRepresentation::setDefaultColors()
 {
-  m_lut->SetNumberOfTableValues(5);
-  m_lut->SetTableValue(0, 0.0, 0.0, 0.0, 0.0);
-  m_lut->SetTableValue(1, 1.0, 0.0, 0.0, m_opacity);
-  m_lut->SetTableValue(2, 0.0, 1.0, 0.0, m_opacity);
-  m_lut->SetTableValue(3, 0.0, 1.0, 1.0, m_opacity);
-  m_lut->SetTableValue(4, 1.0, 1.0, 0.0, m_opacity);
-  m_lut->Build();
-  m_lut->Modified();
+//  m_lut->SetNumberOfTableValues(5);
+//  m_lut->SetTableValue(0, 0.0, 0.0, 0.0, 0.0);
+//  m_lut->SetTableValue(1, 1.0, 0.0, 0.0, m_opacity);
+//  m_lut->SetTableValue(2, 0.0, 1.0, 0.0, m_opacity);
+//  m_lut->SetTableValue(3, 0.0, 1.0, 1.0, m_opacity);
+//  m_lut->SetTableValue(4, 1.0, 1.0, 0.0, m_opacity);
+//  m_lut->Build();
+//  m_lut->Modified();
 
-  // m_lut->SetIndexedLookup(1);
-  m_lut->SetRange(0, 4);
+//  // m_lut->SetIndexedLookup(1);
+//  m_lut->SetRange(0, 4);
+
+    updateColors();
+
 }
 
 //-----------------------------------------------------------------------------

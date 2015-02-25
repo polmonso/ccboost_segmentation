@@ -38,7 +38,7 @@ namespace ESPINA
     ESPINA_SETTINGS(settings);
     settings.beginGroup("ccboost segmentation");
 
-    ConfigData<itkVolumeType>::setDefault(m_settingsConfigData);
+    m_settingsConfigData.reset();
 
     //FIXME hash is per region, but we don't know on load
 //    if (settings.contains("Channel Hash"))

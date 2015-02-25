@@ -126,6 +126,9 @@ public:
         cacheDir = "./";
 
         automaticComputation = false;
+
+        structuredROIs = true;
+
     }
 
     typename ItkImageType::Pointer originalVolumeImage;
@@ -151,13 +154,41 @@ public:
     unsigned int numStumps;
     std::string outFileName;
 
+    /** Supervoxel seed
+      * @deprecated Supervoxels are not used since they are not useful in this case
+     **/
     unsigned int svoxSeed;
+
+    /** Supervoxel cubeness
+      * @deprecated Supervoxels are not used since they are not useful in this case
+     **/
     unsigned int svoxCubeness;
-    
+
+    /** Save the volumes in each processing step.
+     *  Useful for debugging */
     bool saveIntermediateVolumes;
+
+    /** Force the recomputation of the features,
+     * regardless of them being on disk.
+     * If the algorithm fails, it is recommended
+     * to activate it once to ensure a sane state.
+     */
     bool forceRecomputeFeatures;
+
+    /** True if we use the preview panel before creating the segmentations,
+     * or if it is computed within the ccboost task
+     */
     bool usePreview;
+
+    /** Unsupported automatic computation flag */
     bool automaticComputation;
+
+    /** True if the ROIs are ordered
+     * and constitues the full volume
+     * or a single cropped version,
+     * false if the ROIs aren't necessarily contiguous
+     */
+    bool structuredROIs;
 
     unsigned int numPredictRegions;
 
@@ -172,45 +203,49 @@ public:
     std::string probabilisticOutputFilename;
 
 public:
-    static void setDefault(ConfigData& ccConfig){
-        ccConfig.preset = ConfigData::SYNAPSE;
+    /* Static call to set a ConfigData to its default values
+     *
+     */
+    void reset(){
+        preset = ConfigData::SYNAPSE;
 
-        ccConfig.TPQuantile = 0.1;
-        ccConfig.FPQuantile = 0.01;
+        TPQuantile = 0.1;
+        FPQuantile = 0.01;
 
-        ccConfig.gtNegativeLabel = 128;
-        ccConfig.gtPositiveLabel = 255;
+        gtNegativeLabel = 128;
+        gtPositiveLabel = 255;
 
         // number of adaboost stumps (recommended >= 1000, but in general 400 does well enough)
-        ccConfig.numStumps = 500;
+        numStumps = 500;
 
         // output base file name. Output files will have this as the first part of their name
-        ccConfig.outFileName = "substack";
+        outFileName = "substack";
 
         //TODO turn back to not saving
-        ccConfig.saveIntermediateVolumes = true;
-        ccConfig.forceRecomputeFeatures = false;
-        ccConfig.usePreview = true;
-        ccConfig.minComponentSize = 250;
-        ccConfig.maxNumObjects = 200;
+        saveIntermediateVolumes = true;
+        forceRecomputeFeatures = false;
+        usePreview = true;
+        minComponentSize = 250;
+        maxNumObjects = 200;
 
         // Number of regions to split the volume into
-        ccConfig.numPredictRegions = 1;
+        numPredictRegions = 1;
 
         //supervoxel seed and cubeness
-        ccConfig.svoxSeed = 1;//3;
-        ccConfig.svoxCubeness = 16;//16;
+        svoxSeed = 1;//3;
+        svoxCubeness = 16;//16;
 
-        ccConfig.rawVolume = "ccboostcache";
+        rawVolume = "ccboostcache";
 
-        ccConfig.probabilisticOutputFilename = "probabilisticOutputVolume.tif";
+        probabilisticOutputFilename = "probabilisticOutputVolume.tif";
 
         //std::string featuresPath = "/home/monso/code/data/synapse_features/";
         //FIXME architecture dependent--> add portability
-        ccConfig.cacheDir = "./";
+        cacheDir = "./";
 
-        ccConfig.automaticComputation = false;
+        automaticComputation = false;
 
+        structuredROIs = true;
     }
 
     void printInfo()

@@ -75,7 +75,7 @@ CvlabPanel::CvlabPanel(CcboostSegmentationPlugin* manager,
 
   setObjectName("CvlabPanel");
 
-  setWindowTitle(tr("Refined Automatic Segmentation"));
+  setWindowTitle(tr("CCBoost segmentation extractor"));
 
   setWidget(m_gui);
 
@@ -101,8 +101,10 @@ CvlabPanel::~CvlabPanel()
 //------------------------------------------------------------------------
 void CvlabPanel::reset()
 {
+
 }
 
+//------------------------------------------------------------------------
 void CvlabPanel::setVolume(QFileInfo volumeFile){
     typedef itk::ImageFileReader< CcboostAdapter::FloatTypeImage > fReaderType;
     fReaderType::Pointer freader = fReaderType::New();
@@ -111,6 +113,12 @@ void CvlabPanel::setVolume(QFileInfo volumeFile){
         freader->Update();
         m_volume = freader->GetOutput();
 
+        //we just allow one preview, so let's destroy the rest
+        if(m_preview){
+            m_viewManager->removeWidget(m_preview);
+            m_preview.reset();
+        }
+
         m_preview = PreviewWidgetSPtr{new PreviewWidget()};
 
         //for some reason, addWidget destroys the m_volume if we set it before.
@@ -118,7 +126,9 @@ void CvlabPanel::setVolume(QFileInfo volumeFile){
 
         m_preview->setPreviewVolume(m_volume);
         m_preview->setThreshold(m_threshold);
-        m_preview->setVisibility(true); //visibility does not work
+        m_preview->setOpacity(0.4);
+        m_preview->setVisibility(true);
+        m_preview->update();
 
         m_gui->createSegmentations->setEnabled(true);
         m_gui->previewOpacity->setEnabled(true);
@@ -127,9 +137,16 @@ void CvlabPanel::setVolume(QFileInfo volumeFile){
         m_gui->abortAutoSegmenter->setEnabled(true);
 
     } catch( itk::ExceptionObject & err ) {
-          std::cerr << "ExceptionObject caught !" << std::endl;
-          std::cerr << err << std::endl;
+        std::cerr << "ExceptionObject caught !" << std::endl;
+        std::cerr << err << std::endl;
+
+        if(m_preview){
+            m_viewManager->removeWidget(m_preview);
+            m_preview.reset();
+        }
     }
+
+    m_viewManager->updateViews();
 
 }
 
@@ -169,8 +186,6 @@ void CvlabPanel::openOverlay(){
     if (fileDialog.exec() != QDialog::Accepted)
            return;
 
-    if (m_preview) m_preview.reset();
-
     QString file = fileDialog.selectedFiles().first();
     QFileInfo volumeFileInfo(file);
     setVolume(volumeFileInfo);
@@ -198,6 +213,7 @@ void CvlabPanel::changePreviewVisibility(bool visible)
   {
     m_gui->previewVisibility->setIcon(QIcon(":/espina/hide_all.svg"));
   }
+
 }
 
 //------------------------------------------------------------------------
@@ -246,8 +262,10 @@ void CvlabPanel::abort(){
     m_gui->abortAutoSegmenter->setEnabled(false);
 
     //TODO discard segmentation and destroy data/preview
-    m_viewManager->removeWidget(m_preview);
-    m_preview.reset();
+    if(m_preview) {
+        m_viewManager->removeWidget(m_preview);
+        m_preview.reset();
+    }
 
 }
 
@@ -313,6 +331,12 @@ void CvlabPanel::extractSegmentations()
 
         }
         m_undoStack->endMacro();
+
+        //destroy preview
+        if(m_preview){
+            m_viewManager->removeWidget(m_preview);
+            m_preview.reset();
+        }
 
         m_viewManager->updateViews();
 

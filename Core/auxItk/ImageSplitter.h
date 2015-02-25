@@ -15,13 +15,26 @@ namespace itk
         //  or with a static library (which is horrible or not possible in templates)
     public:
         ImageSplitter(const typename TImage::RegionType volumeLargestRegion,
-                      const int numRegions2,
+                      const int numRegions,
                       typename TImage::OffsetType overlap) : volumeLargestRegion(volumeLargestRegion),
-            numRegions(numRegions2),
+            numRegions(numRegions),
             overlap(overlap)
         {
             computeNumSplits(volumeLargestRegion.GetSize(), numRegions, numSplits);
             computeCropRegions(volumeLargestRegion.GetSize(), overlap, numSplits);
+        }
+
+        ImageSplitter(const typename TImage::RegionType volumeLargestRegion,
+                      const int numRegions) : volumeLargestRegion(volumeLargestRegion),
+            numRegions(numRegions)
+        {
+            overlap.Fill(30);
+            if(TImage::GetImageDimension() == 3)
+                overlap[2] = 0;
+
+            computeNumSplits(volumeLargestRegion.GetSize(), numRegions, numSplits);
+            computeCropRegions(volumeLargestRegion.GetSize(), overlap, numSplits);
+
         }
 
     public:

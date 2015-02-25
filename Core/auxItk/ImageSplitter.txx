@@ -193,6 +193,11 @@ void ImageSplitter< TImage>::pasteCroppedRegions(std::vector<typename TImage::Po
 
     typename TImage::RegionType region;
     typename TImage::IndexType index;
+
+    std::cout << "regionp " << volumeLargestRegion << std::endl;
+
+    std::cout << "indexp " << volumeLargestRegion.GetIndex() << std::endl;
+
     index = volumeLargestRegion.GetIndex();
     region.SetIndex(index);
     region.SetSize(volumeLargestRegion.GetSize());

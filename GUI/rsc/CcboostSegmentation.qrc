@@ -3,5 +3,7 @@
         <file>SynapseDetection.svg</file>
         <file>SegmentationImporter.svg</file>
         <file>MitochondriaDetection.svg</file>
+        <file>ExtractSegmentations.svg</file>
+        <file>LoadLabels.svg</file>
     </qresource>
 </RCC>

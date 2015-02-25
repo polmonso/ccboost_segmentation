@@ -301,15 +301,13 @@ double zAnisotropyFactor = 2.71296798698;
 
               std::cout << region << std::endl;
 
-              itkVolumeType::OffsetType overlap{30,30,0};
-
               typedef itk::ImageSplitter< itkVolumeType > SplitterType;
 
               cfgdata.numPredictRegions = SplitterType::numRegionsFittingInMemory( region.GetSize(),
                                                                                    CcboostAdapter::FREEMEMORYREQUIREDPROPORTIONPREDICT);
 
 
-              SplitterType splitter(region, cfgdata.numPredictRegions, overlap);
+              SplitterType splitter(region, cfgdata.numPredictRegions);
 
               for(int i=0; i < splitter.getCropRegions().size(); i++){
 
