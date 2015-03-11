@@ -36,9 +36,9 @@ namespace ESPINA
       void setVolume(QFileInfo volumeFile);
 
     private slots:      
-      void createAutoSegmenter();
+      void createMitochondriaSegmentation();
 
-      void deleteAutoSegmenter();
+      void createSynapseSegmentation();
 
       void openOverlay();
 
@@ -82,6 +82,8 @@ namespace ESPINA
       ChannelAdapterPtr  m_pendingFeaturesChannel;
 
       float m_threshold;
+      float m_probabilityMaxValue;
+      float m_probabilityMinValue;
 
     };
   } // namespace RAS

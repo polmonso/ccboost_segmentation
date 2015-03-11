@@ -89,8 +89,6 @@ namespace ESPINA {
 
       float m_opacity;
       float m_threshold;
-      float m_probabilityMaxValue;
-      float m_probabilityMinValue;
       bool  m_isVisible;
 
       // vtkTextActor* m_textActor;

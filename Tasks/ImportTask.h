@@ -61,7 +61,12 @@ namespace ESPINA {
 
     public:
         explicit ImportTask(ChannelAdapterPtr channel,
-                            SchedulerSPtr     scheduler);
+                            SchedulerSPtr     scheduler,
+                            std::string file);
+
+        explicit ImportTask(ChannelAdapterPtr channel,
+                            SchedulerSPtr     scheduler,
+                            itkVolumeType::Pointer inputSegmentation);
 
       ChannelAdapterPtr channel() const
       { return m_channel; }
@@ -76,7 +81,6 @@ namespace ESPINA {
       void splitSegs(const itkVolumeType::Pointer outputSegmentation,
                                  std::vector<itkVolumeType::Pointer>& outSegList);
      public:
-      std::string filename;
       static const QString IMPORTED;
       static const QString SUPPORTED_FILES;
 
@@ -86,6 +90,10 @@ namespace ESPINA {
       bool m_abort;
 
       itkVolumeType::Pointer m_inputChannel;
+
+      bool loadFromDisk;
+      std::string filename;
+      itkVolumeType::Pointer m_inputSegmentation;
 
     };
     typedef ImportTask* ImportTaskPtr;

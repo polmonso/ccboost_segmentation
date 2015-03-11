@@ -103,7 +103,7 @@ public:
         // output base file name. Output files will have this as the first part of their name
         outFileName = "substack";
 
-        probabilisticOutputFilename = "probabilisticOutputVolume.tif";
+        probabilisticOutputFilename = "probabilisticOutputVolume.mha";
         usePreview = true;
 
         //TODO turn back to not saving
@@ -237,7 +237,7 @@ public:
 
         rawVolume = "ccboostcache";
 
-        probabilisticOutputFilename = "probabilisticOutputVolume.tif";
+        probabilisticOutputFilename = "probabilisticOutputVolume.mha";
 
         //std::string featuresPath = "/home/monso/code/data/synapse_features/";
         //FIXME architecture dependent--> add portability

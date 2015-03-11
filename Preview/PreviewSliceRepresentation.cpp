@@ -29,8 +29,6 @@ PreviewSliceRepresentation::PreviewSliceRepresentation(View2D *view)
 : m_view(view)
 , m_opacity(0.4)
 , m_threshold(0.5)
-, m_probabilityMaxValue(50)
-, m_probabilityMinValue(50)
 , m_isVisible(true)
 // m_textActor(vtkTextActor::New()),
 , m_imageActor(vtkImageActor::New())
@@ -91,17 +89,6 @@ void PreviewSliceRepresentation::setPreviewVolume(LabelImageType::Pointer volume
 
   m_thresholdFilter->SetInput(m_volume);
 
-  typedef itk::MinimumMaximumImageCalculator <LabelImageType>
-          ImageCalculatorFilterType;
-
-  ImageCalculatorFilterType::Pointer imageCalculatorFilter
-          = ImageCalculatorFilterType::New ();
-  imageCalculatorFilter->SetImage(m_volume);
-  imageCalculatorFilter->Compute();
-
-  m_probabilityMaxValue = imageCalculatorFilter->GetMaximum();
-  m_probabilityMinValue = imageCalculatorFilter->GetMinimum();
-
   if(m_volume->GetBufferedRegion() != m_region)
   {
     updateRegion();
@@ -156,7 +143,7 @@ void PreviewSliceRepresentation::updateColors()
 void PreviewSliceRepresentation::update()
 {
   //TODO we can also use the SetLowerThresholdInput for automatic update
-  m_thresholdFilter->SetLowerThreshold( m_threshold*(m_probabilityMaxValue - m_probabilityMinValue) + m_probabilityMinValue);
+  m_thresholdFilter->SetLowerThreshold( m_threshold );
   setSlice(m_plane, m_pos);
 }
 
@@ -185,20 +172,16 @@ void PreviewSliceRepresentation::setSlice(Plane plane, Nm pos)
 //-----------------------------------------------------------------------------
 void PreviewSliceRepresentation::setDefaultColors()
 {
-//  m_lut->SetNumberOfTableValues(5);
-//  m_lut->SetTableValue(0, 0.0, 0.0, 0.0, 0.0);
-//  m_lut->SetTableValue(1, 1.0, 0.0, 0.0, m_opacity);
-//  m_lut->SetTableValue(2, 0.0, 1.0, 0.0, m_opacity);
-//  m_lut->SetTableValue(3, 0.0, 1.0, 1.0, m_opacity);
-//  m_lut->SetTableValue(4, 1.0, 1.0, 0.0, m_opacity);
-//  m_lut->Build();
-//  m_lut->Modified();
+    float opacity = m_isVisible? m_opacity : 0.0;
 
-//  // m_lut->SetIndexedLookup(1);
-//  m_lut->SetRange(0, 4);
+    m_lut->SetNumberOfTableValues(2);
+    m_lut->SetTableValue(0, 0.0, 0.0, 0.0, 0.0);
+    m_lut->SetTableValue(1, 1.0, 0.0, 0.0, opacity);
+    m_lut->Build();
+    m_lut->Modified();
 
-    updateColors();
-
+    // m_lut->SetIndexedLookup(1);
+    m_lut->SetRange(0, 1);
 }
 
 //-----------------------------------------------------------------------------

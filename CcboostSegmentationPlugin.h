@@ -30,7 +30,7 @@
 #include <Support/ViewManager.h>
 #include <Support/Plugin.h>
 #include <Core/Analysis/Input.h>
-#include <Core/Analysis/FetchBehaviour.h>
+#include <Core/Analysis/DataFactory.h>
 #include <Core/Factory/FilterFactory.h>
 #include <Core/EspinaTypes.h>
 #include <Tasks/CcboostTask.h>
@@ -85,6 +85,7 @@ namespace ESPINA
 
     void createCcboostTask(SegmentationAdapterSList segmentations);
     void createImportTask();
+    void createImportTask(itkVolumeType::Pointer segmentation);
 
     //FIXME //TODO hack
   public:

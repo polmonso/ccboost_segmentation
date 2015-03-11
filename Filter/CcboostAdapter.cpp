@@ -165,7 +165,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
 
     TimerRT timerF; timerF.reset();
 
-    adaboost.train( bdata, 500 );
+    adaboost.train( bdata, cfgdata.numStumps );
 
     qDebug("train Elapsed: %f", timerF.elapsed());
 
@@ -226,6 +226,8 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
         FloatTypeImage::Pointer probabilisticOutSeg = duplicator->GetModifiableOutput();
 
         probabilisticOutSeg->DisconnectPipeline();
+
+        probabilisticOutSeg->SetSpacing(cfgdata.train.at(0).rawVolumeImage->GetSpacing());
 
         probabilisticOutSegs.push_back(probabilisticOutSeg);
 
@@ -487,183 +489,6 @@ bool CcboostAdapter::testcore(const ConfigData<itkVolumeType>& cfgdata,
      return true;
 }
 
-bool CcboostAdapter::automaticCore(const ConfigData<itkVolumeType>& cfgdata,
-                          FloatTypeImage::Pointer& probabilisticOutSeg,
-                          std::vector<itkVolumeType::Pointer>& outSegList) {
-#define WORK
-#ifdef WORK2
-    MultipleROIData allROIs;
-
-    // set anisotropy factor
-    allROIs.init( cfgdata.train.at(0).zAnisotropyFactor );
-
-    //    for(auto imgItk: channels) {
-    //        for(auto gtItk: groundTruths) {
-    Matrix3D<ImagePixelType> img, gt;
-
-    //itkVolumeType::Pointer annotatedImage = Splitter::crop<itkVolumeType>(cfgData.train.groundTruthImage,cfgData.train.annotatedRegion);
-
-    img.loadItkImage(cfgdata.train.at(0).rawVolumeImage, true);
-
-    gt.loadItkImage(cfgdata.train.at(0).groundTruthImage, true);
-
-    ROIData roi;
-    roi.init( img.data(), gt.data(), 0, 0, img.width(), img.height(), img.depth(), cfgdata.train.at(0).zAnisotropyFactor );
-
-    // raw image integral image
-    ROIData::IntegralImageType ii;
-    ii.compute( img );
-    roi.addII( ii.internalImage().data() );
-
-    //features
-    TimerRT timerF; timerF.reset();
-
-    computeAllFeatures(cfgdata);
-
-    qDebug("Compute all features Elapsed: %f", timerF.elapsed());
-
-    timerF.reset();
-
-    addAllFeatures(cfgdata, roi);
-
-    qDebug("Add all features Elapsed: %f", timerF.elapsed());
-
-    allROIs.add( &roi );
-
-    // }
-    // }
-
-    qDebug() << "running core plugin";
-
-    BoosterInputData bdata;
-    bdata.init( &allROIs );
-    bdata.showInfo();
-
-    Booster adaboost;
-
-    qDebug() << "training";
-
-    timerF.reset();
-
-    // predict
-    Matrix3D<float> predImg;
-
-    //TODO provide a stumped train
-    if(!cfgdata.automaticComputation) {
-
-        adaboost.train( bdata, 500 );
-
-        qDebug("train Elapsed: %f", timerF.elapsed());
-
-        qDebug() << "predict";
-
-        TimerRT timer; timer.reset();
-        adaboost.predictDoublePolarity( &allROIs, &predImg );
-        qDebug("Elapsed: %f", timer.elapsed());
-
-    } else {
-
-        int stumpindex = 0;
-        do {
-
-            int sizetrain = cfgdata.train.size();
-            int pendingTrain = cfgdata.pendingTrain.size();
-
-            cfgdata.train.reserve(sizetrain + pendingTrain);
-            if(!cfgdata.pendingTrain.empty()){
-                std::move(std::begin(cfgdata.train), std::end(cfgdata.train), std::back_inserter(cfgdata.pendingTrain));
-                cfgdata.pendingTrain.clear();
-            }
-            //adaboost.trainStump( bdata, 100, stumpindex);
-
-            Matrix3D<float> predImg;
-            TimerRT timer; timer.reset();
-            adaboost.predictDoublePolarity( &allROIs, &predImg );
-            qDebug("Elapsed: %f", timer.elapsed());
-
-            //emit(updatePrediction(predImg.asItkImage()));
-
-            stumpindex++;
-        } while(stumpindex < cfgdata.numStumps);
-    }
-
-    predImg.save("/tmp/test.nrrd");
-
-    // save JSON model
-    if (!adaboost.saveModelToFile( "/tmp/model.json" ))
-        std::cout << "Error saving JSON model" << std::endl;
-
-    probabilisticOutSeg = predImg.asItkImage();
-//    probabilisticOutSeg->DisconnectPipeline();
-
-#else
-    typedef itk::ImageFileReader< FloatTypeImage > ReaderType;
-    ReaderType::Pointer reader = ReaderType::New();
-    reader->SetFileName(cfgdata.cacheDir + "predicted.tif");
-    reader->Update();
-    probabilisticOutSeg = reader->GetOutput();
-    probabilisticOutSeg->DisconnectPipeline();
-    return true;
-#endif
-    qDebug() << "output image";
-
-    typedef itk::ImageFileWriter< FloatTypeImage > fWriterType;
-    if(cfgdata.saveIntermediateVolumes && probabilisticOutSeg->VerifyRequestedRegion()) {
-        fWriterType::Pointer writerf = fWriterType::New();
-        writerf->SetFileName(cfgdata.cacheDir + "predicted.tif");
-        writerf->SetInput(probabilisticOutSeg);
-        writerf->Update();
-    } else {
-        //TODO what to do when region fails Verify? is return false enough?
-        //return false;
-    }
-    qDebug() << "predicted.tif created";
-
-    typedef itk::BinaryThresholdImageFilter <Matrix3D<float>::ItkImageType, itkVolumeType>
-            fBinaryThresholdImageFilterType;
-
-    float lowerThreshold = 0.0;
-
-    fBinaryThresholdImageFilterType::Pointer thresholdFilter
-            = fBinaryThresholdImageFilterType::New();
-    thresholdFilter->SetInput(probabilisticOutSeg);
-    thresholdFilter->SetLowerThreshold(lowerThreshold);
-    thresholdFilter->SetInsideValue(255);
-    thresholdFilter->SetOutsideValue(0);
-    thresholdFilter->Update();
-
-    WriterType::Pointer writer = WriterType::New();
-    if(cfgdata.saveIntermediateVolumes && thresholdFilter->GetOutput()->VerifyRequestedRegion()) {
-        writer->SetFileName(cfgdata.cacheDir + "1" + "predicted-thresholded.tif");
-        writer->SetInput(thresholdFilter->GetOutput());
-        writer->Update();
-    }
-
-    ESPINA_SETTINGS(settings);
-    settings.beginGroup("ccboost segmentation");
-    settings.setValue("Channel Hash", QString(cfgdata.train.at(0).featuresRawVolumeImageHash.c_str()));
-
-    if(!cfgdata.usePreview) {
-        itkVolumeType::Pointer outputSegmentation = thresholdFilter->GetOutput();
-
-        if(cfgdata.saveIntermediateVolumes && outputSegmentation->VerifyRequestedRegion()){
-            writer->SetFileName(cfgdata.cacheDir + "2" + "thread-outputSegmentation.tif");
-            writer->SetInput(outputSegmentation);
-            writer->Update();
-        }
-
-        outputSegmentation->DisconnectPipeline();
-
-        postprocessing(cfgdata, outputSegmentation);
-
-        outputSegmentation->SetSpacing(cfgdata.train.at(0).rawVolumeImage->GetSpacing());
-
-        splitSegmentations(outputSegmentation, outSegList, cfgdata.saveIntermediateVolumes, cfgdata.cacheDir);
-
-    }
-    return true;
-}
-
 void CcboostAdapter::splitSegmentations(const itkVolumeType::Pointer outputSegmentation,
                                         std::vector<itkVolumeType::Pointer>& outSegList,
                                         bool saveIntermediateVolumes,
@@ -818,7 +643,7 @@ void CcboostAdapter::postprocessing(itkVolumeType::Pointer& outputSegmentation,
         writer->SetFileName(cacheDir + "4" + "outputSegmentation-nosmallcomponents.tif");
         writer->SetInput(outputSegmentation);
         writer->Update();
-    }
+    }s
 
     qDebug("Removed");
 

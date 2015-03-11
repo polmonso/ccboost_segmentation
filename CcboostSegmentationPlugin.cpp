@@ -35,9 +35,11 @@
 
 #include "DockWidget/CvlabPanel.h"
 
+//#include <chrono>
+
 // ESPINA
 #include <GUI/Model/ModelAdapter.h>
-#include <Core/IO/FetchBehaviour/RasterizedVolumeFromFetchedMeshData.h>
+#include <Core/IO/DataFactory/RasterizedVolumeFromFetchedMeshData.h>
 #include <Extensions/Morphological/MorphologicalInformation.h>
 #include <GUI/Model/Utils/QueryAdapter.h>
 #include <Undo/AddCategoryCommand.h>
@@ -289,11 +291,30 @@ void CcboostSegmentationPlugin::createImportTask(){
     if (fileDialog.exec() != QDialog::Accepted)
         return;
 
-    std::string file = fileDialog.selectedFiles().first().toStdString();
+    std::string filename = fileDialog.selectedFiles().first().toStdString();
 
      SchedulerSPtr scheduler = getScheduler();
-     CCB::ImportTaskSPtr importTask{new CCB::ImportTask(channel, scheduler)};
-     importTask.get()->filename = file;
+     CCB::ImportTaskSPtr importTask{new CCB::ImportTask(channel, scheduler, filename)};
+     struct CcboostSegmentationPlugin::ImportData data;
+     m_executingImportTasks.insert(importTask.get(), data);
+     connect(importTask.get(), SIGNAL(finished()), this, SLOT(finishedImportTask()));
+     Task::submit(importTask);
+
+    return;
+}
+
+void CcboostSegmentationPlugin::createImportTask(itkVolumeType::Pointer segmentation){
+
+    ChannelAdapterPtr channel;
+    if(m_viewManager->activeChannel() != NULL)
+        channel = m_viewManager->activeChannel();
+    else
+        channel = m_model->channels().at(0).get();
+
+    qDebug() << "Using channel " << m_viewManager->activeChannel()->data(Qt::DisplayRole);
+
+     SchedulerSPtr scheduler = getScheduler();
+     CCB::ImportTaskSPtr importTask{new CCB::ImportTask(channel, scheduler, segmentation)};
      struct CcboostSegmentationPlugin::ImportData data;
      m_executingImportTasks.insert(importTask.get(), data);
      connect(importTask.get(), SIGNAL(finished()), this, SLOT(finishedImportTask()));
@@ -505,9 +526,12 @@ void CcboostSegmentationPlugin::finishedImportTask()
               SampleAdapterSList samples;
               samples << QueryAdapter::sample(m_viewManager->activeChannel());
               Q_ASSERT(!samples.empty());
-              std::cout << "Create segmentation " << i++ << "/" << createdSegmentations.size() << "." << std::endl;
+              //std::cout << "Create segmentation " << i++ << "/" << createdSegmentations.size() << "." << std::endl;
+                //auto start = std::chrono::system_clock::now();
               m_undoStack->push(new AddSegmentations(segmentation, samples, m_model));
-
+              //auto duration = std::chrono::duration_cast< std::chrono::milliseconds >
+              //                      (std::chrono::system_clock::now() - start);
+              // std::cout << "Create Elapsed " << duration.count() << std::endl;;
           }
 
         //FIXME the following doesn't work, it tries to add crossed relations and fails
@@ -565,10 +589,11 @@ SegmentationAdapterSList CcboostSegmentationPlugin::createSegmentations(std::vec
 
         Output::Id id = sourceFilter->numberOfOutputs() - 1;
 
-        OutputSPtr output{new Output(sourceFilter.get(), id)};
 
         Bounds    bounds  = equivalentBounds<itkVolumeType>(seg, seg->GetLargestPossibleRegion());
         NmVector3 spacing = ToNmVector3<itkVolumeType>(seg->GetSpacing());
+
+        OutputSPtr output{new Output(sourceFilter.get(), id, spacing)};
 
         DefaultVolumetricDataSPtr volumetricData{new SparseVolume<itkVolumeType>(bounds, spacing)};
         volumetricData->draw(seg);

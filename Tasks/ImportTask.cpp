@@ -75,12 +75,29 @@ const QString ImportTask::SUPPORTED_FILES = tr("Binary Images (*.tiff *.tif *.jp
 
 //------------------------------------------------------------------------
 ImportTask::ImportTask(ChannelAdapterPtr channel,
-                       SchedulerSPtr     scheduler)
+                       SchedulerSPtr     scheduler,
+                       std::string file)
 : Task(scheduler)
 , m_channel(channel)
 , m_abort{false}
+, filename(file)
 {
 
+    loadFromDisk = true;
+
+}
+
+//------------------------------------------------------------------------
+ImportTask::ImportTask(ChannelAdapterPtr channel,
+                       SchedulerSPtr     scheduler,
+                       itkVolumeType::Pointer inputSegmentation)
+: Task(scheduler)
+, m_channel(channel)
+, m_abort{false}
+, m_inputSegmentation(inputSegmentation)
+{
+
+    loadFromDisk = false;
 
 }
 
@@ -108,15 +125,31 @@ void ImportTask::run()
   emit progress(20);
   if (!canExecute()) return;
 
-  //CCBOOST here
-    //TODO add const-correctness
+  //TODO add const-correctness
   std::vector<itkVolumeType::Pointer> outSegList;
-  runCore(outSegList);
+
+  try {
+
+      if(loadFromDisk) {
+          typedef itk::ImageFileReader<itkVolumeType> ReaderType;
+          ReaderType::Pointer reader = ReaderType::New();
+          reader->SetFileName(filename);
+          reader->Update();
+
+          m_inputSegmentation = reader->GetOutput();
+      }
+
+      CcboostAdapter::splitSegmentations(m_inputSegmentation, outSegList);
+
+  } catch( itk::ExceptionObject & err ) {
+      qDebug() << tr("Itk exception on plugin caught at %1:%2. Error: %3.").arg(__FILE__).arg(__LINE__).arg(err.what());
+      qDebug("Returning focus to ESPina.");
+      return;
+  }
 
   if(!canExecute())
       return;
 
-  //CCBOOST finished
 
   qDebug() << outSegList.size();
 
@@ -128,156 +161,3 @@ void ImportTask::run()
     qDebug() << "Ccboost Segmentation Finished";
   }
 }
-
-void ImportTask::runCore(std::vector<itkVolumeType::Pointer>& outSegList){
-
-    try {
-
-         typedef itk::ImageFileReader<itkVolumeType> ReaderType;
-           ReaderType::Pointer reader = ReaderType::New();
-           reader->SetFileName(filename);
-           reader->Update();
-
-           //either do this:
-           CcboostAdapter::splitSegmentations(reader->GetOutput(), outSegList);
-           //or all this:
-           //splitSegs(outputSegmentation, outSegList);
-    } catch( itk::ExceptionObject & err ) {
-        qDebug() << tr("Itk exception on plugin caught at %1:%2. Error: %3.").arg(__FILE__).arg(__LINE__).arg(err.what());
-        qDebug("Returning focus to ESPina.");
-        return;
-    }
-}
-
-//void ImportTask::splitSegs(const itkVolumeType::Pointer outputSegmentation,
-//                           std::vector<itkVolumeType::Pointer>& outSegList){
-
-//    try {
-
-//        //filter background into one segmentation object
-//      typedef itk::BinaryThresholdImageFilter <itkVolumeType, itkVolumeType>
-//          BinaryThresholdImageFilterType;
-
-//        BinaryThresholdImageFilterType::Pointer backgroundThresholdFilter
-//            = BinaryThresholdImageFilterType::New();
-
-//        backgroundThresholdFilter->SetInput(outputSegmentation);
-//        backgroundThresholdFilter->SetLowerThreshold(BackgroundImportLabel);
-//        backgroundThresholdFilter->SetUpperThreshold(BackgroundImportLabel);
-//        backgroundThresholdFilter->SetInsideValue(255);
-//        backgroundThresholdFilter->SetOutsideValue(0);
-//        backgroundThresholdFilter->Update();
-
-//        RawSegmentationVolumeSPtr volRepresentation(new RawSegmentationVolume(backgroundThresholdFilter->GetOutput()));
-//        volRepresentation->fitToContent();
-
-//        SegmentationRepresentationSList representationList;
-//        representationList << volRepresentation;
-//        representationList << MeshRepresentationSPtr(new MarchingCubesMesh(volRepresentation));
-
-//        addOutputRepresentations(0, representationList);
-
-//        m_outputs[0]->updateModificationTime();
-
-//        if(saveDebugImages) {
-//            writer->SetFileName("segmentation_background.tif");
-//            writer->SetInput(backgroundThresholdFilter->GetOutput());
-//            writer->Update();
-//        }
-
-//        BinaryThresholdImageFilterType::Pointer backgroundSuppressionThresholdFilter
-//                   = BinaryThresholdImageFilterType::New();
-
-//        //set unknown to background value (0)
-//        backgroundSuppressionThresholdFilter->SetInput(reader->GetOutput());
-//        backgroundSuppressionThresholdFilter->SetLowerThreshold(SegmentationImportLabel);
-//        backgroundSuppressionThresholdFilter->SetUpperThreshold(SegmentationImportLabel);
-//        backgroundSuppressionThresholdFilter->SetInsideValue(255);
-//        backgroundSuppressionThresholdFilter->SetOutsideValue(0);
-//        backgroundSuppressionThresholdFilter->Update();
-
-//        if(saveDebugImages){
-//          writer->SetFileName("no-background-segmentation.tif");
-//          writer->SetInput(backgroundSuppressionThresholdFilter->GetOutput());
-//          writer->Update();
-//        }
-
-//        //connected components
-
-//        typedef itk::ConnectedComponentImageFilter <itkVolumeType, itkFloatVolumeType >
-//           ConnectedComponentImageFilterType;
-
-//        ConnectedComponentImageFilterType::Pointer connected = ConnectedComponentImageFilterType::New ();
-//        connected->SetInput(backgroundSuppressionThresholdFilter->GetOutput());
-
-//         try {
-
-//            connected->Update();
-
-//         } catch( itk::ExceptionObject & err ) {
-//             qDebug() << tr("Itk exception on plugin caught at %1:%2. Error: %3.").arg(__FILE__).arg(__LINE__).arg(err.what());
-//             qDebug("Returning focus to ESPina.");
-//             return;
-//         }
-//         std::cout << "Number of objects: " << connected->GetObjectCount() << std::endl;
-
-//         qDebug("Connected components segmentation");
-
-//           //tiff does not support int as pixel value and Connected components does not support float as pixel value
-////         if(saveDebugImages){
-////             fwriter->SetFileName("connected-segmentation.tif");
-////             fwriter->SetInput(connected->GetOutput());
-////             fwriter->Update();
-////         }
-
-//         qDebug("Relabeling Connected components segmentation");
-//         typedef itk::RelabelComponentImageFilter<itkFloatVolumeType, itkFloatVolumeType> FilterType;
-//         FilterType::Pointer relabelFilter = FilterType::New();
-//         relabelFilter->SetInput(connected->GetOutput());
-//         relabelFilter->Update();
-
-//         typedef itk::BinaryThresholdImageFilter <itkFloatVolumeType, itkVolumeType>
-//                   FloatBinaryThresholdImageFilterType;
-
-//         qDebug("Creating segmentations");
-
-//         FloatBinaryThresholdImageFilterType::Pointer labelThresholdFilter
-//                            = FloatBinaryThresholdImageFilterType::New();
-
-//         labelThresholdFilter->SetInsideValue(255);
-//         labelThresholdFilter->SetOutsideValue(0);
-//         labelThresholdFilter->SetInput(relabelFilter->GetOutput());
-
-//        for(int i=1; i < connected->GetObjectCount() + 1; i++){
-//            labelThresholdFilter->SetLowerThreshold(i);
-//            labelThresholdFilter->SetUpperThreshold(i);
-//            labelThresholdFilter->Update();
-
-//            QString filename = QString("segmentation%1.tif").arg(i);
-//            qDebug(filename.toUtf8().constData());
-
-//            if(saveDebugImages) {
-//                writer->SetFileName(filename.toUtf8().constData());
-//                writer->SetInput(labelThresholdFilter->GetOutput());
-//                writer->Update();
-//            }
-
-//            RawSegmentationVolumeSPtr volumeRepresentation(new RawSegmentationVolume(labelThresholdFilter->GetOutput()));
-//            volumeRepresentation->fitToContent();
-
-//            SegmentationRepresentationSList repList;
-//            repList << volumeRepresentation;
-//            repList << MeshRepresentationSPtr(new MarchingCubesMesh(volumeRepresentation));
-
-//            addOutputRepresentations(i, repList);
-
-//            m_outputs[i]->updateModificationTime();
-
-//        }
-//    } catch( itk::ExceptionObject & err ) {
-//        qDebug() << tr("Itk exception on plugin caught at %1:%2. Error: %3.").arg(__FILE__).arg(__LINE__).arg(err.what());
-//        qDebug("Returning focus to ESPina.");
-//        return;
-//    }
-
-//}
