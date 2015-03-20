@@ -90,23 +90,10 @@ namespace itk
         void SetOverlap(const typename TImage::OffsetType overlap);
 
         void pasteCroppedRegions(std::vector<typename TImage::Pointer>& probabilisticOutSegs,
-                                 typename TImage::Pointer& outputImage);
+                                        typename TImage::Pointer& outputImage);
 
-        void pasteCroppedRegions(const typename TImage::RegionType volumeRegion,
-                                 const typename TImage::SizeType numSplits,
-                                 std::vector<typename TImage::Pointer>& probabilisticOutSegs,
-                                 std::vector<typename TImage::RegionType>& cropRegions,
-                                 std::vector<typename TImage::RegionType>& pasteDRegions,
-                                 std::vector<typename TImage::RegionType>& pasteORegions,
+        void pasteCroppedRegionsWithFilter(std::vector<typename TImage::Pointer>& probabilisticOutSegs,
                                  typename TImage::Pointer& outputImage);
-
-        void pasteCroppedRegions(const typename TImage::ConstPointer rawVolume,
-                                 const typename TImage::SizeType originalSize,
-                                 const typename TImage::OffsetType overlap,
-                                 const typename TImage::SizeType numSplits,
-                                 std::vector<typename TImage::RegionType>& cropRegions,
-                                 std::vector<typename TImage::RegionType>& pasteDRegions,
-                                 std::vector<typename TImage::RegionType>& pasteORegions);
 
         void pasteCroppedRegionsFromDisk(const typename TImage::ConstPointer rawVolume,
                                          const typename TImage::SizeType originalSize,

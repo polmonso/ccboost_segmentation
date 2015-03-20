@@ -64,6 +64,7 @@ CvlabPanel::CvlabPanel(CcboostSegmentationPlugin* manager,
                        QWidget*            parent)
 : m_manager(manager)
 , m_gui(new GUI())
+, m_msg("ccboost")
 , m_model(model)
 , m_viewManager(viewManager)
 , m_factory(factory)
@@ -89,6 +90,13 @@ CvlabPanel::CvlabPanel(CcboostSegmentationPlugin* manager,
 
   connect(m_manager,           SIGNAL(predictionChanged(QString)),
                this,                SLOT(volumeOverlayChanged(QString)));
+
+  connect(m_manager, SIGNAL(progress(int)),
+           this,     SLOT(updateProgress(int)));
+
+  connect(m_manager, SIGNAL(publishMsg(QString)),
+           this,     SLOT(updateMsg(QString)));
+
 
   bindGUISignals();
 
@@ -150,7 +158,7 @@ void CvlabPanel::setVolume(QFileInfo volumeFile){
         m_gui->previewOpacity->setEnabled(true);
         m_gui->previewVisibility->setEnabled(true);
         m_gui->previewGroup->setEnabled(true);
-        m_gui->abortAutoSegmenter->setEnabled(true);
+        m_gui->abortTask->setEnabled(true);
 
     } catch( itk::ExceptionObject & err ) {
         std::cerr << "ExceptionObject caught !" << std::endl;
@@ -268,7 +276,10 @@ void CvlabPanel::abort(){
     m_gui->previewOpacity->setEnabled(false);
     m_gui->previewVisibility->setEnabled(false);
     m_gui->previewGroup->setEnabled(false);
-    m_gui->abortAutoSegmenter->setEnabled(false);
+    m_gui->abortTask->setEnabled(false);
+
+    //TODO abort ccboost task if any
+    //m_manager->abort();
 
     //TODO discard segmentation and destroy data/preview
     if(m_preview) {
@@ -290,7 +301,7 @@ void CvlabPanel::extractSegmentations()
                fBinaryThresholdImageFilterType::Pointer thresholdFilter
                        = fBinaryThresholdImageFilterType::New();
                thresholdFilter->SetInput(m_volume);
-               thresholdFilter->SetLowerThreshold(m_threshold*(m_probabilityMaxValue - m_probabilityMinValue) + m_probabilityMinValue);
+               thresholdFilter->SetLowerThreshold(m_threshold);
                thresholdFilter->SetInsideValue(255);
                thresholdFilter->SetOutsideValue(0);
                thresholdFilter->Update();
@@ -300,15 +311,24 @@ void CvlabPanel::extractSegmentations()
         outputSegmentation->DisconnectPipeline();
 
         ESPINA_SETTINGS(settings);
+        settings.beginGroup("ccboost segmentation");
         std::string cacheDir = "./";
         bool saveIntermediateVolumes = false;
 
         if (settings.contains("Save Intermediate Volumes"))
              saveIntermediateVolumes = settings.value("Save Intermediate Volumes").toBool();
+
+        //warning, cache dir will be different than the one used for storing features and other data
         if (settings.contains("Features Directory"))
              cacheDir = settings.value("Features Directory").toString().toStdString();
 
-        //warning, cache dir will be different than the one used for storing features and other data
+        typedef itk::ImageFileWriter< itkVolumeType > WriterType;
+        WriterType::Pointer writer = WriterType::New();
+        if(saveIntermediateVolumes) {
+            writer->SetFileName(cacheDir + "binarized.tif");
+            writer->SetInput(outputSegmentation);
+            writer->Update();
+        }
 
         itkVolumeType::SpacingType spacing = volumetricData(m_viewManager->activeChannel()->asInput()->output())->itkImage()->GetSpacing();
 
@@ -320,31 +340,6 @@ void CvlabPanel::extractSegmentations()
                                        saveIntermediateVolumes, cacheDir);
 
         m_manager->createImportTask(outputSegmentation);
-
-        std::vector<itkVolumeType::Pointer> outSegList;
-
-        CcboostAdapter::splitSegmentations(outputSegmentation, outSegList,
-                                           saveIntermediateVolumes, cacheDir);
-
-        m_undoStack->beginMacro("Create import segmentations");
-
-        SegmentationAdapterSList createdSegmentations = m_manager->createSegmentations(outSegList,
-                                                   CCB::ImportTask::IMPORTED);
-
-        //TODO create a task or something to do this,
-        //because it is so slow that it freezes espina for a while
-
-        int i = 1;
-        for(auto segmentation: createdSegmentations){
-
-            SampleAdapterSList samples;
-            samples << QueryAdapter::sample(m_viewManager->activeChannel());
-            Q_ASSERT(!samples.empty());
-            std::cout << "Create segmentation " << i++ << "/" << outSegList.size() << "." << std::endl;
-            m_undoStack->push(new AddSegmentations(segmentation, samples, m_model));
-
-        }
-        m_undoStack->endMacro();
 
         //destroy preview
         if(m_preview){
@@ -358,7 +353,7 @@ void CvlabPanel::extractSegmentations()
         m_gui->previewOpacity->setEnabled(false);
         m_gui->previewVisibility->setEnabled(false);
         m_gui->previewGroup->setEnabled(false);
-        m_gui->abortAutoSegmenter->setEnabled(false);
+        m_gui->abortTask->setEnabled(false);
 
     }
 }
@@ -368,17 +363,39 @@ void CvlabPanel::onFinished()
 {
 }
 
+
+//------------------------------------------------------------------------
+void CvlabPanel::updateProgress(int progress)
+{
+  //m_gui->progressBar->setVisible(progress > 0 && progress < 100);
+  m_gui->progressBar->setValue(progress);
+  updateMsg(m_msg);
+
+  if(progress==100)
+      m_gui->progressBar->setEnabled(false);
+
+}
+
+//------------------------------------------------------------------------
+void CvlabPanel::updateMsg(QString msg)
+{
+  m_msg = msg;
+  auto text = tr("%1%:%2%").arg(m_msg).arg(m_gui->progressBar->value());
+  m_gui->progressBar->setFormat(text);
+
+}
+
 //------------------------------------------------------------------------
 void CvlabPanel::bindGUISignals()
 {
 
     m_gui->bMitochondriaCcboost->setToolTip("Create a synaptic ccboost segmentation from selected segmentations.");
-    connect(m_gui->bMitochondriaCcboost.get(), SIGNAL(triggered()),
-            this,                      SLOT(createSimpleMitochondriaSegmentation()));
+    connect(m_gui->bMitochondriaCcboost, SIGNAL(clicked(bool)),
+            this,                      SLOT(createMitochondriaSegmentation()));
 
     m_gui->bSynapseCcboost->setToolTip("Create a simple synaptic ccboost segmentation from selected segmentations.");
-    connect(m_gui->bSynapseCcboost.get(),      SIGNAL(triggered()),
-            this,                      SLOT(createSimpleSynapseSegmentation()));
+    connect(m_gui->bSynapseCcboost,    SIGNAL(clicked(bool)),
+            this,                      SLOT(createSynapseSegmentation()));
 
     connect(m_gui->previewVisibility,  SIGNAL(toggled(bool)),
             this,                      SLOT(changePreviewVisibility(bool)));
@@ -393,7 +410,7 @@ void CvlabPanel::bindGUISignals()
     connect(m_gui->createSegmentations,SIGNAL(clicked(bool)),
             this,                      SLOT(extractSegmentations()));
 
-    connect(m_gui->abortAutoSegmenter, SIGNAL(clicked(bool)),
+    connect(m_gui->abortTask,          SIGNAL(clicked(bool)),
             this,                      SLOT(abort()));
 
     m_gui->openOverlay->setToolTip("Import segmentation from segmented greyscale image");
@@ -406,28 +423,33 @@ void CvlabPanel::bindGUISignals()
 void CvlabPanel::createSegmentationImport()
 {
 
-    m_plugin->createImportTask();
+    m_manager->createImportTask();
+    m_gui->progressBar->setEnabled(true);
 
 }
 
 //-----------------------------------------------------------------------------
-void CvlabPanel::createSimpleMitochondriaSegmentation()
+void CvlabPanel::createMitochondriaSegmentation()
 {
     //FIXME Move the element setting to the plugin and load it from settings.
     //      This has to be set before merging the segmentations
     CcboostTask::ELEMENT = CcboostTask::MITOCHONDRIA;
     qWarning() << "Detecting " << CcboostTask::ELEMENT;
 
-    m_plugin->createCcboostTask(m_model->segmentations());
+    m_manager->createCcboostTask(m_model->segmentations());
+    m_gui->progressBar->setEnabled(true);
+
 }
 
 //-----------------------------------------------------------------------------
-void CvlabPanel::createSimpleSynapseSegmentation()
+void CvlabPanel::createSynapseSegmentation()
 {
     //FIXME Move the element setting to the plugin and load it from settings.
     //      This has to be set before merging the segmentations
     CcboostTask::ELEMENT = CcboostTask::SYNAPSE;
     qWarning() << "Detecting " << CcboostTask::ELEMENT;
 
-    m_plugin->createCcboostTask(m_model->segmentations());
+    m_manager->createCcboostTask(m_model->segmentations());
+    m_gui->progressBar->setEnabled(true);
+
 }

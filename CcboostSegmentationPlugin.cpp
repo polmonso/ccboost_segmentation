@@ -264,8 +264,9 @@ void CcboostSegmentationPlugin::createCcboostTask(SegmentationAdapterSList segme
     struct CcboostSegmentationPlugin::Data2 data;
     m_executingTasks.insert(ccboostTask.get(), data);
     connect(ccboostTask.get(), SIGNAL(finished()), this, SLOT(finishedTask()));
-    connect(ccboostTask.get(), SIGNAL(message(QString)), this, SLOT(publishMsg(QString)));
+    connect(ccboostTask.get(), SIGNAL(message(QString)), this, SLOT(processTaskMsg(QString)));
     connect(ccboostTask.get(), SIGNAL(questionContinue(QString)), this, SLOT(publishCritical(QString)));
+    connect(ccboostTask.get(), SIGNAL(progress(int)), this, SLOT(updateProgress(int)));
     Task::submit(ccboostTask);
 
     return;
@@ -397,16 +398,6 @@ void CcboostSegmentationPlugin::segmentationsAdded(SegmentationAdapterSList segm
     }
 }
 
-void CcboostSegmentationPlugin::publishMsg(QString msg){
-
-    qDebug() << "Show message: " << msg;
-
-    if(!msg.isEmpty())
-        QMessageBox::critical(NULL, "Synapse Segmentation Message Box",
-                             msg, QMessageBox::Yes, QMessageBox::Yes);
-
-}
-
 void CcboostSegmentationPlugin::questionContinue(QString msg){
 
     qDebug() << "Show message: " << msg;
@@ -429,6 +420,21 @@ void CcboostSegmentationPlugin::questionContinue(QString msg){
     }
 
 
+}
+
+void CcboostSegmentationPlugin::updateProgress(int value) {
+    emit progress(value);
+}
+
+void CcboostSegmentationPlugin::processTaskMsg(QString msg){
+
+    qDebug() << "Show message: " << msg;
+
+//     if(!msg.isEmpty())
+//         QMessageBox::critical(NULL, "Synapse Segmentation Message Box",
+//                              msg, QMessageBox::Yes, QMessageBox::Yes);
+
+    emit publishMsg(msg);
 }
 
 //-----------------------------------------------------------------------------

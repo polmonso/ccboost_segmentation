@@ -174,7 +174,7 @@ void postprocess(const ConfigData<itkVolumeType>& cfgdata,
       writer->Update();
 
       std::vector<itkVolumeType::Pointer> outSegList;
-      CcboostAdapter::splitSegmentations(outputSegmentation, outSegList, cfgdata.saveIntermediateVolumes, cfgdata.cacheDir);
+      CcboostAdapter::splitSegmentations(outputSegmentation, outSegList, false, cfgdata.saveIntermediateVolumes, cfgdata.cacheDir);
 
 }
 

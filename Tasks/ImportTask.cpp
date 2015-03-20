@@ -130,6 +130,7 @@ void ImportTask::run()
 
   try {
 
+      //we have to load m_inputSegmentation
       if(loadFromDisk) {
           typedef itk::ImageFileReader<itkVolumeType> ReaderType;
           ReaderType::Pointer reader = ReaderType::New();
@@ -139,7 +140,7 @@ void ImportTask::run()
           m_inputSegmentation = reader->GetOutput();
       }
 
-      CcboostAdapter::splitSegmentations(m_inputSegmentation, outSegList);
+      CcboostAdapter::splitSegmentations(m_inputSegmentation, outSegList, true);
 
   } catch( itk::ExceptionObject & err ) {
       qDebug() << tr("Itk exception on plugin caught at %1:%2. Error: %3.").arg(__FILE__).arg(__LINE__).arg(err.what());

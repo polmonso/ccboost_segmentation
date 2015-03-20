@@ -91,12 +91,15 @@ int GradientMagnitudeImageFilter2Execute(float sigma, const itk::Image<unsigned 
 
         OutputImageType::Pointer outImg = filter->GetOutput();
 
+        makeNew( writer, WriterType );
+        writer->SetInput( outImg );
+        writer->SetFileName( "./gradient.mha" );
+
         // reset spacing
         spacing[0] = spacing[1] = spacing[2] = 1.0;
 
         outImg->SetSpacing( spacing );
 
-        makeNew( writer, WriterType );
         writer->SetInput( outImg );
         writer->SetFileName( outputFile );
 

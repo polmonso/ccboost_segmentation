@@ -23,6 +23,8 @@
 #include <vector>
 #include <iostream>
 
+#include <itkImageFileWriter.h>
+
 //FIXME I don't like this, but const string inside a tempalted class is tricky
 #define FEATUREEXTENSION ".mha"
 
@@ -261,6 +263,35 @@ public:
         std::cout << "SVox cubeness: " << svoxCubeness <<  std::endl;
         std::cout << "Num stumps: " << numStumps << std::endl;
         std::cout << "Outfilename: " << outFileName << std::endl;
+    }
+
+    void saveVolumes()
+    {
+
+        typedef itk::ImageFileWriter< ItkImageType > WriterType;
+        typename WriterType::Pointer writer = WriterType::New();
+
+        try
+        {
+            for(int i = 0; i<train.size(); i++)
+            {
+                writer->SetInput(train[i].rawVolumeImage);
+                writer->SetFileName(cacheDir + std::to_string(i) + "-trainChunk.tif");
+                writer->Update();
+                writer->SetInput(train[i].groundTruthImage);
+                writer->SetFileName(cacheDir + std::to_string(i) + "-gt-trainChunk.tif");
+                writer->Update();
+            }
+            for(int i = 0; i<test.size(); i++)
+            {
+                writer->SetInput(test[i].rawVolumeImage);
+                writer->SetFileName(cacheDir + std::to_string(i) + "-testChunk.tif");
+                writer->Update();
+            }
+        } catch( itk::ExceptionObject & error ) {
+            std::cerr << __FILE__ << __LINE__ << "Error: " << error << std::endl;
+            return EXIT_FAILURE;
+        }
     }
 
 };

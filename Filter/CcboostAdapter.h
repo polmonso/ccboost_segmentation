@@ -40,8 +40,9 @@ public:
 
     static void splitSegmentations(const itkVolumeType::Pointer outputSegmentation,
                                    std::vector<itkVolumeType::Pointer>& outSegList,
+                                   bool skipBiggest = false,
                                    bool saveIntermediateVolumes = false,
-                                   std::string cacheDir = std::string(".") );
+                                   std::string cacheDir = std::string("."));
 
     static void postprocessing(const ConfigData<itkVolumeType> &cfgData, itkVolumeType::Pointer& outputSegmentation);
 

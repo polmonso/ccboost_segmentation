@@ -170,14 +170,6 @@ void CcboostTask::run()
   itkVolumeType::Pointer segmentedGroundTruth = mergeSegmentations(normalizedChannelItk,
                                                                    m_groundTruthSegList,
                                                                    m_backgroundGroundTruthSegList);
-  //save itk image (volume) as binary/classed volume here
-  WriterType::Pointer writer = WriterType::New();
-  if(ccboostconfig.saveIntermediateVolumes){
-      writer->SetFileName(ccboostconfig.cacheDir + "labelmap.tif");
-      writer->SetInput(segmentedGroundTruth);
-      writer->Update();
-      qDebug() << "labelmap.tif created";
-  }
 
   //Get bounding box of annotated data
   typedef itk::ImageMaskSpatialObject< 3 > ImageMaskSpatialObjectType;
@@ -189,6 +181,8 @@ void CcboostTask::run()
   annotatedRegion.PadByRadius(offset);
 
   annotatedRegion.Crop(channelItk->GetLargestPossibleRegion());
+
+  std::cout << "annotated region: " << annotatedRegion << std::endl;
 
   unsigned int numPredictRegions;
   if(!enoughMemory(channelItk, annotatedRegion, numPredictRegions))
@@ -234,6 +228,15 @@ void CcboostTask::run()
   QDir dir(QString::fromStdString(ccboostconfig.cacheDir));
   dir.mkpath(QString::fromStdString(ccboostconfig.cacheDir));
 
+  //save itk image (volume) as binary/classed volume here
+   if(ccboostconfig.saveIntermediateVolumes){
+       WriterType::Pointer writer = WriterType::New();
+       writer->SetFileName(ccboostconfig.cacheDir + "labelmap.tif");
+       writer->SetInput(segmentedGroundTruth);
+       writer->Update();
+       qDebug() << "labelmap.tif created";
+   }
+
   //volume spliting
   //FIXME decide whether or not to divide the volume depending on the memory available and size of it
   bool divideVolume = true;
@@ -273,7 +276,7 @@ void CcboostTask::run()
 //      cfgdata.numPredictRegions = SplitterType::numRegionsFittingInMemory( region.GetSize(),
 //                                                                           CcboostAdapter::FREEMEMORYREQUIREDPROPORTIONPREDICT);
 
-      std::cout << "Train pieces: " << std::endl;
+      std::cout << "Train pieces: " << ccboostconfig.numPredictRegions << std::endl;
 
       SplitterType trainSplitter(annotatedRegion, ccboostconfig.numPredictRegions);
 
@@ -597,11 +600,30 @@ void CcboostTask::runCore(const ConfigData<itkVolumeType>& ccboostconfig,
     try {
 
         // MultipleROIData allROIs = preprocess(channels, groundTruths, cacheDir, featuresList);
-        if(!CcboostAdapter::core(ccboostconfig, probabilisticOutputSegmentations, outputSplittedSegList, outputSegmentations)) {
+        if(!CcboostAdapter::core(ccboostconfig,
+                                 probabilisticOutputSegmentations,
+                                 outputSplittedSegList,
+                                 outputSegmentations))
+        {
             itk::MultiThreader::SetGlobalDefaultNumberOfThreads( prevITKNumberOfThreads );
             return;
         }
 
+        typedef itk::ImageFileWriter< CcboostAdapter::FloatTypeImage > fWriterType;
+        fWriterType::Pointer fwriter = fWriterType::New();
+        fwriter->SetFileName(ccboostconfig.cacheDir + "outputSegmentation.tif");
+        fwriter->SetInput(probabilisticOutputSegmentations.at(0));
+        try {
+
+            fwriter->Update();
+
+        } catch(itk::ExceptionObject &exp){
+            std::cout << "Warning: Error writing probabilistic output. what(): " << exp << std::endl;
+            return EXIT_FAILURE;
+        } catch(...) {
+            std::cout << "Warning: Error writing probabilistic output" << std::endl;
+            return EXIT_FAILURE;
+        }
     } catch( itk::ExceptionObject & err ) {
         // restore default number of threads
         itk::MultiThreader::SetGlobalDefaultNumberOfThreads( prevITKNumberOfThreads );

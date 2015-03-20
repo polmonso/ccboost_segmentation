@@ -99,11 +99,14 @@ namespace ESPINA
     void segmentationsAdded(SegmentationAdapterSList segmentations);
     void finishedTask();
     void finishedImportTask();
-    void publishMsg(QString msg);
+    void processTaskMsg(QString msg);
     void questionContinue(QString msg);
+    void updateProgress(int progress);
 
   signals:
     void predictionChanged(QString volumeFilename);
+    void progress(int);
+    void publishMsg(QString msg);
 
   private:
     struct Data2

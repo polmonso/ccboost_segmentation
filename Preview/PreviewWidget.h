@@ -53,7 +53,7 @@ namespace ESPINA {
 
       void setOpacity(float opacity); // opacity in [0.0, 1.0].
 
-      void setThreshold(float threshold); // threshold in [0.0, 1.0].
+      void setThreshold(float threshold); // threshold in [-minValue, +maxValue].
 
       void setVisibility(bool value);
 

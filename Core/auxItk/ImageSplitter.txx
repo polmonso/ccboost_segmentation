@@ -135,6 +135,12 @@ void ImageSplitter< TImage>::computeCropRegions(const typename TImage::SizeType 
 
         }
 
+        for(unsigned int idim = 0; idim < dim; idim++){
+            //Add original offset
+            cropIndexO[idim] += this->volumeLargestRegion.GetIndex()[idim];
+            pasteDIndexO[idim] += this->volumeLargestRegion.GetIndex()[idim];
+        }
+
         typename TImage::RegionType cropRegion(cropIndexO, cropSize);
         typename TImage::RegionType pasteDRegion(pasteDIndexO, pasteDSize);
         typename TImage::RegionType pasteORegion(pasteOIndexO, pasteOSize);
@@ -189,6 +195,57 @@ void ImageSplitter< TImage>::saveCroppedRegions(const typename TImage::ConstPoin
 
 template< class TImage>
 void ImageSplitter< TImage>::pasteCroppedRegions(std::vector<typename TImage::Pointer>& outSegs,
+                                                 typename TImage::Pointer& outputImage){
+
+    typename TImage::RegionType region;
+    typename TImage::IndexType index;
+
+    std::cout << "regionp " << volumeLargestRegion << std::endl;
+
+    std::cout << "indexp " << volumeLargestRegion.GetIndex() << std::endl;
+
+    index = volumeLargestRegion.GetIndex();
+    region.SetIndex(index);
+    region.SetSize(volumeLargestRegion.GetSize());
+    outputImage->SetRegions(volumeLargestRegion);
+    outputImage->Allocate();
+
+    typedef typename TImage::SizeType MySizeType;
+    int numRegions = 1;
+    for(int i=0; i < MySizeType::Dimension; i++) {
+        numRegions *= numSplits[i];
+    }
+
+    assert( numRegions == cropRegions.size());
+
+    for(int i=0; i < numRegions; i++){
+
+
+        TImage* inImage = outSegs[i];
+        TImage* outImage = outputImage;
+
+        itk::ImageAlgorithm::Copy(inImage, outImage, pasteORegions[i], pasteDRegions[i]);
+
+        typename  itk::ImageFileWriter< TImage>::Pointer writer = itk::ImageFileWriter< TImage>::New();
+
+        std::stringstream filenameOut;
+        filenameOut << "pastedOutput" << i << ".tif";
+        writer->SetFileName(filenameOut.str().c_str());
+        writer->SetInput( outputImage );
+
+        try {
+          writer->Update();
+        } catch( itk::ExceptionObject & err ) {
+          std::cerr << "ExceptionObject caught when writing!" << std::endl;
+          std::cerr << err << std::endl;
+          return;
+        }
+    }
+
+}
+
+template< class TImage>
+void ImageSplitter< TImage>::pasteCroppedRegionsWithFilter(std::vector<typename TImage::Pointer>& outSegs,
                                                  typename TImage::Pointer& outputImage){
 
     typename TImage::RegionType region;
