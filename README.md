@@ -1,4 +1,11 @@
 # README #
+
+EspINA Neuron Analyzer ccboost synapse/mitochondria segmentation plugin and import plugin.
+
+The current version of the plugin is under development and uses the develop branch of EspINA, about to be released.
+
+![EspINA Screenshot](/../task-based/Screenshots/espina2.png "Mitochondria segmentation")
+
 ### How do I get set up? ###
 
 * Configuration
