@@ -23,7 +23,7 @@
 //#include <Filter/CcboostSegmentationFilter.h>
 //#include <Filter/SASFetchBehaviour.h>
 #include <GUI/Analysis/SASAnalysisDialog.h>
-#include <GUI/CcboostSegmentationToolGroup.h>
+//#include <GUI/CcboostSegmentationToolGroup.h>
 #include <GUI/Settings/CcboostSegmentationSettings.h>
 //#include <Core/Extensions/ExtensionFactory.h>
 #include <Tasks/CcboostTask.h>
@@ -77,7 +77,6 @@ CcboostSegmentationPlugin::CcboostSegmentationPlugin()
 , m_scheduler       {nullptr}
 , m_undoStack       {nullptr}
 , m_settings        {SettingsPanelSPtr(new CcboostSegmentationSettings())}
-, m_toolGroup       {nullptr}
 {
 //    QStringList hierarchy;
 //     hierarchy << "Analysis";
@@ -114,8 +113,6 @@ void CcboostSegmentationPlugin::init(ModelAdapterSPtr model,
   m_scheduler = scheduler;
   m_undoStack = undoStack;
 
-  m_toolGroup = new CcboostSegmentationToolGroup{m_model, m_undoStack, m_factory, m_viewManager, this};
-
   // for automatic computation of CVL
   connect(m_model.get(), SIGNAL(segmentationsAdded(SegmentationAdapterSList)),
           this, SLOT(segmentationsAdded(SegmentationAdapterSList)));
@@ -151,11 +148,15 @@ NamedColorEngineSList CcboostSegmentationPlugin::colorEngines() const
 }
 
 //-----------------------------------------------------------------------------
-QList<ToolGroup *> CcboostSegmentationPlugin::toolGroups() const
+RepresentationFactorySList CcboostSegmentationPlugin::representationFactories() const
 {
-  QList<ToolGroup *> tools;
+  return RepresentationFactorySList();
+}
 
-  tools << m_toolGroup;
+//-----------------------------------------------------------------------------
+QList<CategorizedTool> CcboostSegmentationPlugin::tools() const
+{
+  QList<CategorizedTool> tools;
 
   return tools;
 }
@@ -169,12 +170,6 @@ QList<DockWidget *> CcboostSegmentationPlugin::dockWidgets() const
   docks << new CvlabPanel(this, m_model, m_viewManager, m_factory, m_undoStack);
 
   return docks;
-}
-
-//-----------------------------------------------------------------------------
-RendererSList CcboostSegmentationPlugin::renderers() const
-{
-  return RendererSList();
 }
 
 //-----------------------------------------------------------------------------
@@ -325,12 +320,21 @@ void CcboostSegmentationPlugin::createImportTask(itkVolumeType::Pointer segmenta
 }
 
 //-----------------------------------------------------------------------------
-void CcboostSegmentationPlugin::segmentationsAdded(SegmentationAdapterSList segmentations)
+void CcboostSegmentationPlugin::segmentationsAdded(ViewItemAdapterSList segmentationsItems)
 {
+
+// Automatic segmentation is not supported
+#if 0
     ESPINA_SETTINGS(settings);
     settings.beginGroup("ccboost segmentation");
     if (!settings.contains("Automatic Computation") || !settings.value("Automatic Computation").toBool())
         return;
+
+    SegmentationAdapterSList segmentations;
+    for(auto item : segmentationsItems) {
+        auto segmentation = segmentationPtr(item.get());
+        segmentations << segmentation;
+    }
 
     if(m_executingTasks.isEmpty()){
         //if task is not running, create
@@ -396,6 +400,7 @@ void CcboostSegmentationPlugin::segmentationsAdded(SegmentationAdapterSList segm
         task->ccboostconfig.train.push_back(data);
 
     }
+#endif
 }
 
 void CcboostSegmentationPlugin::questionContinue(QString msg){

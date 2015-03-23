@@ -36,6 +36,8 @@
 #include <Tasks/CcboostTask.h>
 #include <Tasks/ImportTask.h>
 
+#include <GUI/Model/SegmentationAdapter.h>
+
 //Qt
 #include <QMessageBox>
 
@@ -65,11 +67,11 @@ namespace ESPINA
 
     virtual NamedColorEngineSList colorEngines() const;
 
-    virtual QList<ToolGroup *> toolGroups() const;
+    virtual RepresentationFactorySList representationFactories() const;
+
+    virtual QList<CategorizedTool> tools() const;
 
     virtual QList<DockWidget *> dockWidgets() const;
-
-    virtual RendererSList renderers() const;
 
     virtual SettingsPanelSList settingsPanels() const;
 
@@ -96,7 +98,7 @@ namespace ESPINA
     SegmentationAdapterSList createSegmentations(std::vector<itkVolumeType::Pointer>&  predictedSegmentationsList, const QString &categoryName);
 
   public slots:
-    void segmentationsAdded(SegmentationAdapterSList segmentations);
+    void segmentationsAdded(ViewItemAdapterSList segmentations);
     void finishedTask();
     void finishedImportTask();
     void processTaskMsg(QString msg);
@@ -130,7 +132,6 @@ namespace ESPINA
     QUndoStack                      *m_undoStack;
     SettingsPanelSPtr                m_settings;
     SegmentationExtensionFactorySPtr m_extensionFactory;
-    ToolGroupPtr                     m_toolGroup;
     MenuEntry                        m_menuEntry;
     FilterFactorySPtr                m_filterFactory;
     SegmentationAdapterList          m_analysisSynapses;

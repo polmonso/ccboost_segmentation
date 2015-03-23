@@ -31,10 +31,12 @@
 // ESPINA
 #include <Core/EspinaTypes.h>
 #include <Core/Analysis/Filter.h>
-#include <GUI/Representations/MeshRepresentation.h>
+//#include <GUI/Representations/MeshRepresentation.h>
 
 #include <Core/Analysis/Data/Mesh/MarchingCubesMesh.hxx>
 #include <Filter/ConfigData.h>
+
+#include <GUI/Model/SegmentationAdapter.h>
 
 // ITK
 #include <itkImageFileWriter.h>

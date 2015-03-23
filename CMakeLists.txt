@@ -106,7 +106,7 @@ QT4_WRAP_CPP(MOC_SOURCES
   CcboostSegmentationPlugin.h
 #  Filter/CcboostSegmentationFilter.h
   GUI/Settings/CcboostSegmentationSettings.h
-  GUI/CcboostSegmentationToolGroup.h
+#  GUI/CcboostSegmentationToolGroup.h
 #  GUI/FilterInspector/CcboostSegmentationFilterInspector.h
   Preview/PreviewSliceRepresentation.h
   Preview/PreviewWidget.h
@@ -130,7 +130,7 @@ set (PLUGIN_SOURCES
 #  GUI/Analysis/SASAnalysisDialog.cpp
 #  GUI/Analysis/SASTabularReport.cpp
 #  GUI/Analysis/SASInformationProxy.cpp
-  GUI/CcboostSegmentationToolGroup.cpp
+#  GUI/CcboostSegmentationToolGroup.cpp
   GUI/Settings/CcboostSegmentationSettings.cpp
   Preview/PreviewSliceRepresentation.cpp
   Preview/PreviewWidget.cpp

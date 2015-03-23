@@ -29,7 +29,7 @@
 
 // ESPINA
 #include <Support/ViewManager.h>
-#include <Support/Widgets/ToolGroup.h>
+#include <Support/Widgets/Tool.h>
 
 class QUndoStack;
 class QIcon;
