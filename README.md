@@ -9,7 +9,7 @@ add ```-std=c++11``` flag
 
 - iiboost and its deps directory (you'll fetch it with git-submodule below)
 - ITK (probably 4)
-- VTK (probably 4)
+- VTK (probably 6)
 - qt4
 - openmp
 and
