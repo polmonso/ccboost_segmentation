@@ -3,7 +3,7 @@
 
 * Configuration
 
-add -std=c++11 flag
+add ```-std=c++11``` flag
 
 * Dependencies
 
@@ -201,5 +201,3 @@ The other particulars of the Ccboost Plugin follow. The description of the Ccboo
 
 
 ## Ccboost Segmentation Plugin
-
-
