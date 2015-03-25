@@ -265,7 +265,7 @@ public:
         std::cout << "Outfilename: " << outFileName << std::endl;
     }
 
-    void saveVolumes()
+    void saveVolumes() const
     {
 
         typedef itk::ImageFileWriter< ItkImageType > WriterType;

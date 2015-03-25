@@ -525,6 +525,10 @@ void CcboostSegmentationPlugin::finishedImportTask()
 
     m_undoStack->beginMacro("Create import segmentations");
 
+    SampleAdapterSList samples;
+    samples << QueryAdapter::sample(m_viewManager->activeChannel());
+    Q_ASSERT(!samples.empty());
+
     SegmentationAdapterSList createdSegmentations;
     for(CCB::ImportTaskPtr imptask: m_finishedImportTasks.keys())
     {
@@ -532,18 +536,12 @@ void CcboostSegmentationPlugin::finishedImportTask()
                                                    CCB::ImportTask::IMPORTED);
 
         int i = 1;
-        for(auto segmentation: createdSegmentations){
-
-              SampleAdapterSList samples;
-              samples << QueryAdapter::sample(m_viewManager->activeChannel());
-              Q_ASSERT(!samples.empty());
-              //std::cout << "Create segmentation " << i++ << "/" << createdSegmentations.size() << "." << std::endl;
-                //auto start = std::chrono::system_clock::now();
-              m_undoStack->push(new AddSegmentations(segmentation, samples, m_model));
-              //auto duration = std::chrono::duration_cast< std::chrono::milliseconds >
-              //                      (std::chrono::system_clock::now() - start);
-              // std::cout << "Create Elapsed " << duration.count() << std::endl;;
-          }
+        m_undoStack->push(new AddSegmentations(createdSegmentations, samples, m_model));
+        //std::cout << "Create segmentation " << i++ << "/" << createdSegmentations.size() << "." << std::endl;
+        //auto start = std::chrono::system_clock::now();
+        //auto duration = std::chrono::duration_cast< std::chrono::milliseconds >
+        //                      (std::chrono::system_clock::now() - start);
+        // std::cout << "Create Elapsed " << duration.count() << std::endl;;
 
         //FIXME the following doesn't work, it tries to add crossed relations and fails
 //        //TODO there's no way to initialize the list with n-copies directly?
@@ -606,6 +604,7 @@ SegmentationAdapterSList CcboostSegmentationPlugin::createSegmentations(std::vec
 
         OutputSPtr output{new Output(sourceFilter.get(), id, spacing)};
 
+        std::cout << "Segmentation bounds" << bounds << std::endl;
         DefaultVolumetricDataSPtr volumetricData{new SparseVolume<itkVolumeType>(bounds, spacing)};
         volumetricData->draw(seg);
 

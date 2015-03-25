@@ -30,7 +30,7 @@
 
 // ESPINA
 #include <Core/EspinaTypes.h>
-#include <Core/Analysis/Filter.h>
+//#include <Core/Analysis/Filter.h>
 //#include <GUI/Representations/MeshRepresentation.h>
 
 #include <Core/Analysis/Data/Mesh/MarchingCubesMesh.hxx>
