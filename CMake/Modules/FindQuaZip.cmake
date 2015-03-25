@@ -28,7 +28,8 @@ ELSE (QUAZIP_INCLUDE_DIRS AND QUAZIP_LIBRARIES)
 			NAMES quazip
 			HINTS /usr/lib /usr/lib64 ~/code/espina-project2/quazip-0.6.2/build2/lib
 		)
-		FIND_PATH(QUAZIP_INCLUDE_DIR quazip.h
+                #if they ever remove the relative path quazip/* from headers including it, remove the quazip/
+		FIND_PATH(QUAZIP_INCLUDE_DIR quazip/quazip.h
 			HINTS /usr/include /usr/local/include ~/code/espina-project2/quazip-0.6.2/build2/include 
 			PATH_SUFFIXES quazip
 		)
