@@ -58,7 +58,7 @@ void PreviewWidget::setEnabled(bool enable)
 }
 
 //-----------------------------------------------------------------------------
-void PreviewWidget::setPreviewVolume(CcboostAdapter::FloatTypeImage::Pointer volume)
+void PreviewWidget::setPreviewVolume(FloatTypeImage::Pointer volume)
 {
   for(auto representation : m_representations)
   {

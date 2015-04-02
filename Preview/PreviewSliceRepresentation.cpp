@@ -68,7 +68,7 @@ PreviewSliceRepresentation::PreviewSliceRepresentation(View2D *view)
 
   view->addActor(m_imageActor);
 
-  connect(view, SIGNAL(sliceChanged(Plane,Nm)),
+  connect(view, SIGNAL(crosshairPlaneChanged(Plane, Nm)),
           this, SLOT(setSlice(Plane,Nm)));
 }
 

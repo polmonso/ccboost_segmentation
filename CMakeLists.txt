@@ -18,9 +18,9 @@ if (BUILD_ESPINA_PLUGIN)
   find_package(ESPINA REQUIRED)
   include(${ESPINA_USE_FILE})
 
-#FIXME espina headers need wuazip headers and
+#FIXME espina headers need quazip headers and
 #if they are not in system dir we need to request them
-#(find fetches the libraries too, thought we don't need them
+#(find fetches the libraries too, thought we don't need them)
   find_package(QuaZip REQUIRED)
   include_directories(${QUAZIP_INCLUDE_DIRS})
 endif ()
@@ -56,7 +56,11 @@ set(auxItkFilters Core/auxItk/GradientMagnitudeImageFilter2.cxx
 
 add_definitions(
   -std=c++11
-  -fpermissive
+#  -fpermissive
+)
+
+remove_definitions(
+-fpermissive
 )
 
 set( iiboost_SOURCE_DIR Core/iiboost )
@@ -97,6 +101,11 @@ if(BUILD_ESPINA_PLUGIN)
   #  GUI/FilterInspector/CcboostSegmentationFilterInspector.ui
   )
 
+#headers added so they show up on qtcreator
+set(PLUGIN_HEADERS
+    Filter/CcboostAdapter.tpp #added so it shows up on qtcreator
+)
+
   QT4_WRAP_CPP(MOC_SOURCES
     Filter/CcboostAdapter.h
     Tasks/CcboostTask.h
@@ -120,6 +129,7 @@ set (PLUGIN_SOURCES
 #  Core/Extensions/CcboostSegmentationExtension.cpp
   Tasks/CcboostTask.cpp
   Tasks/ImportTask.cpp
+# templated included in header CcboostAdapter.in
   Filter/CcboostAdapter.cpp
   DockWidget/CvlabPanel.cpp
   Preview/PreviewSliceRepresentation.cpp
@@ -130,7 +140,7 @@ set (PLUGIN_SOURCES
   Preview/PreviewSliceRepresentation.cpp
   Preview/PreviewWidget.cpp
   DockWidget/CvlabPanel.cpp
-  Label.cpp
+#  Label.cpp
 #  GUI/FilterInspector/CcboostSegmentationFilterInspector.cpp
   ${auxItkFilters}
 )
@@ -156,7 +166,7 @@ if(MINGW)
   endif(DEFINED ESPINA_VERSION_MAJOR)
 endif(MINGW)
 
-add_library(CcboostSegmentationPlugin SHARED ${PLUGIN_SOURCES})
+add_library(CcboostSegmentationPlugin SHARED ${PLUGIN_SOURCES} ${PLUGIN_HEADERS})
 GENERATE_EXPORT_HEADER(
              CcboostSegmentationPlugin
              BASE_NAME CcboostSegmentationPlugin

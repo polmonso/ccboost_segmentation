@@ -26,13 +26,16 @@
 // Plugin
 //#include "Core/Extensions/CcboostSegmentationExtension.h"
 
+#include <Core/EspinaTypes.h>
+
+#include "CCBTypes.h"
+
 // ESPINA
 #include <Support/ViewManager.h>
 #include <Support/Plugin.h>
 #include <Core/Analysis/Input.h>
 #include <Core/Analysis/DataFactory.h>
 #include <Core/Factory/FilterFactory.h>
-#include <Core/EspinaTypes.h>
 #include <Tasks/CcboostTask.h>
 #include <Tasks/ImportTask.h>
 
@@ -86,8 +89,16 @@ namespace ESPINA
                                    SegmentationAdapterSList &validBgSegmentations);
 
     void createCcboostTask(SegmentationAdapterSList segmentations);
-    void createImportTask();
-    void createImportTask(itkVolumeType::Pointer segmentation);
+
+    void createImportTask(FloatTypeImage::Pointer segmentation, float threshold = 0.0);
+
+    void abortTasks(){
+        for(auto task : m_executingTasks.keys())
+                    task->abort();
+        for(auto task : m_executingImportTasks.keys())
+                    task->abort();
+
+    }
 
     //FIXME //TODO hack
   public:
@@ -96,14 +107,18 @@ namespace ESPINA
     }
 
     SegmentationAdapterSList createSegmentations(std::vector<itkVolumeType::Pointer>&  predictedSegmentationsList, const QString &categoryName);
+    SegmentationAdapterSList createSegmentations(CCB::LabelMapType::Pointer& predictedSegmentationsList, const QString &categoryName);
 
   public slots:
-    void segmentationsAdded(ViewItemAdapterSList segmentations);
+    //NOT SUPPORTED AT THE MOMENT
+    //void segmentationsAdded(ViewItemAdapterSList segmentations);
     void finishedTask();
     void finishedImportTask();
     void processTaskMsg(QString msg);
-    void questionContinue(QString msg);
+    void publishCritical(QString msg);
     void updateProgress(int progress);
+
+    virtual void onAnalysisClosed();
 
   signals:
     void predictionChanged(QString volumeFilename);
@@ -135,6 +150,8 @@ namespace ESPINA
     MenuEntry                        m_menuEntry;
     FilterFactorySPtr                m_filterFactory;
     SegmentationAdapterList          m_analysisSynapses;
+    DockWidget                      *m_dockWidget;
+
 
     QMap<CCB::CcboostTaskPtr, struct Data2> m_executingTasks;
     QMap<CCB::CcboostTaskPtr, struct Data2> m_finishedTasks;
@@ -142,7 +159,7 @@ namespace ESPINA
     QMap<CCB::ImportTaskPtr, struct ImportData> m_executingImportTasks;
     QMap<CCB::ImportTaskPtr, struct ImportData> m_finishedImportTasks;
 
-    friend class CcboostSegmentationToolGroup;
+//    friend class CcboostSegmentationToolGroup;
   };
 
   typedef std::shared_ptr<CcboostSegmentationPlugin> CcboostSegmentationPluginSPtr;

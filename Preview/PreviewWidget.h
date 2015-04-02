@@ -49,7 +49,7 @@ namespace ESPINA {
       virtual void setEnabled(bool enable);
 
     public slots:
-      void setPreviewVolume(CcboostAdapter::FloatTypeImage::Pointer volume);
+      void setPreviewVolume(FloatTypeImage::Pointer volume);
 
       void setOpacity(float opacity); // opacity in [0.0, 1.0].
 
@@ -63,7 +63,7 @@ namespace ESPINA {
       CcboostSegmentationPluginSPtr m_ccboost;
       QMap<RenderView *, PreviewSliceRepresentationSPtr> m_representations;
 
-      CcboostAdapter::FloatTypeImage::Pointer m_volume;
+      FloatTypeImage::Pointer m_volume;
     };
 
     using PreviewWidgetSPtr = std::shared_ptr<PreviewWidget>;

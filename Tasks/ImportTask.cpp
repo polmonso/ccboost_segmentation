@@ -76,14 +76,32 @@ const QString ImportTask::SUPPORTED_FILES = tr("Binary Images (*.tiff *.tif *.jp
 //------------------------------------------------------------------------
 ImportTask::ImportTask(ChannelAdapterPtr channel,
                        SchedulerSPtr     scheduler,
-                       std::string file)
+                       std::string file,
+                       float threshold)
 : Task(scheduler)
 , m_channel(channel)
 , m_abort{false}
-, filename(file)
+, m_filename(file)
+, m_loadFromDisk{true}
+, m_doThreshold{true}
+, m_threshold{threshold}
 {
 
-    loadFromDisk = true;
+}
+
+//------------------------------------------------------------------------
+ImportTask::ImportTask(ChannelAdapterPtr channel,
+                       SchedulerSPtr     scheduler,
+                       FloatTypeImage::Pointer inputSegmentation,
+                       float threshold)
+: Task(scheduler)
+, m_channel(channel)
+, m_abort{false}
+, m_floatInputSegmentation(inputSegmentation)
+, m_loadFromDisk{false}
+, m_doThreshold{true}
+, m_threshold{threshold}
+{
 
 }
 
@@ -94,10 +112,12 @@ ImportTask::ImportTask(ChannelAdapterPtr channel,
 : Task(scheduler)
 , m_channel(channel)
 , m_abort{false}
-, m_inputSegmentation(inputSegmentation)
+, m_binarySegmentation(inputSegmentation)
+, m_doThreshold{false}
+, m_loadFromDisk{false}
+, m_threshold{0.0} //irrellevant
 {
 
-    loadFromDisk = false;
 
 }
 
@@ -105,42 +125,76 @@ ImportTask::ImportTask(ChannelAdapterPtr channel,
 void ImportTask::run()
 {
 
-  m_inputChannel = volumetricData(m_channel->asInput()->output())->itkImage();
-  itkVolumeType::Pointer channelItk = m_inputChannel;
-
-  typedef itk::ChangeInformationImageFilter< itkVolumeType > ChangeInformationFilterType;
-  ChangeInformationFilterType::Pointer normalizeFilter = ChangeInformationFilterType::New();
-  normalizeFilter->SetInput(channelItk);
-  itkVolumeType::SpacingType spacing = channelItk->GetSpacing();
-  spacing[2] = 2*channelItk->GetSpacing()[2]/(channelItk->GetSpacing()[0]
-               + channelItk->GetSpacing()[1]);
-  spacing[0] = 1;
-  spacing[1] = 1;
-  normalizeFilter->SetOutputSpacing( spacing );
-  normalizeFilter->ChangeSpacingOn();
-  normalizeFilter->Update();
-  std::cout << "Using spacing: " << spacing << std::endl;
-  itkVolumeType::Pointer normalizedChannelItk = normalizeFilter->GetOutput();
-
   emit progress(20);
   if (!canExecute()) return;
 
-  //TODO add const-correctness
-  std::vector<itkVolumeType::Pointer> outSegList;
 
   try {
 
       //we have to load m_inputSegmentation
-      if(loadFromDisk) {
+      if(m_loadFromDisk) {
           typedef itk::ImageFileReader<itkVolumeType> ReaderType;
           ReaderType::Pointer reader = ReaderType::New();
-          reader->SetFileName(filename);
+          reader->SetFileName(m_filename);
           reader->Update();
 
-          m_inputSegmentation = reader->GetOutput();
+          m_binarySegmentation = reader->GetOutput();
       }
 
-      CcboostAdapter::splitSegmentations(m_inputSegmentation, outSegList, true);
+      if(m_doThreshold) {
+
+          typedef itk::BinaryThresholdImageFilter <Matrix3D<float>::ItkImageType, itkVolumeType>
+                  fBinaryThresholdImageFilterType;
+
+          fBinaryThresholdImageFilterType::Pointer thresholdFilter
+                  = fBinaryThresholdImageFilterType::New();
+          thresholdFilter->SetInput(m_floatInputSegmentation);
+          thresholdFilter->SetLowerThreshold(m_threshold);
+          thresholdFilter->SetInsideValue(255);
+          thresholdFilter->SetOutsideValue(0);
+          thresholdFilter->Update();
+
+          m_binarySegmentation = thresholdFilter->GetOutput();
+
+          ESPINA_SETTINGS(settings);
+          settings.beginGroup("ccboost segmentation");
+
+          if (settings.contains("Save Intermediate Volumes")) {
+
+              //warning, cache dir will be different than the one
+              //used for storing features and other data since that one uses the hash
+              std::string cacheDir = "./";
+              if (settings.contains("Features Directory"))
+                  cacheDir = settings.value("Features Directory").toString().toStdString();
+
+              typedef itk::ImageFileWriter< itkVolumeType > WriterType;
+              WriterType::Pointer writer = WriterType::New();
+              writer->SetFileName(cacheDir + "binarized.tif");
+              writer->SetInput(m_binarySegmentation);
+              writer->Update();
+          }
+
+          int minCCSize = 0;
+          if (settings.contains("Minimum synapse size (voxels)"))
+                minCCSize = settings.value("Minimum synapse size (voxels)").toInt();
+
+          if(minCCSize > 0)
+          {
+              qDebug() << "Removing components smaller than " << minCCSize << " voxels.";
+              CcboostAdapter::removeSmallComponents(m_binarySegmentation, minCCSize);
+          }
+
+      }
+
+      //CcboostAdapter::splitSegmentations(m_inputSegmentation, outSegList, true, true);
+      LabelMapType::Pointer labelmap = LabelMapType::New();
+      CcboostAdapter::splitSegmentations(m_binarySegmentation, labelmap);
+
+      if(!canExecute())
+            return;
+
+      predictedSegmentationsList = labelmap;
+
 
   } catch( itk::ExceptionObject & err ) {
       qDebug() << tr("Itk exception on plugin caught at %1:%2. Error: %3.").arg(__FILE__).arg(__LINE__).arg(err.what());
@@ -148,17 +202,10 @@ void ImportTask::run()
       return;
   }
 
-  if(!canExecute())
-      return;
 
-
-  qDebug() << outSegList.size();
-
-  predictedSegmentationsList = outSegList;
-
-  if (canExecute())
-  {
+  if (canExecute()) {
     emit progress(100);
     qDebug() << "Ccboost Segmentation Finished";
   }
+
 }

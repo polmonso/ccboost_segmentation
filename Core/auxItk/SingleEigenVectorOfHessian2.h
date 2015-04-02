@@ -15,6 +15,8 @@
 /* Contact <carlos.becker@epfl.ch> for comments & bug reports.          */
 /************************************************************************/
 
+#pragma once
+
 #include <string>
 
 #include <itkImage.h>

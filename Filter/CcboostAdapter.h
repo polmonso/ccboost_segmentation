@@ -12,17 +12,13 @@
 
 // ESPINA
 //#include <Core/EspinaTypes.h>
-
-//for standalone version we input itkVolumeType ourselves
-typedef itk::Image<unsigned char, 3> itkVolumeType;
+#include "CCBTypes.h"
 
 class CcboostAdapter : public QObject
 {
     Q_OBJECT
 
 public:
-    typedef itk::Image<float, 3> FloatTypeImage;
-
     //TODO this goes somewhere else
     static const unsigned int FREEMEMORYREQUIREDPROPORTIONPREDICT = 180;
 
@@ -38,19 +34,30 @@ signals:
 public:
     explicit CcboostAdapter() {};
 
+    /**
+     * @brief splitSegmentations
+     * @param outputSegmentation
+     * @param labelMap itk::ShapeLabelMap
+     * @param saveIntermediateVolumes
+     * @param cacheDir
+     */
+    static void splitSegmentations(const itkVolumeType::Pointer& outputSegmentation,
+                                   ESPINA::CCB::LabelMapType::Pointer& labelMap,
+                                   const int minCCSize = 1000);
+
     static void splitSegmentations(const itkVolumeType::Pointer outputSegmentation,
                                    std::vector<itkVolumeType::Pointer>& outSegList,
                                    bool skipBiggest = false,
                                    bool saveIntermediateVolumes = false,
-                                   std::string cacheDir = std::string("."));
+                                   std::string cacheDir = std::string(""));
 
-    static void postprocessing(const ConfigData<itkVolumeType> &cfgData, itkVolumeType::Pointer& outputSegmentation);
+    template< typename TImageType = itkVolumeType >
+    static void removeborders(const ConfigData< TImageType > &cfgData, typename TImageType::Pointer& outputSegmentation);
 
-    static void postprocessing(itkVolumeType::Pointer& outputSegmentation, double zAnisotropyFactor, bool saveIntermediateVolumes = false, std::string cacheDir = ".");
+    template< typename TImageType = itkVolumeType >
+    static void removeborders(typename TImageType::Pointer& outputSegmentation, bool saveIntermediateVolumes = false, std::string cacheDir = ".");
 
-    static void removeSmallComponents(itk::Image<unsigned char, 3>::Pointer & segmentation,
-                               int minCCSize = 1000,
-                               int threshold = 128);
+    static void removeSmallComponents(itk::Image<unsigned char, 3>::Pointer & segmentation, int minCCSize = 1000);
 
     static void computeAllFeatures(const ConfigData<itkVolumeType> cfgData);
 
@@ -65,6 +72,9 @@ public:
     static void addFeatures(const std::string& cacheDir, const SetConfigData<itkVolumeType>& cfgDataROI, MultipleROIData::ROIDataPtr roi);
 
     //TODO add const-correctness
+    static bool core(const ConfigData<itkVolumeType>& cfgdata,
+                              std::vector<FloatTypeImage::Pointer>& probabilisticOutSegs);
+
     static bool core(const ConfigData<itkVolumeType>& cfg,
                      FloatTypeImage::Pointer &probabilisticOutSeg,
                      std::vector<itkVolumeType::Pointer>& outputSplittedSegList,
@@ -93,5 +103,8 @@ public:
                               std::vector<itkVolumeType::Pointer>& outSegList);
 
 };
+
+//add for implicit instantiation (and remove explicit instantiaton on CcboostAdapter.cpp
+//#include "CcboostAdapter.tpp"
 
 #endif // CCBOOSTADAPTER_H

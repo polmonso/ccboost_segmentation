@@ -5,8 +5,6 @@
 #include <sys/stat.h>
 #include <ImageSplitter.h>
 
-typedef itk::Image<unsigned char , 3> itkVolumeType;
-
 const char *argp_program_version =
 "argex 1.0";
 
@@ -167,7 +165,7 @@ void postprocess(const ConfigData<itkVolumeType>& cfgdata,
       outputSegmentation = outSeg;
       outputSegmentation->DisconnectPipeline();
 
-      CcboostAdapter::postprocessing(cfgdata, outputSegmentation);
+      CcboostAdapter::removeborders(cfgdata, outputSegmentation);
 
       writer->SetFileName(outputfilename);
       writer->SetInput(outputSegmentation);

@@ -35,9 +35,7 @@ namespace ESPINA
 
       void setVolume(QFileInfo volumeFile);
 
-    private slots:      
-      void createSegmentationImport();
-
+    private slots:
       void createMitochondriaSegmentation();
 
       void createSynapseSegmentation();
@@ -74,7 +72,7 @@ namespace ESPINA
 
     private:
       CcboostSegmentationPlugin* m_manager;
-      CcboostAdapter::FloatTypeImage::Pointer m_volume;
+      FloatTypeImage::Pointer m_volume;
 
       GUI*        m_gui;
       QString     m_msg;
@@ -87,6 +85,8 @@ namespace ESPINA
       PreviewWidgetSPtr  m_preview;
 
       ChannelAdapterPtr  m_pendingFeaturesChannel;
+
+      bool m_preprocess;
 
       float m_threshold;
       float m_probabilityMaxValue;

@@ -24,6 +24,8 @@
 #include <GUI/Model/ChannelAdapter.h>
 #include <Core/EspinaTypes.h>
 
+#include "CCBTypes.h"
+
 //ccboost
 #include <QDebug>
 #include "BoosterInputData.h"
@@ -62,7 +64,13 @@ namespace ESPINA {
     public:
         explicit ImportTask(ChannelAdapterPtr channel,
                             SchedulerSPtr     scheduler,
-                            std::string file);
+                            std::string file,
+                            float threshold = 0.0);
+
+        explicit ImportTask(ChannelAdapterPtr channel,
+                            SchedulerSPtr     scheduler,
+                            FloatTypeImage::Pointer inputSegmentation,
+                            float threshold = 0.0);
 
         explicit ImportTask(ChannelAdapterPtr channel,
                             SchedulerSPtr     scheduler,
@@ -71,7 +79,7 @@ namespace ESPINA {
       ChannelAdapterPtr channel() const
       { return m_channel; }
 
-      std::vector<itkVolumeType::Pointer>  predictedSegmentationsList;
+      CCB::LabelMapType::Pointer predictedSegmentationsList;
 
     protected:
       virtual void run();
@@ -91,9 +99,12 @@ namespace ESPINA {
 
       itkVolumeType::Pointer m_inputChannel;
 
-      bool loadFromDisk;
-      std::string filename;
-      itkVolumeType::Pointer m_inputSegmentation;
+      const bool m_loadFromDisk;
+      const std::string m_filename;
+      const bool m_doThreshold;
+      const float m_threshold;
+      itkVolumeType::Pointer m_binarySegmentation;
+      FloatTypeImage::Pointer m_floatInputSegmentation;
 
     };
     typedef ImportTask* ImportTaskPtr;

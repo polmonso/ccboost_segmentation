@@ -28,9 +28,9 @@
 #include <Core/Utils/Spatial.h>
 #include <GUI/View/View2D.h>
 
-//TODO maybe template FloatImageType instead of adding CcboostAdapter dependence
-#include "Filter/CcboostAdapter.h"
+#include "CCBTypes.h"
 
+#include <itkBinaryThresholdImageFilter.h>
 #include <itkExtractImageFilter.h>
 #include <itkImageToVTKImageFilter.h>
 #include <vtkImageActor.h>
@@ -49,7 +49,7 @@ namespace ESPINA {
       Q_OBJECT
 
     public:
-        typedef CcboostAdapter::FloatTypeImage LabelImageType;
+      typedef FloatTypeImage LabelImageType;
 
       explicit PreviewSliceRepresentation(View2D *view);
       virtual ~PreviewSliceRepresentation();

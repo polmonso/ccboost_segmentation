@@ -89,35 +89,34 @@ const QString CcboostTask::NEGATIVETAG = "no";
 //------------------------------------------------------------------------
 CcboostTask::CcboostTask(ChannelAdapterPtr channel,
                          SchedulerSPtr     scheduler)
-: Task(scheduler)
-, m_channel(channel)
-, m_abort{false}
+    : Task(scheduler)
+    , m_channel(channel)
 {
 #ifdef __unix
-  struct sysinfo info;
-  sysinfo(&info);
-  memoryAvailableMB = info.totalram/1024/1024;
+    struct sysinfo info;
+    sysinfo(&info);
+    memoryAvailableMB = info.totalram/1024/1024;
 
-  //TODO FIXME quick test of limited memory resources.
- // memoryAvailableMB = 6000;
+    //TODO FIXME quick test of limited memory resources.
+    // memoryAvailableMB = 6000;
 
-  if(memoryAvailableMB == 0){
-      memoryAvailableMB = numeric_limits<unsigned int>::max();
-     //FIXME we're not on the main thread, dialog creation will crash
-//      QMessageBox::warning(NULL,"RAM Memory check", QString("The amount of RAM memory couldn't be detected or very low (info.totalram = %1 Bytes). "
-//                                                            "Running the Synapse Segmentation Plugin might lead to crash").arg(info.totalram));
+    if(memoryAvailableMB == 0){
+        memoryAvailableMB = numeric_limits<unsigned int>::max();
+        //FIXME we're not on the main thread, dialog creation will crash
+        //      QMessageBox::warning(NULL,"RAM Memory check", QString("The amount of RAM memory couldn't be detected or very low (info.totalram = %1 Bytes). "
+        //                                                            "Running the Synapse Segmentation Plugin might lead to crash").arg(info.totalram));
 
-      emit message(QString("The amount of RAM memory couldn't be detected or very low (info.totalram = %1 Bytes). "
-                   "Running the Synapse Segmentation Plugin might lead to crash").arg(info.totalram));
+        emit message(QString("The amount of RAM memory couldn't be detected or very low (info.totalram = %1 Bytes). "
+                             "Running the Synapse Segmentation Plugin might lead to crash").arg(info.totalram));
 
 
-  }
+    }
 #else
-  memoryAvailableMB = numeric_limits<unsigned int>::max();
-//  QMessageBox::warning(NULL,"RAM Memory check", "The amount of RAM memory couldn't be detected."
-//                       "Running the Synapse Segmentation Plugin might lead to crash");
-  emit message(QString("The amount of RAM memory couldn't be detected or very low (info.totalram = %1 Bytes). "
-               "Running the Synapse Segmentation Plugin might lead to crash").arg(info.totalram));
+    memoryAvailableMB = numeric_limits<unsigned int>::max();
+    //  QMessageBox::warning(NULL,"RAM Memory check", "The amount of RAM memory couldn't be detected."
+    //                       "Running the Synapse Segmentation Plugin might lead to crash");
+    emit message(QString("The amount of RAM memory couldn't be detected or very low (info.totalram = %1 Bytes). "
+                         "Running the Synapse Segmentation Plugin might lead to crash").arg(info.totalram));
 
 #endif
 
@@ -128,229 +127,322 @@ CcboostTask::CcboostTask(ChannelAdapterPtr channel,
 //------------------------------------------------------------------------
 void CcboostTask::run()
 {
-  QElapsedTimer timer;
-  timer.start();
+    QElapsedTimer timer;
+    timer.start();
 
 
-  // Determine the number of threads to use.
-  const int num_threads = omp_get_num_procs() - 1;
-  qDebug() << "Number of threads: " << num_threads;
+    // Determine the number of threads to use.
+    const int num_threads = omp_get_num_procs() - 1;
+    qDebug() << "Number of threads: " << num_threads;
 
-  emit progress(0);
-  if (!canExecute()) return;
+    emit progress(0);
+    if (!canExecute()) return;
 
-  //TODO do I have to put back the original locale?
-  std::setlocale(LC_NUMERIC, "C");
+    //TODO do I have to put back the original locale?
+    std::setlocale(LC_NUMERIC, "C");
 
-  m_inputChannel = volumetricData(m_channel->asInput()->output())->itkImage();
-  itkVolumeType::Pointer channelItk = m_inputChannel;
+    m_inputChannel = volumetricData(m_channel->asInput()->output())->itkImage();
+    itkVolumeType::Pointer channelItk = m_inputChannel;
 
-  //m_inputSegmentation = volumetricData(m_inputs[1]->output())->itkImage();
+    //m_inputSegmentation = volumetricData(m_inputs[1]->output())->itkImage();
 
-  if(!enoughGroundTruth())
-      return;
+    if(!enoughGroundTruth())
+        return;
 
-  typedef itk::ChangeInformationImageFilter< itkVolumeType > ChangeInformationFilterType;
-  ChangeInformationFilterType::Pointer normalizeFilter = ChangeInformationFilterType::New();
-  normalizeFilter->SetInput(channelItk);
-  itkVolumeType::SpacingType spacing = channelItk->GetSpacing();
-  spacing[2] = 2*channelItk->GetSpacing()[2]/(channelItk->GetSpacing()[0]
-               + channelItk->GetSpacing()[1]);
-  spacing[0] = 1;
-  spacing[1] = 1;
-  normalizeFilter->SetOutputSpacing( spacing );
-  normalizeFilter->ChangeSpacingOn();
-  normalizeFilter->Update();
-  std::cout << "Using spacing: " << spacing << std::endl;
-  itkVolumeType::Pointer normalizedChannelItk = normalizeFilter->GetOutput();
+    typedef itk::ChangeInformationImageFilter< itkVolumeType > ChangeInformationFilterType;
+    ChangeInformationFilterType::Pointer normalizeFilter = ChangeInformationFilterType::New();
+    normalizeFilter->SetInput(channelItk);
+    itkVolumeType::SpacingType spacing = channelItk->GetSpacing();
+    spacing[2] = 2*channelItk->GetSpacing()[2]/(channelItk->GetSpacing()[0]
+            + channelItk->GetSpacing()[1]);
+    spacing[0] = 1;
+    spacing[1] = 1;
+    normalizeFilter->SetOutputSpacing( spacing );
+    normalizeFilter->ChangeSpacingOn();
+    normalizeFilter->Update();
+    std::cout << "Using spacing: " << spacing << std::endl;
+    itkVolumeType::Pointer normalizedChannelItk = normalizeFilter->GetOutput();
 
-  emit progress(20);
-  if (!canExecute()) return;
+    emit progress(20);
+    if (!canExecute()) return;
 
-  itkVolumeType::Pointer segmentedGroundTruth = mergeSegmentations(normalizedChannelItk,
-                                                                   m_groundTruthSegList,
-                                                                   m_backgroundGroundTruthSegList);
+    itkVolumeType::Pointer segmentedGroundTruth = mergeSegmentations(normalizedChannelItk,
+                                                                     m_groundTruthSegList,
+                                                                     m_backgroundGroundTruthSegList);
 
-  //Get bounding box of annotated data
-  typedef itk::ImageMaskSpatialObject< 3 > ImageMaskSpatialObjectType;
-  ImageMaskSpatialObjectType::Pointer
-          imageMaskSpatialObject  = ImageMaskSpatialObjectType::New();
-  imageMaskSpatialObject->SetImage ( segmentedGroundTruth );
-  itkVolumeType::RegionType annotatedRegion = imageMaskSpatialObject->GetAxisAlignedBoundingBoxRegion();
-  itkVolumeType::OffsetValueType offset(CcboostTask::ANNOTATEDPADDING);
-  annotatedRegion.PadByRadius(offset);
+    //Get bounding box of annotated data
+    typedef itk::ImageMaskSpatialObject< 3 > ImageMaskSpatialObjectType;
+    ImageMaskSpatialObjectType::Pointer
+            imageMaskSpatialObject  = ImageMaskSpatialObjectType::New();
+    imageMaskSpatialObject->SetImage ( segmentedGroundTruth );
+    itkVolumeType::RegionType annotatedRegion = imageMaskSpatialObject->GetAxisAlignedBoundingBoxRegion();
+    itkVolumeType::OffsetValueType offset(CcboostTask::ANNOTATEDPADDING);
+    annotatedRegion.PadByRadius(offset);
 
-  annotatedRegion.Crop(channelItk->GetLargestPossibleRegion());
+    annotatedRegion.Crop(channelItk->GetLargestPossibleRegion());
 
-  std::cout << "annotated region: " << annotatedRegion << std::endl;
+    std::cout << "annotated region: " << annotatedRegion << std::endl;
 
-  unsigned int numPredictRegions;
-  if(!enoughMemory(channelItk, annotatedRegion, numPredictRegions))
-      return;
+    unsigned int numPredictRegions;
+    if(!enoughMemory(channelItk, annotatedRegion, numPredictRegions))
+        return;
 
-  //Create config object and retrieve settings from espina
-  ccboostconfig.reset();
+    //Create config object and retrieve settings from espina
+    ccboostconfig.reset();
 
-  ccboostconfig.numPredictRegions = numPredictRegions;
+    ccboostconfig.numPredictRegions = numPredictRegions;
 
-  applyEspinaSettings(ccboostconfig);
+    applyEspinaSettings(ccboostconfig);
 
-  if(CcboostTask::ELEMENT == CcboostTask::MITOCHONDRIA)
-      ccboostconfig.preset = ConfigData<itkVolumeType>::MITOCHONDRIA;
-  else if(CcboostTask::ELEMENT == CcboostTask::SYNAPSE)
-      ccboostconfig.preset = ConfigData<itkVolumeType>::SYNAPSE;
-  else {
-      qWarning() << "Error! Preset is not set. Using default: " << CcboostTask::SYNAPSE;
-      ccboostconfig.preset = ConfigData<itkVolumeType>::SYNAPSE;
-  }
+    if(CcboostTask::ELEMENT == CcboostTask::MITOCHONDRIA)
+        ccboostconfig.preset = ConfigData<itkVolumeType>::MITOCHONDRIA;
+    else if(CcboostTask::ELEMENT == CcboostTask::SYNAPSE)
+        ccboostconfig.preset = ConfigData<itkVolumeType>::SYNAPSE;
+    else
+    {
+        qWarning() << "Error! Preset is not set. Using default: " << CcboostTask::SYNAPSE;
+        ccboostconfig.preset = ConfigData<itkVolumeType>::SYNAPSE;
+    }
 
-  ccboostconfig.originalVolumeImage = normalizedChannelItk;
+    ccboostconfig.originalVolumeImage = normalizedChannelItk;
 
-  //FIXME computing the hash on cfgData.train.rawVolumeImage provokes a segFault
-  //TODO each volume (and feature) should have its hash, but we are just using the first throught cachedir
-  typedef itk::ImageDuplicator< itkVolumeType > DuplicatorType;
-  DuplicatorType::Pointer duplicator = DuplicatorType::New();
-  duplicator->SetInputImage(ccboostconfig.originalVolumeImage);
-  duplicator->Update();
-  itkVolumeType::Pointer inpImg = duplicator->GetOutput();
-  inpImg->DisconnectPipeline();
-  typedef itk::Testing::HashImageFilter<itkVolumeType> HashImageFilterType;
-  HashImageFilterType::Pointer hashImageFilter = HashImageFilterType::New();
-  hashImageFilter->SetInput(inpImg);
-  hashImageFilter->Update();
-  string hash = hashImageFilter->GetHash();
+    //FIXME computing the hash on cfgData.train.rawVolumeImage provokes a segFault
+    //TODO each volume (and feature) should have its hash, but we are just using the first throught cachedir
+    typedef itk::ImageDuplicator< itkVolumeType > DuplicatorType;
+    DuplicatorType::Pointer duplicator = DuplicatorType::New();
+    duplicator->SetInputImage(ccboostconfig.originalVolumeImage);
+    duplicator->Update();
+    itkVolumeType::Pointer inpImg = duplicator->GetOutput();
+    inpImg->DisconnectPipeline();
+    typedef itk::Testing::HashImageFilter<itkVolumeType> HashImageFilterType;
+    HashImageFilterType::Pointer hashImageFilter = HashImageFilterType::New();
+    hashImageFilter->SetInput(inpImg);
+    hashImageFilter->Update();
+    string hash = hashImageFilter->GetHash();
 
-  ccboostconfig.rawVolume = "supervoxelcache-";
-  ccboostconfig.cacheDir = ccboostconfig.cacheDir + ccboostconfig.rawVolume + hash
-          + QString::number(spacing[2]).toStdString() + "/";
-  //FIXME use channel filename instead of supervoxelcache
-  qDebug("Output directory: %s", ccboostconfig.cacheDir.c_str());
-  QDir dir(QString::fromStdString(ccboostconfig.cacheDir));
-  dir.mkpath(QString::fromStdString(ccboostconfig.cacheDir));
+    ccboostconfig.rawVolume = "supervoxelcache-";
+    ccboostconfig.cacheDir = ccboostconfig.cacheDir + ccboostconfig.rawVolume + hash
+            + QString::number(spacing[2]).toStdString() + "/";
+    //FIXME use channel filename instead of supervoxelcache
+    qDebug("Output directory: %s", ccboostconfig.cacheDir.c_str());
+    QDir dir(QString::fromStdString(ccboostconfig.cacheDir));
+    dir.mkpath(QString::fromStdString(ccboostconfig.cacheDir));
 
-  //save itk image (volume) as binary/classed volume here
-   if(ccboostconfig.saveIntermediateVolumes){
-       WriterType::Pointer writer = WriterType::New();
-       writer->SetFileName(ccboostconfig.cacheDir + "labelmap.tif");
-       writer->SetInput(segmentedGroundTruth);
-       writer->Update();
-       qDebug() << "labelmap.tif created";
-   }
+    //save itk image (volume) as binary/classed volume here
+    if(ccboostconfig.saveIntermediateVolumes)
+    {
+        WriterType::Pointer writer = WriterType::New();
+        writer->SetFileName(ccboostconfig.cacheDir + "labelmap.tif");
+        writer->SetInput(segmentedGroundTruth);
+        writer->Update();
+        qDebug() << "labelmap.tif created";
+    }
 
-  //volume spliting
-  //FIXME decide whether or not to divide the volume depending on the memory available and size of it
-  bool divideVolume = true;
+    //volume spliting
+    //FIXME decide whether or not to divide the volume depending on the memory available and size of it
+    bool divideVolume = true;
 
-  if(!divideVolume) {
+    if(!divideVolume)
+    {
 
-      SetConfigData<itkVolumeType> trainData;
-      SetConfigData<itkVolumeType>::setDefaultSet(trainData);
-      trainData.rawVolumeImage = ccboostconfig.originalVolumeImage;
-      trainData.groundTruthImage = segmentedGroundTruth;
-      trainData.zAnisotropyFactor = 2*channelItk->GetSpacing()[2]/(channelItk->GetSpacing()[0]
-              + channelItk->GetSpacing()[1]);
-      trainData.annotatedRegion = annotatedRegion;
+        SetConfigData<itkVolumeType> trainData;
+        SetConfigData<itkVolumeType>::setDefaultSet(trainData);
+        trainData.rawVolumeImage = ccboostconfig.originalVolumeImage;
+        trainData.groundTruthImage = segmentedGroundTruth;
+        trainData.zAnisotropyFactor = 2*channelItk->GetSpacing()[2]/(channelItk->GetSpacing()[0]
+                + channelItk->GetSpacing()[1]);
+        trainData.annotatedRegion = annotatedRegion;
 
-      ccboostconfig.train.push_back(trainData);
+        ccboostconfig.train.push_back(trainData);
 
-      // Test
-      //FIXME test should get the whole volume or pieces, it is not necessarily a copy of train.
-      SetConfigData<itkVolumeType> testData = trainData;
-      testData.rawVolumeImage = ccboostconfig.originalVolumeImage;
-      testData.zAnisotropyFactor = trainData.zAnisotropyFactor;
+        // Test
+        //FIXME test should get the whole volume or pieces, it is not necessarily a copy of train.
+        SetConfigData<itkVolumeType> testData = trainData;
+        testData.rawVolumeImage = ccboostconfig.originalVolumeImage;
+        testData.zAnisotropyFactor = trainData.zAnisotropyFactor;
 
-      ccboostconfig.test.push_back(testData);
+        ccboostconfig.test.push_back(testData);
 
-      //      CcboostAdapter::core(cfgdata,
-      //                           probabilisticOutSegs,
-      //                           outSegList,
-      //                           outputSegmentations);
+        //      CcboostAdapter::core(cfgdata,
+        //                           probabilisticOutSegs,
+        //                           outSegList,
+        //                           outputSegmentations);
 
-      //      outputSegmentation = outputSegmentations.at(0);
+        //      outputSegmentation = outputSegmentations.at(0);
 
-  } else {
+    }
+    else
+    {
 
-      typedef itk::ImageSplitter< itkVolumeType > SplitterType;
+        typedef itk::ImageSplitter< itkVolumeType > SplitterType;
 
-// We have a better memory estimator in this class.
-//      cfgdata.numPredictRegions = SplitterType::numRegionsFittingInMemory( region.GetSize(),
-//                                                                           CcboostAdapter::FREEMEMORYREQUIREDPROPORTIONPREDICT);
+        // We have a better memory estimator in this class.
+        //      cfgdata.numPredictRegions = SplitterType::numRegionsFittingInMemory( region.GetSize(),
+        //                                                                           CcboostAdapter::FREEMEMORYREQUIREDPROPORTIONPREDICT);
 
-      std::cout << "Train pieces: " << ccboostconfig.numPredictRegions << std::endl;
+        std::cout << "Train pieces: " << ccboostconfig.numPredictRegions << std::endl;
 
-      SplitterType trainSplitter(annotatedRegion, ccboostconfig.numPredictRegions);
+        SplitterType trainSplitter(annotatedRegion, ccboostconfig.numPredictRegions);
 
-      int trainSize = trainSplitter.getCropRegions().size();
+        int trainSize = trainSplitter.getCropRegions().size();
 
-      for(int i=0; i < trainSize; i++){
+        for(int i=0; i < trainSize; i++)
+        {
 
-          std::string id = QString::number(i).toStdString();
+            std::string id = QString::number(i).toStdString();
 
-          SetConfigData<itkVolumeType> trainData;
-          SetConfigData<itkVolumeType>::setDefaultSet(trainData, id);
-          trainData.zAnisotropyFactor = 2*channelItk->GetSpacing()[2]/(channelItk->GetSpacing()[0]
-                  + channelItk->GetSpacing()[1]);
-          trainData.rawVolumeImage = trainSplitter.crop(ccboostconfig.originalVolumeImage,
-                                                        trainSplitter.getCropRegions().at(i));
-          trainData.groundTruthImage = trainSplitter.crop(segmentedGroundTruth,
+            SetConfigData<itkVolumeType> trainData;
+            SetConfigData<itkVolumeType>::setDefaultSet(trainData, id);
+            trainData.zAnisotropyFactor = 2*channelItk->GetSpacing()[2]/(channelItk->GetSpacing()[0]
+                    + channelItk->GetSpacing()[1]);
+            trainData.rawVolumeImage = trainSplitter.crop(ccboostconfig.originalVolumeImage,
                                                           trainSplitter.getCropRegions().at(i));
+            trainData.groundTruthImage = trainSplitter.crop(segmentedGroundTruth,
+                                                            trainSplitter.getCropRegions().at(i));
 
-          ccboostconfig.train.push_back(trainData);
+            ccboostconfig.train.push_back(trainData);
 
-      }
+        }
 
 
-      std::cout << "Test pieces: " << std::endl;
+        std::cout << "Test pieces: " << std::endl;
 
-      //TODO we could reuse if regions match
-      itkVolumeType::RegionType region = ccboostconfig.originalVolumeImage->GetLargestPossibleRegion();
-      SplitterType testSplitter(region, ccboostconfig.numPredictRegions);
+        //TODO we could reuse if regions match
+        itkVolumeType::RegionType region = ccboostconfig.originalVolumeImage->GetLargestPossibleRegion();
+        SplitterType testSplitter(region, ccboostconfig.numPredictRegions);
 
-      int testSize = testSplitter.getCropRegions().size();
+        int testSize = testSplitter.getCropRegions().size();
 
-      for(int i= 0; i < testSize; i++){
+        for(int i= 0; i < testSize; i++)
+        {
 
-          std::string id = QString::number( trainSize + i).toStdString();
+            std::string id = QString::number( trainSize + i).toStdString();
 
-          SetConfigData<itkVolumeType> testData;
-          SetConfigData<itkVolumeType>::setDefaultSet(testData, id);
-          testData.zAnisotropyFactor = 2*channelItk->GetSpacing()[2]/(channelItk->GetSpacing()[0]
-                  + channelItk->GetSpacing()[1]);
-          testData.rawVolumeImage = testSplitter.crop(ccboostconfig.originalVolumeImage,
-                                                      testSplitter.getCropRegions().at(i));
-          testData.groundTruthImage = testSplitter.crop(segmentedGroundTruth,
+            SetConfigData<itkVolumeType> testData;
+            SetConfigData<itkVolumeType>::setDefaultSet(testData, id);
+            testData.zAnisotropyFactor = 2*channelItk->GetSpacing()[2]/(channelItk->GetSpacing()[0]
+                    + channelItk->GetSpacing()[1]);
+            testData.rawVolumeImage = testSplitter.crop(ccboostconfig.originalVolumeImage,
                                                         testSplitter.getCropRegions().at(i));
-          ccboostconfig.test.push_back(testData);
-      }
+            testData.groundTruthImage = testSplitter.crop(segmentedGroundTruth,
+                                                          testSplitter.getCropRegions().at(i));
+            ccboostconfig.test.push_back(testData);
+        }
 
-  }
+    }
 
-  qDebug("%s", "cc boost segmentation");
+    qDebug("%s", "cc boost segmentation");
 
-  emit progress(30);
-  if (!canExecute()) return;
+    emit progress(30);
+    if (!canExecute()) return;
 
-  //CCBOOST here
-    //TODO add const-correctness
-  std::vector<itkVolumeType::Pointer> outSegList;
+    //CCBOOST here
+    std::vector<FloatTypeImage::Pointer> probabilisticOutputSegmentations;
 
-  runCore(ccboostconfig, outSegList);
+    // modify ITK number of threads for speed up
+    const int prevITKNumberOfThreads = itk::MultiThreader::GetGlobalDefaultNumberOfThreads();
+    if (prevITKNumberOfThreads <= 1)
+        itk::MultiThreader::SetGlobalDefaultNumberOfThreads(8);
 
-  if(!canExecute())
-      return;
+    bool success = true;
+    try
+    {
 
-  //CCBOOST finished
+        // MultipleROIData allROIs = preprocess(channels, groundTruths, cacheDir, featuresList);
+        success = CcboostAdapter::core(ccboostconfig,probabilisticOutputSegmentations);
 
-  qDebug() << outSegList.size();
+    }
+    catch( itk::ExceptionObject & err )
+    {
+        // restore default number of threads
+        itk::MultiThreader::SetGlobalDefaultNumberOfThreads( prevITKNumberOfThreads );
 
-  predictedSegmentationsList = outSegList;
+        qDebug() << QObject::tr("Itk exception on ccboost caught. Error: %1.").arg(err.what());
 
-  qDebug() << "Ccboost Segment Time: " << timer.elapsed();
-  if (canExecute())
-  {
-    emit progress(100);
-    qDebug() << "Ccboost Segmentation Finished";
-  }
+        emit message(QString("Itk exception when running ccboost. Message: %1").arg(err.what()));
+        this->setFailed(true);
+        return;
+    }
+
+    // restore default number of threads
+    itk::MultiThreader::SetGlobalDefaultNumberOfThreads( prevITKNumberOfThreads );
+
+    if(!success) {
+        //TODO add error messages
+        qDebug() << QObject::tr("Ccboost failed. Captured at %1:%2").arg(__FILE__).arg(__LINE__);
+        emit message(QString("Ccboost failed. Aborting."));
+        this->setFailed(true);
+    }
+
+    //CCBOOST finished
+
+    emit progress(90);
+    if (!canExecute()) return;
+
+    FloatTypeImage::Pointer probabilisticOutputSegmentation = FloatTypeImage::New();
+
+    if(!divideVolume)
+        probabilisticOutputSegmentation = probabilisticOutputSegmentations.at(0);
+    else
+    {
+        typedef itk::ImageSplitter< FloatTypeImage > FloatSplitterType;
+
+        FloatTypeImage::RegionType fregion(ccboostconfig.originalVolumeImage->GetLargestPossibleRegion());
+
+        FloatSplitterType fsplitter(fregion, ccboostconfig.numPredictRegions);
+
+        fsplitter.pasteCroppedRegions(probabilisticOutputSegmentations, probabilisticOutputSegmentation);
+
+    }
+
+    //setspacing
+    probabilisticOutputSegmentation->SetSpacing(channelItk->GetSpacing());
+    //rm borders
+    CcboostAdapter::removeborders<FloatTypeImage>(probabilisticOutputSegmentation, ccboostconfig.saveIntermediateVolumes, ccboostconfig.cacheDir);
+
+    if(ccboostconfig.usePreview)
+    {
+
+        typedef itk::ImageFileWriter< FloatTypeImage > fWriterType;
+        fWriterType::Pointer fwriter = fWriterType::New();
+        fwriter->SetFileName(ccboostconfig.cacheDir + ccboostconfig.probabilisticOutputFilename);
+
+        qDebug() << "Saving probabilistic volume at " <<  QFileInfo(QString::fromStdString(ccboostconfig.cacheDir + ccboostconfig.probabilisticOutputFilename)).absoluteFilePath();
+
+        fwriter->SetInput(probabilisticOutputSegmentation);
+
+        try
+        {
+
+            fwriter->Update();
+
+        }
+        catch(itk::ExceptionObject &exp)
+        {
+            qDebug() << QObject::tr("Itk exception on ccboost caught. Error: %1. From %2:%3").arg(exp.what()).arg(__FILE__).arg(__LINE__);
+            emit message(QString("Itk exception when running ccboost. Message: %1. Aborting task.").arg(exp.what()));
+            this->abort();
+        }
+        catch(...)
+        {
+            std::cout << "Warning: Error writing output" << std::endl;
+            emit message(QString("Exception when running ccboost. Aborting task."));
+            this->abort();
+        }
+    }
+    else
+        this->probabilisticSegmentation = probabilisticOutputSegmentation;
+
+    if(!canExecute())
+        return;
+
+    qDebug() << "Ccboost Segment Time: " << timer.elapsed();
+
+    if (canExecute())
+    {
+        emit progress(100);
+        qDebug() << "Ccboost Segmentation Finished";
+    }
 }
 
 bool CcboostTask::enoughMemory(const itkVolumeType::Pointer channelItk, const itkVolumeType::RegionType annotatedRegion, unsigned int & numPredictRegions){
@@ -372,17 +464,17 @@ bool CcboostTask::enoughMemory(const itkVolumeType::Pointer channelItk, const it
     qDebug() << QString("The volume will be splitted in %1 / %2 = %3 regions of size %4 MB on prediction").arg(memoryNeededMBpredict).arg(memoryAvailableMB).arg(numPredictRegions).arg(pieceSize);
 
     if(memoryAvailableMB < memoryNeededMB){
-//       if(QMessageBox::critical(NULL, "Synapse Segmentation Memory check",
-//                         QString("The estimated amount of memory required has an upper bound of %1 Mb"
-//                                 "and you have %2 Mb. We will process by pieces and ESPina might crash."
-//                                 "(You should reduce it by constraining the Ground truth to a smaller 3d Cube)."
-//                                 "Continue anyway?").arg(memoryNeededMB).arg(memoryAvailableMB), QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) == QMessageBox::Cancel)
-//           return false;
+        //       if(QMessageBox::critical(NULL, "Synapse Segmentation Memory check",
+        //                         QString("The estimated amount of memory required has an upper bound of %1 Mb"
+        //                                 "and you have %2 Mb. We will process by pieces and ESPina might crash."
+        //                                 "(You should reduce it by constraining the Ground truth to a smaller 3d Cube)."
+        //                                 "Continue anyway?").arg(memoryNeededMB).arg(memoryAvailableMB), QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) == QMessageBox::Cancel)
+        //           return false;
 
         QString msg = QString("The estimated amount of memory required has an upper bound of %1 Mb"
-                            "and you have %2 Mb. We will process by pieces and ESPina might crash."
-                            "(You should reduce it by constraining the Ground truth to a smaller 3d Cube)."
-                            "Continue anyway?").arg(memoryNeededMB).arg(memoryAvailableMB);
+                              "and you have %2 Mb. We will process by pieces and ESPina might crash."
+                              "(You should reduce it by constraining the Ground truth to a smaller 3d Cube)."
+                              "Continue anyway?").arg(memoryNeededMB).arg(memoryAvailableMB);
         qDebug() << msg;
         emit questionContinue(msg);
     }
@@ -390,25 +482,25 @@ bool CcboostTask::enoughMemory(const itkVolumeType::Pointer channelItk, const it
     return true;
 }
 
-//FIXME Pass necessary parameters more cleanly
+//FIXME Pass necessary parameters more cleanly, optimise (by labelMap bounding box for example)
 bool CcboostTask::enoughGroundTruth(){
-    int numBgPx = 0;
+    unsigned int numBgPx = 0;
 
     for(auto bgSeg: m_backgroundGroundTruthSegList){
 
-      itkVolumeType::Pointer bgSegItk = volumetricData(bgSeg->output())->itkImage();
+        itkVolumeType::Pointer bgSegItk = volumetricData(bgSeg->output())->itkImage();
 
-      itk::ImageRegionConstIterator<itkVolumeType> imageIterator(bgSegItk, bgSegItk->GetLargestPossibleRegion());
-      while(!imageIterator.IsAtEnd() && numBgPx < MINNUMBGPX) {
-        if(imageIterator.Get() != 0)
-            numBgPx++;
-        ++imageIterator;
-      }
-      if(numBgPx >= MINNUMBGPX)
-         break;
+        itk::ImageRegionConstIterator<itkVolumeType> imageIterator(bgSegItk, bgSegItk->GetLargestPossibleRegion());
+        while(!imageIterator.IsAtEnd() && numBgPx < MINNUMBGPX) {
+            if(imageIterator.Get() != 0)
+                numBgPx++;
+            ++imageIterator;
+        }
+        if(numBgPx >= MINNUMBGPX)
+            break;
     }
 
-    int mintruth;
+    unsigned int mintruth;
     if(CcboostTask::ELEMENT == CcboostTask::MITOCHONDRIA){
         mintruth = MINTRUTHMITOCHONDRIA;
     }else{
@@ -418,29 +510,29 @@ bool CcboostTask::enoughGroundTruth(){
     if(m_groundTruthSegList.size() == 0){
 
         emit message(QString("Insufficient positive examples provided. Found none."
-                          " Make sure the %1 category exists in the model taxonomy"
-                          " or that you are using the tags 'positive' and 'negative'."
-                          " Aborting.").arg(CcboostTask::ELEMENT));
+                             " Make sure the %1 category exists in the model taxonomy"
+                             " or that you are using the tags 'positive' and 'negative'."
+                             " Aborting.").arg(CcboostTask::ELEMENT));
         return false;
     }else if(numBgPx == 0){
 
         emit message(QString("Insufficient background examples provided. Found none."
-                          " Make sure the Background category exists in the model taxonomy."
-                          " or that you are using the tags 'yes%1' and 'no%1'."
-                          " Aborting.").arg(CcboostTask::ELEMENT));
+                             " Make sure the Background category exists in the model taxonomy."
+                             " or that you are using the tags 'yes%1' and 'no%1'."
+                             " Aborting.").arg(CcboostTask::ELEMENT));
         return false;
     }else if(m_groundTruthSegList.size() < mintruth || numBgPx < MINNUMBGPX){
 
         //FIXME we can no longer create dialogs, so we have to adhere to the async calls
         emit questionContinue(QString("Not enough annotations were provided "
-                          "(%1 positive elements %2 background pixels while %3 and %4 are recommended)."
-                          " Increase the background or positive annotation provided."
-                          " Continue anyway?").arg(m_groundTruthSegList.size()).arg(numBgPx).arg(mintruth).arg(MINNUMBGPX));
+                                      "(%1 positive elements %2 background pixels while %3 and %4 are recommended)."
+                                      " Increase the background or positive annotation provided."
+                                      " Continue anyway?").arg(m_groundTruthSegList.size()).arg(numBgPx).arg(mintruth).arg(MINNUMBGPX));
     }
 
     qDebug() << QString("Annotation provided: "
-                      "%1 elements > %2 background pixels (%3 and %4 are required). "
-                      ).arg(m_groundTruthSegList.size()).arg(numBgPx).arg(mintruth).arg(MINNUMBGPX);
+                        "%1 elements > %2 background pixels (%3 and %4 are required). "
+                        ).arg(m_groundTruthSegList.size()).arg(numBgPx).arg(mintruth).arg(MINNUMBGPX);
     return true;
 }
 
@@ -464,32 +556,32 @@ itkVolumeType::Pointer CcboostTask::mergeSegmentations(const itkVolumeType::Poin
     /*saving the segmentations*/
     for(auto seg: segList){
 
-      DefaultVolumetricDataSPtr volume = volumetricData(seg->output());
-      itkVolumeType::Pointer segVolume = volume->itkImage();
+        DefaultVolumetricDataSPtr volume = volumetricData(seg->output());
+        itkVolumeType::Pointer segVolume = volume->itkImage();
 
-      typedef itk::PasteImageFilter <itkVolumeType > PasteImageFilterType;
+        typedef itk::PasteImageFilter <itkVolumeType > PasteImageFilterType;
 
-      itkVolumeType::IndexType destinationIndex = segVolume->GetLargestPossibleRegion().GetIndex();
+        itkVolumeType::IndexType destinationIndex = segVolume->GetLargestPossibleRegion().GetIndex();
 
-      //FIXME instead of pasting the image, pad it.
-      PasteImageFilterType::Pointer pasteFilter  = PasteImageFilterType::New ();
-      pasteFilter->SetDestinationImage(segmentedGroundTruth);
-      pasteFilter->SetSourceImage(segVolume);
-      pasteFilter->SetSourceRegion(segVolume->GetLargestPossibleRegion());
-      pasteFilter->SetDestinationIndex(destinationIndex);
-      pasteFilter->Update();
+        //FIXME instead of pasting the image, pad it.
+        PasteImageFilterType::Pointer pasteFilter  = PasteImageFilterType::New ();
+        pasteFilter->SetDestinationImage(segmentedGroundTruth);
+        pasteFilter->SetSourceImage(segVolume);
+        pasteFilter->SetSourceRegion(segVolume->GetLargestPossibleRegion());
+        pasteFilter->SetDestinationIndex(destinationIndex);
+        pasteFilter->Update();
 
-      typedef itk::OrImageFilter< itkVolumeType >  ProcessImageFilterType;
+        typedef itk::OrImageFilter< itkVolumeType >  ProcessImageFilterType;
 
-      ProcessImageFilterType::Pointer processFilter = ProcessImageFilterType::New ();
-      processFilter->SetInput(1,pasteFilter->GetOutput());
-      processFilter->SetInput(0,segmentedGroundTruth);
-      processFilter->Update();
+        ProcessImageFilterType::Pointer processFilter = ProcessImageFilterType::New ();
+        processFilter->SetInput(1,pasteFilter->GetOutput());
+        processFilter->SetInput(0,segmentedGroundTruth);
+        processFilter->Update();
 
-      segmentedGroundTruth = processFilter->GetOutput();
+        segmentedGroundTruth = processFilter->GetOutput();
 
-      //TODO instead of providing a binary image, use the segmentations map.
-   }
+        //TODO instead of providing a binary image, use the segmentations map.
+    }
 
     typedef itk::MultiplyImageFilter<itkVolumeType, itkVolumeType, itkVolumeType> MultiplyImageFilterType;
     MultiplyImageFilterType::Pointer multiplyImageFilter = MultiplyImageFilterType::New();
@@ -499,34 +591,34 @@ itkVolumeType::Pointer CcboostTask::mergeSegmentations(const itkVolumeType::Poin
         DefaultVolumetricDataSPtr volume = volumetricData(seg->output());
         itkVolumeType::Pointer segVolume = volume->itkImage();
 
-         typedef itk::PasteImageFilter <itkVolumeType > PasteImageFilterType;
+        typedef itk::PasteImageFilter <itkVolumeType > PasteImageFilterType;
 
-         itkVolumeType::IndexType destinationIndex = segVolume->GetLargestPossibleRegion().GetIndex();
+        itkVolumeType::IndexType destinationIndex = segVolume->GetLargestPossibleRegion().GetIndex();
 
-         multiplyImageFilter->SetInput(segVolume);
-         //multiplyImageFilter->SetConstant(CCBOOSTBACKGROUNDLABEL);
-         multiplyImageFilter->SetConstant(128);
-         multiplyImageFilter->UpdateLargestPossibleRegion();
+        multiplyImageFilter->SetInput(segVolume);
+        //multiplyImageFilter->SetConstant(CCBOOSTBACKGROUNDLABEL);
+        multiplyImageFilter->SetConstant(128);
+        multiplyImageFilter->UpdateLargestPossibleRegion();
 
-         //FIXME instead of pasting the image, pad it.
-         PasteImageFilterType::Pointer pasteFilter = PasteImageFilterType::New ();
-         pasteFilter->SetDestinationImage(segmentedGroundTruth);
-         pasteFilter->SetSourceImage(multiplyImageFilter->GetOutput());
-         pasteFilter->SetSourceRegion(multiplyImageFilter->GetOutput()->GetLargestPossibleRegion());
-         pasteFilter->SetDestinationIndex(destinationIndex);
-         pasteFilter->Update();
+        //FIXME instead of pasting the image, pad it.
+        PasteImageFilterType::Pointer pasteFilter = PasteImageFilterType::New ();
+        pasteFilter->SetDestinationImage(segmentedGroundTruth);
+        pasteFilter->SetSourceImage(multiplyImageFilter->GetOutput());
+        pasteFilter->SetSourceRegion(multiplyImageFilter->GetOutput()->GetLargestPossibleRegion());
+        pasteFilter->SetDestinationIndex(destinationIndex);
+        pasteFilter->Update();
 
-         typedef itk::OrImageFilter< itkVolumeType >  ProcessImageFilterType;
+        typedef itk::OrImageFilter< itkVolumeType >  ProcessImageFilterType;
 
-         ProcessImageFilterType::Pointer processFilter  = ProcessImageFilterType::New ();
-         processFilter->SetInput(1,pasteFilter->GetOutput());
-         processFilter->SetInput(0,segmentedGroundTruth);
-         processFilter->Update();
+        ProcessImageFilterType::Pointer processFilter  = ProcessImageFilterType::New ();
+        processFilter->SetInput(1,pasteFilter->GetOutput());
+        processFilter->SetInput(0,segmentedGroundTruth);
+        processFilter->Update();
 
-         segmentedGroundTruth = processFilter->GetOutput();
+        segmentedGroundTruth = processFilter->GetOutput();
 
-         //TODO instead of providing a binary image, use the segmentations map.
-     }
+        //TODO instead of providing a binary image, use the segmentations map.
+    }
 
     return segmentedGroundTruth;
 
@@ -555,7 +647,7 @@ void CcboostTask::applyEspinaSettings(ConfigData<itkVolumeType> cfgdata){
         cfgdata.svoxCubeness = settings.value("Super Voxel Cubeness").toInt();
 
     if (settings.contains("Features Directory")) {
-            cfgdata.cacheDir = settings.value("Features Directory").toString().toStdString();
+        cfgdata.cacheDir = settings.value("Features Directory").toString().toStdString();
         //FIXME config data setdefault is overwritten and ignored
     }
 
@@ -579,128 +671,6 @@ void CcboostTask::applyEspinaSettings(ConfigData<itkVolumeType> cfgdata){
 
     if (settings.contains("Automatic Computation"))
         cfgdata.automaticComputation = settings.value("Automatic Computation").toBool();
-
-}
-
-
-void CcboostTask::runCore(const ConfigData<itkVolumeType>& ccboostconfig,
-             std::vector<itkVolumeType::Pointer>& outputSplittedSegList){
-
-//#warning quick return patchs
-//    return;
-
-    std::vector<itkVolumeType::Pointer> outputSegmentations;
-    std::vector<CcboostAdapter::FloatTypeImage::Pointer> probabilisticOutputSegmentations;
-
-    // modify ITK number of  s for speed up
-    const int prevITKNumberOfThreads = itk::MultiThreader::GetGlobalDefaultNumberOfThreads();
-    if (prevITKNumberOfThreads <= 1)
-        itk::MultiThreader::SetGlobalDefaultNumberOfThreads(8);
-
-    try {
-
-        // MultipleROIData allROIs = preprocess(channels, groundTruths, cacheDir, featuresList);
-        if(!CcboostAdapter::core(ccboostconfig,
-                                 probabilisticOutputSegmentations,
-                                 outputSplittedSegList,
-                                 outputSegmentations))
-        {
-            itk::MultiThreader::SetGlobalDefaultNumberOfThreads( prevITKNumberOfThreads );
-            return;
-        }
-
-        typedef itk::ImageFileWriter< CcboostAdapter::FloatTypeImage > fWriterType;
-        fWriterType::Pointer fwriter = fWriterType::New();
-        fwriter->SetFileName(ccboostconfig.cacheDir + "outputSegmentation.tif");
-        fwriter->SetInput(probabilisticOutputSegmentations.at(0));
-        try {
-
-            fwriter->Update();
-
-        } catch(itk::ExceptionObject &exp){
-            std::cout << "Warning: Error writing probabilistic output. what(): " << exp << std::endl;
-            return EXIT_FAILURE;
-        } catch(...) {
-            std::cout << "Warning: Error writing probabilistic output" << std::endl;
-            return EXIT_FAILURE;
-        }
-    } catch( itk::ExceptionObject & err ) {
-        // restore default number of threads
-        itk::MultiThreader::SetGlobalDefaultNumberOfThreads( prevITKNumberOfThreads );
-
-        qDebug() << QObject::tr("Itk exception on ccboost caught. Error: %1.").arg(err.what());
-
-        emit message(QString("Itk exception when running ccboost. Message: %1").arg(err.what()));
-        return;
-    }
-
-    // restore default number of threads
-    itk::MultiThreader::SetGlobalDefaultNumberOfThreads( prevITKNumberOfThreads );
-
-    try {
-        //FIXME at the moment we are loading the probabilistic volume on the preview
-        //if(ccboostconfig.saveIntermediateVolumes) {
-
-            std::cout << "Saving predicted data to disk" << std::endl;
-
-            itkVolumeType::Pointer outputSegmentation = itkVolumeType::New();
-
-            //FIXME reuse splitter / this will fail if not splitted volume but series of ROIs
-            typedef itk::ImageSplitter< itkVolumeType > SplitterType;
-            itkVolumeType::RegionType region = ccboostconfig.originalVolumeImage->GetLargestPossibleRegion();
-
-            SplitterType testSplitter(region, ccboostconfig.numPredictRegions);
-
-            //repaste test
-            testSplitter.pasteCroppedRegions(outputSegmentations, outputSegmentation);
-
-            typedef CcboostAdapter::FloatTypeImage FloatTypeImage;
-
-            typedef itk::ImageSplitter< FloatTypeImage > FloatSplitterType;
-
-            CcboostAdapter::FloatTypeImage::Pointer probabilisticOutputSegmentation = CcboostAdapter::FloatTypeImage::New();
-
-            FloatTypeImage::RegionType fregion(region);
-
-            FloatSplitterType fsplitter(fregion,
-                                        ccboostconfig.numPredictRegions);
-
-            fsplitter.pasteCroppedRegions(probabilisticOutputSegmentations, probabilisticOutputSegmentation);
-
-            typedef itk::ImageFileWriter< CcboostAdapter::FloatTypeImage > fWriterType;
-            fWriterType::Pointer fwriter = fWriterType::New();
-            fwriter->SetFileName(ccboostconfig.cacheDir + ccboostconfig.probabilisticOutputFilename);
-
-            qDebug() << "Saving probabilistic volume at " <<  QFileInfo(QString::fromStdString(ccboostconfig.cacheDir + ccboostconfig.probabilisticOutputFilename)).absoluteFilePath();
-            fwriter->SetInput(probabilisticOutputSegmentation);
-
-            typedef itk::ImageFileWriter< itkVolumeType > WriterType;
-            WriterType::Pointer writer = WriterType::New();
-            writer->SetFileName(ccboostconfig.cacheDir + "ccboost-binarized-output.tif");
-            writer->SetInput(outputSegmentation);
-
-            try {
-
-                fwriter->Update();
-                writer->Update();
-
-            } catch(itk::ExceptionObject &exp){
-                std::cout << "Warning: Error writing output. what(): " << exp << std::endl;
-            } catch(...) {
-                std::cout << "Warning: Error writing output" << std::endl;
-            }
-        //}
-
-    } catch( itk::ExceptionObject & err ) {
-        // restore default number of threads
-        itk::MultiThreader::SetGlobalDefaultNumberOfThreads( prevITKNumberOfThreads );
-
-        qDebug() << QObject::tr("Itk exception on ccboost caught. Error: %1. From %2:%3").arg(err.what()).arg(__FILE__).arg(__LINE__);
-
-        emit message(QString("Itk exception when running ccboost. Message: %1").arg(err.what()));
-        return;
-    }
-
 
 }
 

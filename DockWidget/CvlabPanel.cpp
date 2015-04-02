@@ -70,11 +70,11 @@ CvlabPanel::CvlabPanel(CcboostSegmentationPlugin* manager,
 , m_factory(factory)
 , m_undoStack(undoStack)
 , m_pendingFeaturesChannel(nullptr)
-, m_threshold(0.50)
+, m_threshold(0.0)
 , m_probabilityMaxValue(50)
-, m_probabilityMinValue(50)
+, m_probabilityMinValue(-50)
 {
-  qRegisterMetaType<CcboostAdapter::FloatTypeImage::Pointer>("CcboostAdapter::FloatTypeImage::Pointer");
+  qRegisterMetaType< FloatTypeImage::Pointer >("FloatTypeImage::Pointer");
 
   setObjectName("CvlabPanel");
 
@@ -112,11 +112,32 @@ CvlabPanel::~CvlabPanel()
 void CvlabPanel::reset()
 {
 
+    m_threshold  = 0;
+    m_probabilityMaxValue =  50;
+    m_probabilityMinValue = -50;
+    this->changePreviewThreshold(50);
+
+    m_gui->bSynapseCcboost->setEnabled(true);
+    m_gui->bMitochondriaCcboost->setEnabled(true);
+    m_gui->openOverlay->setEnabled(true);
+
+    m_gui->previewThreshold->setEnabled(false);
+    m_gui->createSegmentations->setEnabled(false);
+    m_gui->previewOpacity->setEnabled(false);
+    m_gui->previewVisibility->setEnabled(false);
+    m_gui->previewGroup->setEnabled(false);
+    m_gui->abortTask->setEnabled(false);
+
+    //TODO does reset discard segmentation and destroy data/preview?
+    if(m_preview) {
+        m_viewManager->removeWidget(m_preview);
+        m_preview.reset();
+    }
 }
 
 //------------------------------------------------------------------------
 void CvlabPanel::setVolume(QFileInfo volumeFile){
-    typedef itk::ImageFileReader< CcboostAdapter::FloatTypeImage > fReaderType;
+    typedef itk::ImageFileReader< FloatTypeImage > fReaderType;
     fReaderType::Pointer freader = fReaderType::New();
     freader->SetFileName(volumeFile.absoluteFilePath().toStdString());
     try {
@@ -129,7 +150,7 @@ void CvlabPanel::setVolume(QFileInfo volumeFile){
             m_preview.reset();
         }
 
-        typedef itk::MinimumMaximumImageCalculator <CcboostAdapter::FloatTypeImage>
+        typedef itk::MinimumMaximumImageCalculator <FloatTypeImage>
                 ImageCalculatorFilterType;
 
         ImageCalculatorFilterType::Pointer imageCalculatorFilter
@@ -139,8 +160,9 @@ void CvlabPanel::setVolume(QFileInfo volumeFile){
 
         m_probabilityMaxValue = imageCalculatorFilter->GetMaximum();
         m_probabilityMinValue = imageCalculatorFilter->GetMinimum();
+        this->changePreviewThreshold(50); //50%
 
-        //could we save the volume with the correect spacing, please? otherwise transform to physical fails and everything is wrong.
+        //we have to be sure the volume has the correect spacing, otherwise transform to physical fails and everything is wrong.
         m_volume->SetSpacing(volumetricData(m_viewManager->activeChannel()->asInput()->output())->itkImage()->GetSpacing());
 
         m_preview = PreviewWidgetSPtr{new PreviewWidget()};
@@ -154,6 +176,11 @@ void CvlabPanel::setVolume(QFileInfo volumeFile){
         m_preview->setVisibility(true);
         m_preview->update();
 
+        m_gui->bSynapseCcboost->setEnabled(false);
+        m_gui->bMitochondriaCcboost->setEnabled(false);
+        m_gui->openOverlay->setEnabled(false);
+
+        m_gui->previewThreshold->setEnabled(true);
         m_gui->createSegmentations->setEnabled(true);
         m_gui->previewOpacity->setEnabled(true);
         m_gui->previewVisibility->setEnabled(true);
@@ -230,7 +257,7 @@ void CvlabPanel::changePreviewVisibility(bool visible)
 
   //testing who messes up with lut
   m_preview->update();
-//  emit sliceChanged(Plane::XY, 5);
+//  emit crosshairPlaneChanged(Plane::XY, 5);
 }
 
 //------------------------------------------------------------------------
@@ -250,11 +277,11 @@ void CvlabPanel::changePreviewOpacity(int opacity)
 //------------------------------------------------------------------------
 void CvlabPanel::changePreviewThreshold(int pthreshold)
 {
-    //assert we have a volume
-  Q_ASSERT(m_volume);
 
   if (m_preview)
   {
+    //assert we have a volume
+    Q_ASSERT(m_volume);
     m_threshold = (pthreshold/100.0)*(m_probabilityMaxValue - m_probabilityMinValue) + m_probabilityMinValue;
     m_preview->setThreshold(m_threshold);
     m_viewManager->updateViews();
@@ -272,21 +299,12 @@ void CvlabPanel::onActiveChannelChanged()
 //------------------------------------------------------------------------
 void CvlabPanel::abort(){
 
-    m_gui->createSegmentations->setEnabled(false);
-    m_gui->previewOpacity->setEnabled(false);
-    m_gui->previewVisibility->setEnabled(false);
-    m_gui->previewGroup->setEnabled(false);
-    m_gui->abortTask->setEnabled(false);
+    //TODO send abort signal to ccboost task or Import task if any
+    m_manager->abortTasks();
 
-    //TODO abort ccboost task if any
-    //m_manager->abort();
+    //TODO say something
 
-    //TODO discard segmentation and destroy data/preview
-    if(m_preview) {
-        m_viewManager->removeWidget(m_preview);
-        m_preview.reset();
-    }
-
+    onFinished();
 }
 
 //------------------------------------------------------------------------
@@ -295,51 +313,8 @@ void CvlabPanel::extractSegmentations()
     if (m_volume)
     {
 
-        typedef itk::BinaryThresholdImageFilter <Matrix3D<float>::ItkImageType, itkVolumeType>
-                       fBinaryThresholdImageFilterType;
-
-               fBinaryThresholdImageFilterType::Pointer thresholdFilter
-                       = fBinaryThresholdImageFilterType::New();
-               thresholdFilter->SetInput(m_volume);
-               thresholdFilter->SetLowerThreshold(m_threshold);
-               thresholdFilter->SetInsideValue(255);
-               thresholdFilter->SetOutsideValue(0);
-               thresholdFilter->Update();
-
-        itkVolumeType::Pointer outputSegmentation = thresholdFilter->GetOutput();
-
-        outputSegmentation->DisconnectPipeline();
-
-        ESPINA_SETTINGS(settings);
-        settings.beginGroup("ccboost segmentation");
-        std::string cacheDir = "./";
-        bool saveIntermediateVolumes = false;
-
-        if (settings.contains("Save Intermediate Volumes"))
-             saveIntermediateVolumes = settings.value("Save Intermediate Volumes").toBool();
-
-        //warning, cache dir will be different than the one used for storing features and other data
-        if (settings.contains("Features Directory"))
-             cacheDir = settings.value("Features Directory").toString().toStdString();
-
-        typedef itk::ImageFileWriter< itkVolumeType > WriterType;
-        WriterType::Pointer writer = WriterType::New();
-        if(saveIntermediateVolumes) {
-            writer->SetFileName(cacheDir + "binarized.tif");
-            writer->SetInput(outputSegmentation);
-            writer->Update();
-        }
-
-        itkVolumeType::SpacingType spacing = volumetricData(m_viewManager->activeChannel()->asInput()->output())->itkImage()->GetSpacing();
-
-        outputSegmentation->SetSpacing(spacing);
-
-        double zAnisotropyFactor = 2*spacing[2]/(spacing[0] + spacing[1]);
-
-        CcboostAdapter::postprocessing(outputSegmentation, zAnisotropyFactor,
-                                       saveIntermediateVolumes, cacheDir);
-
-        m_manager->createImportTask(outputSegmentation);
+        //m_volume ha read as FloatTypeImage
+        m_manager->createImportTask(m_volume, m_threshold);
 
         //destroy preview
         if(m_preview){
@@ -356,11 +331,17 @@ void CvlabPanel::extractSegmentations()
         m_gui->abortTask->setEnabled(false);
 
     }
+
+    m_gui->bSynapseCcboost->setEnabled(true);
+    m_gui->bMitochondriaCcboost->setEnabled(true);
+    m_gui->openOverlay->setEnabled(true);
 }
 
 //------------------------------------------------------------------------
 void CvlabPanel::onFinished()
 {
+    reset();
+
 }
 
 
@@ -380,7 +361,7 @@ void CvlabPanel::updateProgress(int progress)
 void CvlabPanel::updateMsg(QString msg)
 {
   m_msg = msg;
-  auto text = tr("%1%:%2%").arg(m_msg).arg(m_gui->progressBar->value());
+  auto text = tr("%1:%2%").arg(m_msg).arg(m_gui->progressBar->value());
   m_gui->progressBar->setFormat(text);
 
 }
@@ -416,15 +397,6 @@ void CvlabPanel::bindGUISignals()
     m_gui->openOverlay->setToolTip("Import segmentation from segmented greyscale image");
     connect(m_gui->openOverlay,        SIGNAL(clicked(bool)),
             this,                      SLOT(openOverlay()));
-
-}
-
-//-----------------------------------------------------------------------------
-void CvlabPanel::createSegmentationImport()
-{
-
-    m_manager->createImportTask();
-    m_gui->progressBar->setEnabled(true);
 
 }
 

@@ -24,12 +24,13 @@
 #include <GUI/Model/ChannelAdapter.h>
 #include <Core/EspinaTypes.h>
 
+#include "CCBTypes.h"
+
 //ccboost
 #include <QDebug>
 #include "BoosterInputData.h"
 
 // ESPINA
-#include <Core/EspinaTypes.h>
 //#include <Core/Analysis/Filter.h>
 //#include <GUI/Representations/MeshRepresentation.h>
 
@@ -66,7 +67,7 @@ namespace ESPINA {
         static const unsigned int FREEMEMORYREQUIREDPROPORTIONPREDICT = 180;
         static const unsigned int MINTRUTHSYNAPSES = 6;
         static const unsigned int MINTRUTHMITOCHONDRIA = 2;
-        static const double       MINNUMBGPX = 100000;
+        static const unsigned int MINNUMBGPX = 100000;
         static const unsigned int CCBOOSTBACKGROUNDLABEL = 128;
     public:
         static const unsigned int ANNOTATEDPADDING = 30;
@@ -86,11 +87,14 @@ namespace ESPINA {
       ChannelAdapterPtr channel() const
       { return m_channel; }
 
-      std::vector<itkVolumeType::Pointer>  predictedSegmentationsList;
+      FloatTypeImage::Pointer  probabilisticSegmentation;
 
       static itkVolumeType::Pointer mergeSegmentations(const itkVolumeType::Pointer channelItk,
                                                             const SegmentationAdapterSList& segList,
                                                             const SegmentationAdapterSList& backgroundSegList);
+
+      bool hasFailed() const
+      { return m_failed; }
 
     signals:
       void message(QString);
@@ -108,8 +112,6 @@ namespace ESPINA {
 
       static void applyEspinaSettings(ConfigData<itkVolumeType> cfgdata);
 
-      void runCore(const ConfigData<itkVolumeType>& ccboostconfig,
-                   std::vector<itkVolumeType::Pointer>& outputSplittedSegList);
     public:
       //TODO espina2. this is a hack to get the segmentations in the filter.
       //Find out how to do it properly
@@ -118,8 +120,10 @@ namespace ESPINA {
 
     private:
       ChannelAdapterPtr m_channel;
+      void setFailed(const bool value)
+      { m_failed = value; }
 
-      bool m_abort;
+      bool m_failed{false};
 
       unsigned int memoryAvailableMB;
 
@@ -127,8 +131,8 @@ namespace ESPINA {
       itkVolumeType::Pointer m_inputChannel;
 
     };
-    using CcboostTaskPtr  = CcboostTask *;
-    using CcboostTaskSPtr = std::shared_ptr<CcboostTask>;
+    typedef CcboostTask* CcboostTaskPtr;
+    typedef std::shared_ptr<CcboostTask>CcboostTaskSPtr;
 
   } // namespace CCB
 } // namespace ESPINA

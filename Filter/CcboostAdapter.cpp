@@ -1,3 +1,4 @@
+
 #include "CcboostAdapter.h"
 
 //Boost
@@ -49,6 +50,8 @@
 #include <itkImageToVTKImageFilter.h>
 #include <itkSmoothingRecursiveGaussianImageFilter.h>
 #include <itkImageDuplicator.h>
+#include <itkBinaryImageToShapeLabelMapFilter.h>
+#include <itkShapeOpeningLabelMapFilter.h>
 
 //using namespace ESPINA;
 
@@ -56,33 +59,43 @@
 #define ESPINA_SETTINGS(settings) QSettings settings("CeSViMa", "ESPINA");
 #endif
 
-bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
-                          FloatTypeImage::Pointer& probabilisticOutSeg,
-                          std::vector<itkVolumeType::Pointer>& outputSplittedSegList,
-                          itkVolumeType::Pointer& outputSegmentation) {
+#include "CcboostAdapter.tpp"
 
-    std::vector<FloatTypeImage::Pointer> probabilisticOutSegs;
-    std::vector<itkVolumeType::Pointer> outputSegmentations;
-
-    core(cfgdata, probabilisticOutSegs, outputSplittedSegList, outputSegmentations);
-
-    probabilisticOutSeg = probabilisticOutSegs.at(0);
-    outputSegmentation = outputSegmentations.at(0);
-
-}
+//Explicit templated member function instantiation, remove for implicit
+template void CcboostAdapter::removeborders< FloatTypeImage >( FloatTypeImage::Pointer&, bool, std::string);
+template void CcboostAdapter::removeborders< itkVolumeType >(   itkVolumeType::Pointer&, bool, std::string);
 
 bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
-                          std::vector<FloatTypeImage::Pointer>& probabilisticOutSegs,
-                          std::vector<itkVolumeType::Pointer>& outputSplittedSegList,
-                          std::vector<itkVolumeType::Pointer>& outputSegmentations) {
+                          std::vector<FloatTypeImage::Pointer>& probabilisticOutSegs)
+{
 
+//#define WORK
+#ifndef WORK
+    for(int roiidx = 0; roiidx < cfgdata.test.size(); roiidx++)
+    {
+        typedef itk::ImageFileReader< FloatTypeImage > fReaderType;
+        fReaderType::Pointer freader = fReaderType::New();
 
-#define WORK
-#ifdef WORK
+        std::cout << "Reading: " << cfgdata.cacheDir << std::to_string(roiidx) << "-predicted.tif" << std::endl;
+        freader->SetFileName(cfgdata.cacheDir + std::to_string(roiidx) + "-predicted.tif");
+        try
+        {
+            freader->Update();
+        }
+        catch( itk::ExceptionObject & err )
+        {
+
+            std::cerr << "Itk exception on ccboost caught at " << __FILE__ << ":" << __LINE__ << ". Error: " << err.what() << std::endl;
+            return false;
+        }
+        FloatTypeImage::Pointer probabilisticOutSeg = freader->GetOutput();
+        probabilisticOutSeg->DisconnectPipeline();
+        probabilisticOutSegs.push_back(probabilisticOutSeg);
+    }
+#else
 
     if(cfgdata.saveIntermediateVolumes)
         cfgdata.saveVolumes();
-
 
     BoosterInputData::MultipleROIDataPtr allTrainROIs = std::make_shared<MultipleROIData>();
 
@@ -105,7 +118,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
             ROIData::IntegralImageType ii;
             ii.compute( img );
             roi->addII( std::move(ii), ROIData::ChannelType::GAUSS );
-        }   
+        }
 
         //features
         TimerRT timerF; timerF.reset();
@@ -141,10 +154,10 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
     qDebug("train Elapsed: %f", timerF.elapsed());
 
     // save JSON model
-      if (!adaboost.saveModelToFile( "/tmp/model.json" ))
-          std::cout << "Error saving JSON model" << std::endl;
+    if (!adaboost.saveModelToFile( "/tmp/model.json" ))
+        std::cout << "Error saving JSON model" << std::endl;
 
-      // predict
+    // predict
 
     qDebug() << "predict";
 
@@ -153,9 +166,6 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
         Matrix3D<ImagePixelType> img;
 
         img.loadItkImage(testData.rawVolumeImage, true);
-        //FIXME why do we need ground truth on predict?
-//#warning why do we need ground truth on predict?
-//        gt.loadItkImage(testData.groundTruthImage, true);
 
         MultipleROIData::ROIDataPtr roi = std::make_shared<ROIData>();
         roi->init( img.data(), 0, 0, 0, img.width(), img.height(), img.depth(), cfgdata.train.at(0).zAnisotropyFactor );
@@ -200,12 +210,12 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
         probabilisticOutSeg->SetSpacing(cfgdata.train.at(0).rawVolumeImage->GetSpacing());
 
         typedef itk::MedianImageFilter <FloatTypeImage, FloatTypeImage>
-        MedianImageFilterType;
+                MedianImageFilterType;
 
         const double medianFilterRadius = 2.0;
 
         MedianImageFilterType::Pointer medianFilter
-        = MedianImageFilterType::New();
+                = MedianImageFilterType::New();
         MedianImageFilterType::InputSizeType radius;
         radius.Fill(medianFilterRadius);
         medianFilter->SetRadius(radius);
@@ -220,17 +230,57 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
 
     }
 
-#else
-    for(int roiidx = 0; roiidx < cfgdata.test.size(); roiidx++) {
-        typedef itk::ImageFileReader< FloatTypeImage > fReaderType;
-        fReaderType::Pointer freader = fReaderType::New();
-        freader->SetFileName(cfgdata.cacheDir + std::to_string(roiidx) + "-1-" + "predicted.tif");
-        freader->Update();
-        FloatTypeImage::Pointer probabilisticOutSeg = freader->GetOutput();
-        probabilisticOutSeg->DisconnectPipeline();
-        probabilisticOutSegs.push_back(probabilisticOutSeg);
-    }
+    for(int roiidx = 0; roiidx < probabilisticOutSegs.size(); roiidx++) {
+           typedef itk::ImageFileWriter< FloatTypeImage > fWriterType;
+           fWriterType::Pointer fwriter = fWriterType::New();
+
+           std::cout << "Writing: " << cfgdata.cacheDir << std::to_string(roiidx) << "-predicted.tif" << std::endl;
+           fwriter->SetFileName(cfgdata.cacheDir + std::to_string(roiidx) + "-predicted.tif");
+           fwriter->SetInput(probabilisticOutSegs[roiidx]);
+           try {
+               fwriter->Update();
+           }
+           catch( itk::ExceptionObject & err )
+           {
+
+               std::cerr << "Itk exception on ccboost caught at " << __FILE__ << ":" << __LINE__ << ". Error: " << err.what() << std::endl;
+               return false;
+           }
+
+       }
+
 #endif
+
+    ESPINA_SETTINGS(settings);
+    settings.beginGroup("ccboost segmentation");
+    settings.setValue("Channel Hash", QString(cfgdata.train.at(0).featuresRawVolumeImageHash.c_str()));
+
+    return true;
+}
+
+bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
+                          FloatTypeImage::Pointer& probabilisticOutSeg,
+                          std::vector<itkVolumeType::Pointer>& outputSplittedSegList,
+                          itkVolumeType::Pointer& outputSegmentation) {
+
+    std::vector<FloatTypeImage::Pointer> probabilisticOutSegs;
+    std::vector<itkVolumeType::Pointer> outputSegmentations;
+
+    core(cfgdata, probabilisticOutSegs, outputSplittedSegList, outputSegmentations);
+
+    probabilisticOutSeg = probabilisticOutSegs.at(0);
+    outputSegmentation = outputSegmentations.at(0);
+
+}
+
+bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
+                          std::vector<FloatTypeImage::Pointer>& probabilisticOutSegs,
+                          std::vector<itkVolumeType::Pointer>& outputSplittedSegList,
+                          std::vector<itkVolumeType::Pointer>& outputSegmentations) {
+
+
+    core(cfgdata, probabilisticOutSegs);
+
     //provisory test, assume that we have the full volume and paste it into one volume
 
     //TODO handle multiple output ROIs
@@ -246,7 +296,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
             writerf->Update();
         }
 
-        qDebug() << "predicted.tif created";             
+        qDebug() << "predicted.tif created";
 
         typedef itk::BinaryThresholdImageFilter <Matrix3D<float>::ItkImageType, itkVolumeType>
                 fBinaryThresholdImageFilterType;
@@ -268,11 +318,11 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
             writer->SetFileName(cfgdata.cacheDir + std::to_string(roiidx) + "-2-" + "thread-outputSegmentation.tif");
             writer->SetInput(outputSegmentation);
             writer->Update();
-        }       
+        }
 
         outputSegmentation->DisconnectPipeline();
 
-        postprocessing(cfgdata, outputSegmentation);
+        removeborders(cfgdata, outputSegmentation);
 
         outputSegmentation->SetSpacing(cfgdata.train.at(0).rawVolumeImage->GetSpacing());
 
@@ -284,11 +334,62 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
 
     }
 
-     ESPINA_SETTINGS(settings);
-     settings.beginGroup("ccboost segmentation");
-     settings.setValue("Channel Hash", QString(cfgdata.train.at(0).featuresRawVolumeImageHash.c_str()));
+    ESPINA_SETTINGS(settings);
+    settings.beginGroup("ccboost segmentation");
+    settings.setValue("Channel Hash", QString(cfgdata.train.at(0).featuresRawVolumeImageHash.c_str()));
 
-     return true;
+    return true;
+}
+
+void CcboostAdapter::splitSegmentations(const itkVolumeType::Pointer& outputSegmentation,
+                                        ESPINA::CCB::LabelMapType::Pointer& labelMap,
+                                        int minCCSize){
+
+    //FIXME we should a binary image, fix by forcing type?
+    Q_ASSERT( itk::NumericTraits<itkVolumeType::PixelType>::max() == 255 );
+    Q_ASSERT( itk::NumericTraits<itkVolumeType::PixelType>::min() == 0 );
+
+    typedef itk::BinaryImageToShapeLabelMapFilter<itkVolumeType> BinaryImageToShapeLabelMapFilterType;
+    typename BinaryImageToShapeLabelMapFilterType::Pointer binaryImageToShapeLabelMapFilter = BinaryImageToShapeLabelMapFilterType::New();
+    binaryImageToShapeLabelMapFilter->SetInput(outputSegmentation);
+    binaryImageToShapeLabelMapFilter->FullyConnectedOn();
+    binaryImageToShapeLabelMapFilter->SetInputForegroundValue(255);
+    binaryImageToShapeLabelMapFilter->SetOutputBackgroundValue(0);
+
+    // Remove label objects that have PHYSICAL_SIZE less than physicalSizeThreshold
+    typedef itk::ShapeOpeningLabelMapFilter< BinaryImageToShapeLabelMapFilterType::OutputImageType > ShapeOpeningLabelMapFilterType;
+    ShapeOpeningLabelMapFilterType::Pointer shapeOpeningLabelMapFilter = ShapeOpeningLabelMapFilterType::New();
+    shapeOpeningLabelMapFilter->SetInput( binaryImageToShapeLabelMapFilter->GetOutput() );
+    shapeOpeningLabelMapFilter->SetLambda( minCCSize );
+    //For a list of attributes see http://www.itk.org/Doxygen/html/itkLabelMapUtilities_8h_source.html
+    shapeOpeningLabelMapFilter->SetAttribute( ShapeOpeningLabelMapFilterType::LabelObjectType::PHYSICAL_SIZE);
+
+//TODO where should I deal with exceptions? Currently dealt at CcboostTask level, that is, CcboostTask::run()
+//    try {
+
+        shapeOpeningLabelMapFilter->Update();
+
+//    } catch( itk::ExceptionObject & error ) {
+//        std::cerr << __FILE__ << ":" << __LINE__ << "Error: " << error << std::endl;
+//        return EXIT_FAILURE;
+//    }
+
+    labelMap = shapeOpeningLabelMapFilter->GetOutput();
+
+    const unsigned int numObjects = labelMap->GetNumberOfLabelObjects();
+
+    if(numObjects == 0) {
+        std::cerr << "Warning: 0 objects present." << std::endl;
+    }
+
+    //To recover a volume from a labelMap, use the filter LabelMapToLabelImageFilter. e.g:
+    //      typedef itk::LabelMapToLabelImageFilter<LabelMapType, itkVolumeType> Label2VolumeFilter;
+    //      auto label2volume = Label2VolumeFilter::New();
+    //           label2volume->SetInput(labelmap);
+    //           label2volume->Update();
+    //      itkVolumeType::Pointer volume = label2volume->GetOutput();
+
+
 }
 
 void CcboostAdapter::splitSegmentations(const itkVolumeType::Pointer outputSegmentation,
@@ -299,7 +400,7 @@ void CcboostAdapter::splitSegmentations(const itkVolumeType::Pointer outputSegme
 
     /*split the output into several segmentations*/
     typedef itk::ConnectedComponentImageFilter <itkVolumeType, bigVolumeType >
-      ConnectedComponentImageFilterType;
+            ConnectedComponentImageFilterType;
 
     ConnectedComponentImageFilterType::Pointer connected = ConnectedComponentImageFilterType::New ();
     connected->SetInput(outputSegmentation);
@@ -322,18 +423,20 @@ void CcboostAdapter::splitSegmentations(const itkVolumeType::Pointer outputSegme
     relabelFilter->SetInput(connected->GetOutput());
     relabelFilter->Update();
     if(saveIntermediateVolumes) {
-        qDebug("Save relabeled segmentation");
-        bigwriter->SetFileName(cacheDir + "6" + "relabeled-segmentation.tif");
+        std::string saveFilenamePath = cacheDir + "6" + "relabeled-segmentation.tif";
+        qDebug("Save relabeled segmentation at ");
+        qDebug(saveFilenamePath.c_str());
+        bigwriter->SetFileName(saveFilenamePath);
         bigwriter->SetInput(relabelFilter->GetOutput());
         bigwriter->Update();
     }
 
     //create Espina Segmentation
     typedef itk::BinaryThresholdImageFilter <bigVolumeType, itkVolumeType>
-      BinaryThresholdImageFilterType;
+            BinaryThresholdImageFilterType;
 
     BinaryThresholdImageFilterType::Pointer labelThresholdFilter
-        = BinaryThresholdImageFilterType::New();
+            = BinaryThresholdImageFilterType::New();
 
     labelThresholdFilter->SetInsideValue(255);
     labelThresholdFilter->SetOutsideValue(0);
@@ -341,7 +444,6 @@ void CcboostAdapter::splitSegmentations(const itkVolumeType::Pointer outputSegme
     qDebug("Create Itk segmentations");
 
     //TODO espina2 ccboostconfig
-//    for(int i=1; i < connected->GetObjectCount() && i < ccboostconfig.maxNumObjects; i++){
     for(int i = skipBiggest? 1 : 0; i < connected->GetObjectCount(); i++){
         labelThresholdFilter->SetInput(relabelFilter->GetOutput());
         labelThresholdFilter->SetLowerThreshold(i);
@@ -353,108 +455,11 @@ void CcboostAdapter::splitSegmentations(const itkVolumeType::Pointer outputSegme
         outSegList.push_back(outSeg);
 
     }
-
 }
 
-void CcboostAdapter::postprocessing(const ConfigData<itkVolumeType>& cfgData,
-                                    itkVolumeType::Pointer& outputSegmentation) {
+void CcboostAdapter::removeSmallComponents(itkVolumeType::Pointer& segmentation, int minCCSize) {
 
-
-postprocessing(outputSegmentation, cfgData.train.at(0).zAnisotropyFactor,
-               cfgData.saveIntermediateVolumes, cfgData.cacheDir);
-
-}
-
-void CcboostAdapter::postprocessing(itkVolumeType::Pointer& outputSegmentation,
-                                    double zAnisotropyFactor,
-                                    bool saveIntermediateVolumes,
-                                    std::string cacheDir) {
-
-
-
-    qDebug("remove borders");
-
-    itkVolumeType::SizeType outputSize = outputSegmentation->GetLargestPossibleRegion().GetSize();
-
-    const int borderToRemove = 2;
-    const int borderZ = std::max((int)1, (int)(borderToRemove/zAnisotropyFactor + 0.5));
-    const int borderOther = borderToRemove;
-
-    // this is dimension-agnostic, though now we need to know which one is Z to handle anisotropy
-    const unsigned zIndex = 2;
-
-    const int numDim = itkVolumeType::ImageDimension;
-
-    // go through each dimension and zero it out
-    for (unsigned dim=0; dim < numDim; dim++)
-    {
-        const int thisBorder = (dim == zIndex) ? borderZ : borderOther;
-
-        const int length = outputSize[dim];
-
-        // check if image is too small, then we have to avoid over/underflows
-        const unsigned toRemove = std::min( length, thisBorder );
-
-        itkVolumeType::SizeType   regionSize = outputSegmentation->GetLargestPossibleRegion().GetSize();
-        regionSize[dim] = toRemove;
-
-        itkVolumeType::IndexType   regionIndex = outputSegmentation->GetLargestPossibleRegion().GetIndex();
-
-        itkVolumeType::RegionType region;
-        region.SetSize(regionSize);
-        region.SetIndex(regionIndex);
-
-        // first the low part of the border
-        {
-            itk::ImageRegionIterator<itkVolumeType> imageIterator(outputSegmentation, region);
-            while(!imageIterator.IsAtEnd())
-            {
-                // set to zero
-                imageIterator.Set(0);
-                ++imageIterator;
-            }
-        }
-
-        // now the last part (just offset in [dim])
-        {
-            regionIndex[dim] = outputSize[dim] - toRemove;
-            region.SetIndex(regionIndex);
-
-            itk::ImageRegionIterator<itkVolumeType> imageIterator(outputSegmentation, region);
-            while(!imageIterator.IsAtEnd())
-            {
-                // set to zero
-                imageIterator.Set(0);
-                ++imageIterator;
-            }
-        }
-    }
-
-    WriterType::Pointer writer = WriterType::New();
-    if(saveIntermediateVolumes) {
-        writer->SetFileName(cacheDir + "3" + "ccOutputSegmentation-noborders.tif");
-        writer->SetInput(outputSegmentation);
-        writer->Update();
-        qDebug("cc boost segmentation saved");
-    }
-
-    qDebug("Remove small components");
-
-    removeSmallComponents(outputSegmentation);
-
-    if(saveIntermediateVolumes) {
-        writer->SetFileName(cacheDir + "4" + "outputSegmentation-nosmallcomponents.tif");
-        writer->SetInput(outputSegmentation);
-        writer->Update();
-    }
-
-    qDebug("Removed");
-
-    outputSegmentation->DisconnectPipeline();
-
-}
-
-void CcboostAdapter::removeSmallComponents(itk::Image<unsigned char, 3>::Pointer & segmentation, int minCCSize, int threshold) {
+#warning "TODO reimplement this function, Matrix3D createLabelMap is not the best we can do"
 
     typedef unsigned int LabelScalarType;
 
@@ -467,48 +472,60 @@ void CcboostAdapter::removeSmallComponents(itk::Image<unsigned char, 3>::Pointer
     Matrix3D<itkVolumeType::PixelType> scoreMatrix;
     scoreMatrix.loadItkImage(segmentation, true);
 
-    scoreMatrix.createLabelMap<LabelScalarType>( threshold, 255, &CCMatrix,
-                                             false, &labelCount, &shapeDescr );
+    scoreMatrix.createLabelMap<LabelScalarType>( 128, 255, &CCMatrix,
+                                                 false, &labelCount, &shapeDescr );
 
     // now create image
     {
-      typedef itk::ImageFileWriter< itkVolumeType > WriterType;
-      typedef Matrix3D<LabelScalarType>::ItkImageType LabelImageType;
+        typedef itk::ImageFileWriter< itkVolumeType > WriterType;
+        typedef Matrix3D<LabelScalarType>::ItkImageType LabelImageType;
 
-      // original image
-      LabelImageType::Pointer labelsImage = CCMatrix.asItkImage();
+        // original image
+        LabelImageType::Pointer labelsImage = CCMatrix.asItkImage();
 
-      // now copy pixel values, get an iterator for each
-      itk::ImageRegionConstIterator<LabelImageType> labelsIterator(labelsImage, labelsImage->GetLargestPossibleRegion());
-      itk::ImageRegionIterator<itkVolumeType> imageIterator(segmentation, segmentation->GetLargestPossibleRegion());
+        // now copy pixel values, get an iterator for each
+        itk::ImageRegionConstIterator<LabelImageType> labelsIterator(labelsImage, labelsImage->GetLargestPossibleRegion());
+        itk::ImageRegionIterator<itkVolumeType> imageIterator(segmentation, segmentation->GetLargestPossibleRegion());
 
-      // WARNING: assuming same searching order-- could be wrong!!
-      while( (! labelsIterator.IsAtEnd()) && (!imageIterator.IsAtEnd()) )
-      {
-          if ((labelsIterator.Value() == 0) || ( shapeDescr[labelsIterator.Value() - 1].numVoxels() < minCCSize ) )
-              imageIterator.Set( 0 );
-          else
-          {
-              imageIterator.Set( 255 );
-          }
+        // WARNING: assuming same searching order-- could be wrong!!
+        while( (! labelsIterator.IsAtEnd()) && (!imageIterator.IsAtEnd()) )
+        {
+            if ((labelsIterator.Value() == 0) || ( shapeDescr[labelsIterator.Value() - 1].numVoxels() < minCCSize ) )
+                imageIterator.Set( 0 );
+            else
+            {
+                imageIterator.Set( 255 );
+            }
 
-          ++labelsIterator;
-          ++imageIterator;
-      }
+            ++labelsIterator;
+            ++imageIterator;
+        }
     }
+
+    //    qDebug("Remove small components");
+
+    //    removeSmallComponents(outputSegmentation);
+
+    //    if(saveIntermediateVolumes) {
+    //        writer->SetFileName(cacheDir + "4" + "outputSegmentation-nosmallcomponents.tif");
+    //        writer->SetInput(outputSegmentation);
+    //        writer->Update();
+    //    }
+
+    //    qDebug("Removed");
 
 }
 
 void CcboostAdapter::computeAllFeatures(const ConfigData<itkVolumeType> cfgData) {
 
     for(auto cfgROI: cfgData.train){
-//        if(!caller->canExecute())
-//                return;
+        //        if(!caller->canExecute())
+        //                return;
         computeFeatures(cfgData, cfgROI);
     }
     for(auto cfgROI: cfgData.test){
-//        if(!caller->canExecute())
-//                return;
+        //        if(!caller->canExecute())
+        //                return;
         computeFeatures(cfgData, cfgROI);
     }
 
@@ -519,90 +536,90 @@ void CcboostAdapter::computeFeatures(const ConfigData<itkVolumeType> cfgData,
 
 
     //TODO can we give message with?
-//    if(!caller->canExecute())
-//        return;
+    //    if(!caller->canExecute())
+    //        return;
 
     std::stringstream strstream;
 
     int featureNum = 0;
     for( const std::string& featureFile: cfgDataROI.otherFeatures ) {
 
-       strstream.str(std::string());
-       featureNum++;
-       strstream << "Computing " << featureNum << "/" << cfgDataROI.otherFeatures.size() << " features";
-       std::cout << strstream.str() << std::endl;
-//       if(!caller->canExecute())
-//           return;
-       //stateDescription->setTime(strstream.str());
+        strstream.str(std::string());
+        featureNum++;
+        strstream << "Computing " << featureNum << "/" << cfgDataROI.otherFeatures.size() << " features";
+        std::cout << strstream.str() << std::endl;
+        //       if(!caller->canExecute())
+        //           return;
+        //stateDescription->setTime(strstream.str());
 
-       std::string featureFilepath(cfgData.cacheDir + featureFile);
-       ifstream featureStream(featureFilepath.c_str());
-       //TODO check hash to prevent recomputing
-       if(!featureStream.good() || cfgData.forceRecomputeFeatures){
+        std::string featureFilepath(cfgData.cacheDir + featureFile);
+        ifstream featureStream(featureFilepath.c_str());
+        //TODO check hash to prevent recomputing
+        if(!featureStream.good() || cfgData.forceRecomputeFeatures){
 
-           computeFeature(cfgDataROI, cfgData.cacheDir, featureFile);
+            computeFeature(cfgDataROI, cfgData.cacheDir, featureFile);
 
-       }
+        }
     }
 
-//    stateDescription->setMessage("Features computed");
-//    stateDescription->setTime("");
+    //    stateDescription->setMessage("Features computed");
+    //    stateDescription->setTime("");
 }
 
 void CcboostAdapter::computeFeature(const SetConfigData<itkVolumeType> cfgDataROI,
                                     const std::string cacheDir,
                                     const std::string featureFile){
-        std::string featureFilepath(cacheDir + featureFile);
+    std::string featureFilepath(cacheDir + featureFile);
 
-        //TODO do this in a more flexible way
-        int stringPos;
-        if( (stringPos = featureFile.find(std::string("hessOrient-"))) != std::string::npos){
-            float sigma;
-            std::string filename(featureFile.substr(stringPos));
-            std::string matchStr = std::string("hessOrient-s%f-repolarized") + FEATUREEXTENSION;
-            int result = sscanf(filename.c_str(),matchStr.c_str(),&sigma);
-           //FIXME break if error
-            if(result < 0)
-                qDebug() << "Error scanning feature name " << featureFile.c_str();
+    //TODO do this in a more flexible way
+    int stringPos;
+    if( (stringPos = featureFile.find(std::string("hessOrient-"))) != std::string::npos){
+        float sigma;
+        std::string filename(featureFile.substr(stringPos));
+        std::string matchStr = std::string("hessOrient-s%f-repolarized") + FEATUREEXTENSION;
+        int result = sscanf(filename.c_str(),matchStr.c_str(),&sigma);
+        //FIXME break if error
+        if(result < 0)
+            qDebug() << "Error scanning feature name " << featureFile.c_str();
 
-            qDebug() << QString("Either you requested recomputing the features, "
-                                "the current channel is new or has changed or "
-                                "Hessian Orient Estimate feature not found at "
-                                "path: %2. Creating with sigma %1").arg(sigma).arg(QString::fromStdString(featureFilepath));
+        qDebug() << QString("Either you requested recomputing the features, "
+                            "the current channel is new or has changed or "
+                            "Hessian Orient Estimate feature not found at "
+                            "path: %2. Creating with sigma %1").arg(sigma).arg(QString::fromStdString(featureFilepath));
 
 
-            AllEigenVectorsOfHessian2Execute(sigma, cfgDataROI.rawVolumeImage, featureFilepath, EByMagnitude, cfgDataROI.zAnisotropyFactor);
+        AllEigenVectorsOfHessian2Execute(sigma, cfgDataROI.rawVolumeImage, featureFilepath, EByMagnitude, cfgDataROI.zAnisotropyFactor);
 
-            RepolarizeYVersorWithGradient2Execute(sigma, cfgDataROI.rawVolumeImage, featureFilepath, featureFilepath, cfgDataROI.zAnisotropyFactor);
+        RepolarizeYVersorWithGradient2Execute(sigma, cfgDataROI.rawVolumeImage, featureFilepath, featureFilepath, cfgDataROI.zAnisotropyFactor);
 
-       } else if ( (stringPos = featureFile.find(std::string("gradient-magnitude"))) != std::string::npos ) {
-            float sigma;
-            std::string filename(featureFile.substr(stringPos));
-            std::string matchStr = std::string("gradient-magnitude-s%f") + FEATUREEXTENSION;
-            int result = sscanf(filename.c_str(),matchStr.c_str(),&sigma);
-            if(result < 0)
-                qDebug() << "Error scanning feature name " << featureFile.c_str();
+    } else if ( (stringPos = featureFile.find(std::string("gradient-magnitude"))) != std::string::npos ) {
+        float sigma;
+        std::string filename(featureFile.substr(stringPos));
+        std::string matchStr = std::string("gradient-magnitude-s%f") + FEATUREEXTENSION;
+        int result = sscanf(filename.c_str(),matchStr.c_str(),&sigma);
+        if(result < 0)
+            qDebug() << "Error scanning feature name " << featureFile.c_str();
 
-            qDebug() << QString("Current  or channel is new or has changed or gradient magnitude feature not found at path: %2. Creating with sigma %1").arg(sigma).arg(QString::fromStdString(featureFilepath));
+        qDebug() << QString("Current  or channel is new or has changed or gradient magnitude feature not found at path: %2. Creating with sigma %1").arg(sigma).arg(QString::fromStdString(featureFilepath));
 
-            GradientMagnitudeImageFilter2Execute(sigma, cfgDataROI.rawVolumeImage, featureFilepath, cfgDataROI.zAnisotropyFactor);
+        GradientMagnitudeImageFilter2Execute(sigma, cfgDataROI.rawVolumeImage, featureFilepath, cfgDataROI.zAnisotropyFactor);
 
-        } else if( (stringPos = featureFile.find(std::string("stensor"))) != std::string::npos ) {
-            float rho,sigma;
-            std::string filename(featureFile.substr(stringPos));
-            std::string matchStr = std::string("stensor-s%f-r%f") + FEATUREEXTENSION;
-            int result = sscanf(filename.c_str(),matchStr.c_str(),&sigma,&rho);
-            if(result < 0)
-                qDebug() << "Error scanning feature name" << featureFile.c_str();
+    } else if( (stringPos = featureFile.find(std::string("stensor"))) != std::string::npos ) {
+        float rho,sigma;
+        std::string filename(featureFile.substr(stringPos));
+        std::string matchStr = std::string("stensor-s%f-r%f") + FEATUREEXTENSION;
+        int result = sscanf(filename.c_str(),matchStr.c_str(),&sigma,&rho);
+        if(result < 0)
+            qDebug() << "Error scanning feature name" << featureFile.c_str();
 
-            qDebug() << QString("Current channel is new or has changed or tensor feature not found at path %3. Creating with rho %1 and sigma %2").arg(rho).arg(sigma).arg(QString::fromStdString(featureFilepath));
+        qDebug() << QString("Current channel is new or has changed or tensor feature not found at path %3. Creating with rho %1 and sigma %2").arg(rho).arg(sigma).arg(QString::fromStdString(featureFilepath));
 
-            bool sortByMagnitude = true;
-            EigenOfStructureTensorImageFilter2Execute(sigma, rho, cfgDataROI.rawVolumeImage, featureFilepath, sortByMagnitude, cfgDataROI.zAnisotropyFactor );
+        bool sortByMagnitude = true;
+        EigenOfStructureTensorImageFilter2Execute(sigma, rho, cfgDataROI.rawVolumeImage, featureFilepath, sortByMagnitude, cfgDataROI.zAnisotropyFactor );
 
-        } else {
-            qDebug() << QString("feature %1 is not recognized.").arg(featureFile.c_str()).toUtf8();
-        }
+    } else {
+        qDebug() << QString("feature %1 is not recognized.").arg(featureFile.c_str()).toUtf8();
+    }
 }
 
 void CcboostAdapter::addAllFeatures(const ConfigData<itkVolumeType> &cfgData, MultipleROIData::ROIDataPtr roi ) {
@@ -647,7 +664,7 @@ void CcboostAdapter::addFeatures(const std::string& cacheDir,
 
         if ( (mWidth != roi->rawImage.width()) || (mHeight != roi->rawImage.height()) || (mDepth != roi->rawImage.depth()) ) {
             qDebug("Feature image size differs from raw image: %s. (%dx%dx%d vs %dx%dx%d). Recomputing.",featFName.c_str(), mWidth, mHeight, mDepth,
-                                   roi->rawImage.width(), roi->rawImage.height(), roi->rawImage.depth());
+                   roi->rawImage.width(), roi->rawImage.height(), roi->rawImage.depth());
 
             computeFeature(cfgDataROI, cacheDir, chanFName);
 
@@ -746,3 +763,11 @@ void CcboostAdapter::addFeatures(const std::string& cacheDir,
         }
     }
 }
+
+//#include "CcboostAdapter.in"
+
+//void CcboostAdapter::removeborders(const ConfigData< itkVolumeType > &cfgData, itkVolumeType::Pointer& outputSegmentation);
+//void CcboostAdapter::removeborders(const ConfigData< FloatTypeImage > &cfgData, FloatTypeImage::Pointer& outputSegmentation);
+
+//void CcboostAdapter::removeborders(itkVolumeType::Pointer& outputSegmentation, bool saveIntermediateVolumes, std::string cacheDir);
+//void CcboostAdapter::removeborders(FloatTypeImage::Pointer& outputSegmentation, bool saveIntermediateVolumes, std::string cacheDir);

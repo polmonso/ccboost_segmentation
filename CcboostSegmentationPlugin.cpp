@@ -77,6 +77,7 @@ CcboostSegmentationPlugin::CcboostSegmentationPlugin()
 , m_scheduler       {nullptr}
 , m_undoStack       {nullptr}
 , m_settings        {SettingsPanelSPtr(new CcboostSegmentationSettings())}
+, m_dockWidget      {nullptr}
 {
 //    QStringList hierarchy;
 //     hierarchy << "Analysis";
@@ -113,9 +114,13 @@ void CcboostSegmentationPlugin::init(ModelAdapterSPtr model,
   m_scheduler = scheduler;
   m_undoStack = undoStack;
 
+  //NOT SUPPORTED AT THE MOMENT:
   // for automatic computation of CVL
-  connect(m_model.get(), SIGNAL(segmentationsAdded(SegmentationAdapterSList)),
-          this, SLOT(segmentationsAdded(SegmentationAdapterSList)));
+//  connect(m_model.get(), SIGNAL(segmentationsAdded(SegmentationAdapterSList)),
+//          this, SLOT(segmentationsAdded(SegmentationAdapterSList)));
+
+  //FIXME use a manager or a pointer to the output instead of passing the this pointer
+   m_dockWidget = new CvlabPanel(this, m_model, m_viewManager, m_factory, m_undoStack);
 
 }
 
@@ -166,8 +171,7 @@ QList<DockWidget *> CcboostSegmentationPlugin::dockWidgets() const
 {
   QList<DockWidget *> docks;
 
-  //FIXME use a manager or a pointer to the output instead of passing the this pointer
-  docks << new CvlabPanel(this, m_model, m_viewManager, m_factory, m_undoStack);
+  docks << m_dockWidget;
 
   return docks;
 }
@@ -236,6 +240,11 @@ void CcboostSegmentationPlugin::getGTSegmentations(const SegmentationAdapterSLis
 
 void CcboostSegmentationPlugin::createCcboostTask(SegmentationAdapterSList segmentations){
 
+    if(m_executingTasks.size() > 0 || m_finishedTasks.size() > 0){
+        qDebug() << "ccboost task already running. Aborting new request.";
+        return;
+    }
+
     SegmentationAdapterSList validSegmentations;
     SegmentationAdapterSList validBgSegmentations;
 
@@ -267,39 +276,7 @@ void CcboostSegmentationPlugin::createCcboostTask(SegmentationAdapterSList segme
     return;
 }
 
-void CcboostSegmentationPlugin::createImportTask(){
-
-    ChannelAdapterPtr channel;
-    if(m_viewManager->activeChannel() != NULL)
-        channel = m_viewManager->activeChannel();
-    else
-        channel = m_model->channels().at(0).get();
-
-    qDebug() << "Using channel " << m_viewManager->activeChannel()->data(Qt::DisplayRole);
-
-
-    QFileDialog fileDialog;
-    fileDialog.setObjectName("SelectSegmentationFile");
-    fileDialog.setFileMode(QFileDialog::ExistingFiles);
-    fileDialog.setWindowTitle(QString("Select file "));
-    fileDialog.setFilter(ImportTask::SUPPORTED_FILES);
-
-    if (fileDialog.exec() != QDialog::Accepted)
-        return;
-
-    std::string filename = fileDialog.selectedFiles().first().toStdString();
-
-     SchedulerSPtr scheduler = getScheduler();
-     CCB::ImportTaskSPtr importTask{new CCB::ImportTask(channel, scheduler, filename)};
-     struct CcboostSegmentationPlugin::ImportData data;
-     m_executingImportTasks.insert(importTask.get(), data);
-     connect(importTask.get(), SIGNAL(finished()), this, SLOT(finishedImportTask()));
-     Task::submit(importTask);
-
-    return;
-}
-
-void CcboostSegmentationPlugin::createImportTask(itkVolumeType::Pointer segmentation){
+void CcboostSegmentationPlugin::createImportTask(FloatTypeImage::Pointer segmentation, float threshold){
 
     ChannelAdapterPtr channel;
     if(m_viewManager->activeChannel() != NULL)
@@ -310,7 +287,7 @@ void CcboostSegmentationPlugin::createImportTask(itkVolumeType::Pointer segmenta
     qDebug() << "Using channel " << m_viewManager->activeChannel()->data(Qt::DisplayRole);
 
      SchedulerSPtr scheduler = getScheduler();
-     CCB::ImportTaskSPtr importTask{new CCB::ImportTask(channel, scheduler, segmentation)};
+     CCB::ImportTaskSPtr importTask{new CCB::ImportTask(channel, scheduler, segmentation, threshold)};
      struct CcboostSegmentationPlugin::ImportData data;
      m_executingImportTasks.insert(importTask.get(), data);
      connect(importTask.get(), SIGNAL(finished()), this, SLOT(finishedImportTask()));
@@ -319,12 +296,49 @@ void CcboostSegmentationPlugin::createImportTask(itkVolumeType::Pointer segmenta
     return;
 }
 
+// Deprecated by preview
+//void CcboostSegmentationPlugin::createImportTask(){
+
+
+//    #warning "This function is deprecated"  __FILE__ ":"  __LINE__;
+
+//    ChannelAdapterPtr channel;
+//    if(m_viewManager->activeChannel() != NULL)
+//        channel = m_viewManager->activeChannel();
+//    else
+//        channel = m_model->channels().at(0).get();
+
+//    qDebug() << "Using channel " << m_viewManager->activeChannel()->data(Qt::DisplayRole);
+
+
+//    QFileDialog fileDialog;
+//    fileDialog.setObjectName("SelectSegmentationFile");
+//    fileDialog.setFileMode(QFileDialog::ExistingFiles);
+//    fileDialog.setWindowTitle(QString("Select file "));
+//    fileDialog.setFilter(ImportTask::SUPPORTED_FILES);
+
+//    if (fileDialog.exec() != QDialog::Accepted)
+//        return;
+
+//    std::string filename = fileDialog.selectedFiles().first().toStdString();
+
+//     SchedulerSPtr scheduler = getScheduler();
+//     CCB::ImportTaskSPtr importTask{new CCB::ImportTask(channel, scheduler, filename)};
+//     struct CcboostSegmentationPlugin::ImportData data;
+//     m_executingImportTasks.insert(importTask.get(), data);
+//     connect(importTask.get(), SIGNAL(finished()), this, SLOT(finishedImportTask()));
+//     Task::submit(importTask);
+
+//    return;
+//}
+
+// Automatic segmentation is not supported
+#if 0
 //-----------------------------------------------------------------------------
 void CcboostSegmentationPlugin::segmentationsAdded(ViewItemAdapterSList segmentationsItems)
 {
 
-// Automatic segmentation is not supported
-#if 0
+
     ESPINA_SETTINGS(settings);
     settings.beginGroup("ccboost segmentation");
     if (!settings.contains("Automatic Computation") || !settings.value("Automatic Computation").toBool())
@@ -400,10 +414,10 @@ void CcboostSegmentationPlugin::segmentationsAdded(ViewItemAdapterSList segmenta
         task->ccboostconfig.train.push_back(data);
 
     }
-#endif
 }
+#endif
 
-void CcboostSegmentationPlugin::questionContinue(QString msg){
+void CcboostSegmentationPlugin::publishCritical(QString msg){
 
     qDebug() << "Show message: " << msg;
 
@@ -446,61 +460,45 @@ void CcboostSegmentationPlugin::processTaskMsg(QString msg){
 void CcboostSegmentationPlugin::finishedTask()
 {
 
-
     CcboostTaskPtr ccboostTask = dynamic_cast<CcboostTaskPtr>(sender());
     disconnect(ccboostTask, SIGNAL(finished()), this, SLOT(finishedTask()));
+    disconnect(ccboostTask, SIGNAL(message(QString)), this, SLOT(processTaskMsg(QString)));
+    disconnect(ccboostTask, SIGNAL(questionContinue(QString)), this, SLOT(publishCritical(QString)));
+    //This is disconnected by the scheduler
+    disconnect(ccboostTask, SIGNAL(progress(int)), this, SLOT(updateProgress(int)));
 
     if(!ccboostTask->isAborted())
         m_finishedTasks.insert(ccboostTask, m_executingTasks[ccboostTask]);
 
     m_executingTasks.remove(ccboostTask);
 
-    //we don't consider having several runs at the same time.
-    assert(m_finishedTasks.size() == 1);
-    assert(m_executingTasks.size() == 0);
-//    //if everyone did not finish yet, wait.
-//    if (!m_executingTasks.empty())
-//        return;
 
     // maybe all tasks have been aborted.
-    if(m_finishedTasks.empty())
+    if(m_finishedTasks.empty() || ccboostTask->hasFailed())
         return;
 
-    if(ccboostTask->ccboostconfig.usePreview){
+    //we shouldn't have several runs at the same time.
+    Q_ASSERT(m_executingTasks.size() == 0);
+    Q_ASSERT(m_finishedTasks.size() == 1);
+
+
+    if(ccboostTask->ccboostconfig.usePreview)
+    {
+
+        //this signal is captured by the cvlabPanel
         emit predictionChanged(QString::fromStdString(ccboostTask->ccboostconfig.cacheDir + ccboostTask->ccboostconfig.probabilisticOutputFilename));
-    } else {
 
-        m_undoStack->beginMacro("Create Synaptic ccboost segmentations");
-
-        SegmentationAdapterSList createdSegmentations;
-        //    for(CCB::CcboostTaskPtr ccbtask: m_finishedTasks.keys())
-        //    {
-        //FIXME createSegmentations removes one. makes sense on import, but not here.
-        createdSegmentations = createSegmentations(ccboostTask->predictedSegmentationsList, CVL);
-        int i = 1;
-        for(auto segmentation: createdSegmentations){
-
-            SampleAdapterSList samples;
-            samples << QueryAdapter::sample(m_viewManager->activeChannel());
-            Q_ASSERT(!samples.empty());
-            std::cout << "Create segmentation " << i++ << "/" << createdSegmentations.size() << "." << std::endl;
-
-            m_undoStack->push(new AddSegmentations(segmentation, samples, m_model));
-
-        }
-
-        //    }
-        m_undoStack->endMacro();
     }
-    //FIXME TODO do I need this?
-    //m_viewManager->updateSegmentationRepresentations(createdSegmentations);
-    m_viewManager->updateViews();
+    else
+    {
 
-    m_finishedTasks.clear();
+        m_finishedTasks.clear();
+
+        createImportTask(ccboostTask->probabilisticSegmentation);
+
+    }
 
     return;
-
-    //TODO connect autosegmentation slot
 
 }
 
@@ -510,14 +508,14 @@ void CcboostSegmentationPlugin::finishedImportTask()
 
     ImportTaskPtr importTask = dynamic_cast<ImportTaskPtr>(sender());
     disconnect(importTask, SIGNAL(finished()), this, SLOT(finishedImportTask()));
+
     if(!importTask->isAborted())
         m_finishedImportTasks.insert(importTask, m_executingImportTasks[importTask]);
 
     m_executingImportTasks.remove(importTask);
 
-    //if everyone did not finish yet, wait.
-    if (!m_executingImportTasks.empty())
-        return;
+    Q_ASSERT(m_finishedTasks.size() == 1 && "more than one task is run");
+    Q_ASSERT(m_executingTasks.size() == 0 && "more than one task is run");
 
     // maybe all tasks have been aborted.
     if(m_finishedImportTasks.empty())
@@ -530,35 +528,11 @@ void CcboostSegmentationPlugin::finishedImportTask()
     Q_ASSERT(!samples.empty());
 
     SegmentationAdapterSList createdSegmentations;
-    for(CCB::ImportTaskPtr imptask: m_finishedImportTasks.keys())
-    {
-        createdSegmentations = createSegmentations(imptask->predictedSegmentationsList,
-                                                   CCB::ImportTask::IMPORTED);
+    createdSegmentations = createSegmentations(importTask->predictedSegmentationsList,
+                                               CCB::ImportTask::IMPORTED);
 
-        int i = 1;
-        m_undoStack->push(new AddSegmentations(createdSegmentations, samples, m_model));
-        //std::cout << "Create segmentation " << i++ << "/" << createdSegmentations.size() << "." << std::endl;
-        //auto start = std::chrono::system_clock::now();
-        //auto duration = std::chrono::duration_cast< std::chrono::milliseconds >
-        //                      (std::chrono::system_clock::now() - start);
-        // std::cout << "Create Elapsed " << duration.count() << std::endl;;
+    m_undoStack->push(new AddSegmentations(createdSegmentations, samples, m_model));
 
-        //FIXME the following doesn't work, it tries to add crossed relations and fails
-//        //TODO there's no way to initialize the list with n-copies directly?
-//        SampleAdapterSList samplesList;
-//        for(int i=0; i < createdSegmentations.size(); i++){
-//            SampleAdapterSList samples;
-//            samples << QueryAdapter::sample(m_viewManager->activeChannel());
-//            Q_ASSERT(!samples.empty());
-//            samplesList << samples;
-//        }
-
-//        std::cout << "Create " << createdSegmentations.size() << " segmentations" << std::endl;
-//        m_undoStack->push(new AddSegmentations(createdSegmentations, samplesList, m_model));
-//        std::cout << "Segmentations created." << std::endl;
-
-
-    }
     m_undoStack->endMacro();
 
     //FIXME TODO do I need this?
@@ -571,11 +545,98 @@ void CcboostSegmentationPlugin::finishedImportTask()
 
 }
 
+SegmentationAdapterSList CcboostSegmentationPlugin::createSegmentations(CCB::LabelMapType::Pointer& predictedSegmentationsList,
+                                                                        const QString& categoryName)
+{
+
+    auto sourceFilter = m_factory->createFilter<SourceFilter>(InputSList(), "ccboostSegmentFilter");
+
+    auto classification = m_model->classification();
+    CategoryAdapterSPtr category = classification->category(categoryName);
+    if (category == nullptr)
+    {
+        m_undoStack->push(new AddCategoryCommand(m_model->classification()->root(), categoryName, m_model, QColor(255,255,0)));
+
+        category = m_model->classification()->category(categoryName);
+
+        category->addProperty(QString("Dim_X"), QVariant("500"));
+        category->addProperty(QString("Dim_Y"), QVariant("500"));
+        category->addProperty(QString("Dim_Z"), QVariant("500"));
+    }
+
+    int numObjects = predictedSegmentationsList->GetNumberOfLabelObjects();
+    qDebug() << "Number of Label Objects" << numObjects;
+
+    //auto spacing = ItkSpacing<itkVolumeType>(channel->output()->spacing());
+
+    auto spacing = predictedSegmentationsList->GetSpacing();
+
+    Output::Id id = 0;
+
+    CCB::LabelMapType::LabelObjectType* object;
+    SegmentationAdapterSList segmentations;
+
+    for(int i=0; i < numObjects; i++)
+      {
+        try
+        {
+          //qDebug() << "Loading Segmentation " << seg.label;
+          object      = predictedSegmentationsList->GetNthLabelObject(i);
+          auto region = object->GetBoundingBox();
+
+          auto segLabelMap = CCB::LabelMapType::New();
+          segLabelMap->SetSpacing(spacing);
+          segLabelMap->SetRegions(region);
+          segLabelMap->Allocate();
+
+          object->SetLabel(SEG_VOXEL_VALUE);
+
+          segLabelMap->AddLabelObject(object);
+          segLabelMap->Update();
+
+          auto label2volumeFilter = LabelMap2VolumeFilterType::New();
+          label2volumeFilter->SetInput(segLabelMap);
+          label2volumeFilter->Update();
+
+          auto volume = label2volumeFilter->GetOutput();
+
+          auto output = std::make_shared<Output>(sourceFilter.get(), id, ToNmVector3<itkVolumeType>(spacing));
+
+          Bounds    bounds  = equivalentBounds<itkVolumeType>(volume, volume->GetLargestPossibleRegion());
+          NmVector3 spacing = ToNmVector3<itkVolumeType>(volume->GetSpacing());
+
+          DefaultVolumetricDataSPtr volumetricData{new SparseVolume<itkVolumeType>(bounds, spacing)};
+          volumetricData->draw(volume);
+
+          MeshDataSPtr meshData{new MarchingCubesMesh<itkVolumeType>(volumetricData)};
+
+          output->setData(volumetricData);
+          output->setData(meshData);
+          output->setSpacing(spacing);
+
+          sourceFilter->addOutput(id, output);
+
+          auto segmentation = m_factory->createSegmentation(sourceFilter, id);
+
+          segmentation->setCategory(category);
+
+          segmentations << segmentation;
+
+          id++;
+        } catch (...)
+        {
+          std::cerr << "Couldn't create segmentation " << i << std::endl;
+        }
+      }
+
+    return segmentations;
+}
+
 SegmentationAdapterSList CcboostSegmentationPlugin::createSegmentations(std::vector<itkVolumeType::Pointer>&  predictedSegmentationsList,
                                                                         const QString& categoryName)
 {
 
-    auto sourceFilter = m_factory->createFilter<SourceFilter>(InputSList(), "AutoSegmentFilter");
+    auto sourceFilter = m_factory->createFilter<SourceFilter>(InputSList(), "ccboostSegmentFilter");
 
     auto classification = m_model->classification();
     CategoryAdapterSPtr category = classification->category(categoryName);
@@ -596,15 +657,16 @@ SegmentationAdapterSList CcboostSegmentationPlugin::createSegmentations(std::vec
     for (auto seg: predictedSegmentationsList)
     {
 
-        Output::Id id = sourceFilter->numberOfOutputs() - 1;
+        //FIXME why there's a -1 there?
+        Output::Id id = sourceFilter->numberOfOutputs();// - 1;
 
-
-        Bounds    bounds  = equivalentBounds<itkVolumeType>(seg, seg->GetLargestPossibleRegion());
+        //FIXME we could be smarter and get the bounding box when computing the connectedcomponents
+        Q_ASSERT( itk::NumericTraits< itkVolumeType::PixelType >::max() != 255 && "something weird is going on");
+        Bounds    bounds  = minimalBounds<itkVolumeType>(seg, 255);
         NmVector3 spacing = ToNmVector3<itkVolumeType>(seg->GetSpacing());
 
         OutputSPtr output{new Output(sourceFilter.get(), id, spacing)};
 
-        std::cout << "Segmentation bounds" << bounds << std::endl;
         DefaultVolumetricDataSPtr volumetricData{new SparseVolume<itkVolumeType>(bounds, spacing)};
         volumetricData->draw(seg);
 
@@ -616,6 +678,8 @@ SegmentationAdapterSList CcboostSegmentationPlugin::createSegmentations(std::vec
 
         sourceFilter->addOutput(id, output);
 
+        std::cout << "Creating Segmentation " << id << "/" << predictedSegmentationsList.size() << ". Bounds: " << bounds << std::endl;
+
         auto segmentation = m_factory->createSegmentation(sourceFilter, id);
         segmentation->setCategory(category);
 
@@ -623,6 +687,16 @@ SegmentationAdapterSList CcboostSegmentationPlugin::createSegmentations(std::vec
     }
 
     return segmentations;
+}
+
+//------------------------------------------------------------------------
+void CcboostSegmentationPlugin::onAnalysisClosed()
+{
+  if(m_dockWidget != nullptr)
+  {
+    //FIXME check if CvlabPanel->reset() does what it is expected to do upon close
+    dynamic_cast<CvlabPanel *>(m_dockWidget)->reset();
+  }
 }
 
 Q_EXPORT_PLUGIN2(CcboostSegmentationPlugin, ESPINA::CcboostSegmentationPlugin)
