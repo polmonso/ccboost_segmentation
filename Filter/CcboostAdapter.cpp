@@ -61,15 +61,17 @@
 
 #include "CcboostAdapter.tpp"
 
+#ifdef CVL_EXPLICIT_INSTANTIATION
 //Explicit templated member function instantiation, remove for implicit
 template void CcboostAdapter::removeborders< FloatTypeImage >( FloatTypeImage::Pointer&, bool, std::string);
 template void CcboostAdapter::removeborders< itkVolumeType >(   itkVolumeType::Pointer&, bool, std::string);
+#endif
 
 bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
                           std::vector<FloatTypeImage::Pointer>& probabilisticOutSegs)
 {
 
-//#define WORK
+#define WORK
 #ifndef WORK
     for(int roiidx = 0; roiidx < cfgdata.test.size(); roiidx++)
     {
@@ -457,62 +459,90 @@ void CcboostAdapter::splitSegmentations(const itkVolumeType::Pointer outputSegme
     }
 }
 
-void CcboostAdapter::removeSmallComponents(itkVolumeType::Pointer& segmentation, int minCCSize) {
+//throws ItkException
+template< typename TImageType >
+void CcboostAdapter::removeSmallComponents(typename TImageType::Pointer& segmentation, int minCCSize)
+{
 
-#warning "TODO reimplement this function, Matrix3D createLabelMap is not the best we can do"
+    // Create a ShapeLabelMap from the image
+      typedef itk::BinaryImageToShapeLabelMapFilter<TImageType> BinaryImageToShapeLabelMapFilterType;
+      typename BinaryImageToShapeLabelMapFilterType::Pointer binaryImageToShapeLabelMapFilter = BinaryImageToShapeLabelMapFilterType::New();
+      binaryImageToShapeLabelMapFilter->SetInput(segmentation);
 
-    typedef unsigned int LabelScalarType;
+      // Remove label objects that have a physical size less than minCCSize
+      typedef itk::ShapeOpeningLabelMapFilter< typename BinaryImageToShapeLabelMapFilterType::OutputImageType > ShapeOpeningLabelMapFilterType;
+      typename ShapeOpeningLabelMapFilterType::Pointer shapeOpeningLabelMapFilter = ShapeOpeningLabelMapFilterType::New();
+      shapeOpeningLabelMapFilter->SetInput( binaryImageToShapeLabelMapFilter->GetOutput() );
+      shapeOpeningLabelMapFilter->SetLambda( minCCSize );
+      shapeOpeningLabelMapFilter->ReverseOrderingOff();
+      shapeOpeningLabelMapFilter->SetAttribute( ShapeOpeningLabelMapFilterType::LabelObjectType::PHYSICAL_SIZE);
 
-    Matrix3D<LabelScalarType> CCMatrix;
-    LabelScalarType labelCount;
+      // Create a label image
+      typedef itk::LabelMapToLabelImageFilter<typename BinaryImageToShapeLabelMapFilterType::OutputImageType, TImageType> LabelMapToLabelImageFilterType;
+      typename LabelMapToLabelImageFilterType::Pointer labelMapToLabelImageFilter = LabelMapToLabelImageFilterType::New();
+      labelMapToLabelImageFilter->SetInput(shapeOpeningLabelMapFilter->GetOutput());
+      labelMapToLabelImageFilter->Update();
 
-    // we need to store info to remove small regions
-    std::vector<ShapeStatistics<itk::ShapeLabelObject<LabelScalarType, 3> > > shapeDescr;
+      segmentation = labelMapToLabelImageFilter->GetOutput();
+}
 
-    Matrix3D<itkVolumeType::PixelType> scoreMatrix;
-    scoreMatrix.loadItkImage(segmentation, true);
+template< typename TImageType >
+void CcboostAdapter::removeSmallComponentsOld(typename TImageType::Pointer& segmentation, int minCCSize) {
 
-    scoreMatrix.createLabelMap<LabelScalarType>( 128, 255, &CCMatrix,
-                                                 false, &labelCount, &shapeDescr );
+#warning "this function is deprecated, use removeSmallComponents Instead"
 
-    // now create image
-    {
-        typedef itk::ImageFileWriter< itkVolumeType > WriterType;
-        typedef Matrix3D<LabelScalarType>::ItkImageType LabelImageType;
+//    typedef unsigned int LabelScalarType;
 
-        // original image
-        LabelImageType::Pointer labelsImage = CCMatrix.asItkImage();
+//    Matrix3D<LabelScalarType> CCMatrix;
+//    LabelScalarType labelCount;
 
-        // now copy pixel values, get an iterator for each
-        itk::ImageRegionConstIterator<LabelImageType> labelsIterator(labelsImage, labelsImage->GetLargestPossibleRegion());
-        itk::ImageRegionIterator<itkVolumeType> imageIterator(segmentation, segmentation->GetLargestPossibleRegion());
+//    // we need to store info to remove small regions
+//    std::vector<ShapeStatistics<itk::ShapeLabelObject<LabelScalarType, 3> > > shapeDescr;
 
-        // WARNING: assuming same searching order-- could be wrong!!
-        while( (! labelsIterator.IsAtEnd()) && (!imageIterator.IsAtEnd()) )
-        {
-            if ((labelsIterator.Value() == 0) || ( shapeDescr[labelsIterator.Value() - 1].numVoxels() < minCCSize ) )
-                imageIterator.Set( 0 );
-            else
-            {
-                imageIterator.Set( 255 );
-            }
+//    Matrix3D<typename TImageType::PixelType> scoreMatrix;
+//    scoreMatrix.loadItkImage(segmentation, true);
 
-            ++labelsIterator;
-            ++imageIterator;
-        }
-    }
+//    scoreMatrix.createLabelMap< LabelScalarType >( 128, 255, &CCMatrix,
+//                                                 false, &labelCount, &shapeDescr );
 
-    //    qDebug("Remove small components");
+//    // now create image
+//    {
+//        typedef itk::ImageFileWriter< TImageType > WriterType;
+//        typedef Matrix3D<LabelScalarType>::ItkImageType LabelImageType;
 
-    //    removeSmallComponents(outputSegmentation);
+//        // original image
+//        LabelImageType::Pointer labelsImage = CCMatrix.asItkImage();
 
-    //    if(saveIntermediateVolumes) {
-    //        writer->SetFileName(cacheDir + "4" + "outputSegmentation-nosmallcomponents.tif");
-    //        writer->SetInput(outputSegmentation);
-    //        writer->Update();
-    //    }
+//        // now copy pixel values, get an iterator for each
+//        itk::ImageRegionConstIterator<LabelImageType> labelsIterator(labelsImage, labelsImage->GetLargestPossibleRegion());
+//        itk::ImageRegionIterator<itkVolumeType> imageIterator(segmentation, segmentation->GetLargestPossibleRegion());
 
-    //    qDebug("Removed");
+//        // WARNING: assuming same searching order-- could be wrong!!
+//        while( (! labelsIterator.IsAtEnd()) && (!imageIterator.IsAtEnd()) )
+//        {
+//            if ((labelsIterator.Value() == 0) || ( shapeDescr[labelsIterator.Value() - 1].numVoxels() < minCCSize ) )
+//                imageIterator.Set( 0 );
+//            else
+//            {
+//                imageIterator.Set( 255 );
+//            }
+
+//            ++labelsIterator;
+//            ++imageIterator;
+//        }
+//    }
+
+//    //    qDebug("Remove small components");
+
+//    //    removeSmallComponents(outputSegmentation);
+
+//    //    if(saveIntermediateVolumes) {
+//    //        writer->SetFileName(cacheDir + "4" + "outputSegmentation-nosmallcomponents.tif");
+//    //        writer->SetInput(outputSegmentation);
+//    //        writer->Update();
+//    //    }
+
+//    //    qDebug("Removed");
 
 }
 

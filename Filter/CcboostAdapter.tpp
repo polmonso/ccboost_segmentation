@@ -60,8 +60,8 @@ void CcboostAdapter::removeborders(typename TImageType::Pointer& outputSegmentat
             itk::ImageRegionIterator<TImageType> imageIterator(outputSegmentation, region);
             while(!imageIterator.IsAtEnd())
             {
-                // set to zero
-                imageIterator.Set(0);
+                // set to minimum value
+                imageIterator.Set(itk::NumericTraits< typename TImageType::PixelType >::min());
                 ++imageIterator;
             }
         }

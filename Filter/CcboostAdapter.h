@@ -57,7 +57,11 @@ public:
     template< typename TImageType = itkVolumeType >
     static void removeborders(typename TImageType::Pointer& outputSegmentation, bool saveIntermediateVolumes = false, std::string cacheDir = ".");
 
-    static void removeSmallComponents(itk::Image<unsigned char, 3>::Pointer & segmentation, int minCCSize = 1000);
+    //throws ItkException
+    template< typename TImageType = itkVolumeType >
+    static void removeSmallComponents(typename TImageType::Pointer & segmentation, int minCCSize = 1000);
+    template< typename TImageType = itkVolumeType >
+    static void removeSmallComponentsOld(typename TImageType::Pointer & segmentation, int minCCSize = 1000);
 
     static void computeAllFeatures(const ConfigData<itkVolumeType> cfgData);
 
@@ -104,7 +108,10 @@ public:
 
 };
 
+#define CVL_EXPLICIT_INSTANTIATION
+#ifndef CVL_EXPLICIT_INSTANTIATION
 //add for implicit instantiation (and remove explicit instantiaton on CcboostAdapter.cpp
-//#include "CcboostAdapter.tpp"
+#include "CcboostAdapter.tpp"
+#endif
 
 #endif // CCBOOSTADAPTER_H

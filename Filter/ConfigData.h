@@ -290,7 +290,6 @@ public:
             }
         } catch( itk::ExceptionObject & error ) {
             std::cerr << __FILE__ << __LINE__ << "Error: " << error << std::endl;
-            return EXIT_FAILURE;
         }
     }
 
