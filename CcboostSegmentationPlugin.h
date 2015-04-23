@@ -31,7 +31,7 @@
 #include "CCBTypes.h"
 
 // ESPINA
-#include <Support/ViewManager.h>
+#include <Support/ViewManager.h> //may be context now?
 #include <Support/Plugin.h>
 #include <Core/Analysis/Input.h>
 #include <Core/Analysis/DataFactory.h>

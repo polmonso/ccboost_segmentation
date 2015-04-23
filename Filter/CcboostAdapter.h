@@ -108,7 +108,7 @@ public:
 
 };
 
-#define CVL_EXPLICIT_INSTANTIATION
+//#define CVL_EXPLICIT_INSTANTIATION
 #ifndef CVL_EXPLICIT_INSTANTIATION
 //add for implicit instantiation (and remove explicit instantiaton on CcboostAdapter.cpp
 #include "CcboostAdapter.tpp"

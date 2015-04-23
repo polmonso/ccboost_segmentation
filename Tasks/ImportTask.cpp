@@ -181,7 +181,7 @@ void ImportTask::run()
           if(minCCSize > 0)
           {
               qDebug() << "Removing components smaller than " << minCCSize << " voxels.";
-              CcboostAdapter::removeSmallComponents(m_binarySegmentation, minCCSize);
+              CcboostAdapter::removeSmallComponentsOld(m_binarySegmentation, minCCSize);
           }
 
       }

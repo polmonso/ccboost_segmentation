@@ -59,10 +59,10 @@
 #define ESPINA_SETTINGS(settings) QSettings settings("CeSViMa", "ESPINA");
 #endif
 
-#include "CcboostAdapter.tpp"
-
 #ifdef CVL_EXPLICIT_INSTANTIATION
 //Explicit templated member function instantiation, remove for implicit
+#include "CcboostAdapter.tpp"
+#warning using explicit instantiation, symbols might be missing
 template void CcboostAdapter::removeborders< FloatTypeImage >( FloatTypeImage::Pointer&, bool, std::string);
 template void CcboostAdapter::removeborders< itkVolumeType >(   itkVolumeType::Pointer&, bool, std::string);
 #endif
@@ -71,7 +71,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
                           std::vector<FloatTypeImage::Pointer>& probabilisticOutSegs)
 {
 
-#define WORK
+//#define WORK
 #ifndef WORK
     for(int roiidx = 0; roiidx < cfgdata.test.size(); roiidx++)
     {
@@ -459,92 +459,7 @@ void CcboostAdapter::splitSegmentations(const itkVolumeType::Pointer outputSegme
     }
 }
 
-//throws ItkException
-template< typename TImageType >
-void CcboostAdapter::removeSmallComponents(typename TImageType::Pointer& segmentation, int minCCSize)
-{
 
-    // Create a ShapeLabelMap from the image
-      typedef itk::BinaryImageToShapeLabelMapFilter<TImageType> BinaryImageToShapeLabelMapFilterType;
-      typename BinaryImageToShapeLabelMapFilterType::Pointer binaryImageToShapeLabelMapFilter = BinaryImageToShapeLabelMapFilterType::New();
-      binaryImageToShapeLabelMapFilter->SetInput(segmentation);
-
-      // Remove label objects that have a physical size less than minCCSize
-      typedef itk::ShapeOpeningLabelMapFilter< typename BinaryImageToShapeLabelMapFilterType::OutputImageType > ShapeOpeningLabelMapFilterType;
-      typename ShapeOpeningLabelMapFilterType::Pointer shapeOpeningLabelMapFilter = ShapeOpeningLabelMapFilterType::New();
-      shapeOpeningLabelMapFilter->SetInput( binaryImageToShapeLabelMapFilter->GetOutput() );
-      shapeOpeningLabelMapFilter->SetLambda( minCCSize );
-      shapeOpeningLabelMapFilter->ReverseOrderingOff();
-      shapeOpeningLabelMapFilter->SetAttribute( ShapeOpeningLabelMapFilterType::LabelObjectType::PHYSICAL_SIZE);
-
-      // Create a label image
-      typedef itk::LabelMapToLabelImageFilter<typename BinaryImageToShapeLabelMapFilterType::OutputImageType, TImageType> LabelMapToLabelImageFilterType;
-      typename LabelMapToLabelImageFilterType::Pointer labelMapToLabelImageFilter = LabelMapToLabelImageFilterType::New();
-      labelMapToLabelImageFilter->SetInput(shapeOpeningLabelMapFilter->GetOutput());
-      labelMapToLabelImageFilter->Update();
-
-      segmentation = labelMapToLabelImageFilter->GetOutput();
-}
-
-template< typename TImageType >
-void CcboostAdapter::removeSmallComponentsOld(typename TImageType::Pointer& segmentation, int minCCSize) {
-
-#warning "this function is deprecated, use removeSmallComponents Instead"
-
-//    typedef unsigned int LabelScalarType;
-
-//    Matrix3D<LabelScalarType> CCMatrix;
-//    LabelScalarType labelCount;
-
-//    // we need to store info to remove small regions
-//    std::vector<ShapeStatistics<itk::ShapeLabelObject<LabelScalarType, 3> > > shapeDescr;
-
-//    Matrix3D<typename TImageType::PixelType> scoreMatrix;
-//    scoreMatrix.loadItkImage(segmentation, true);
-
-//    scoreMatrix.createLabelMap< LabelScalarType >( 128, 255, &CCMatrix,
-//                                                 false, &labelCount, &shapeDescr );
-
-//    // now create image
-//    {
-//        typedef itk::ImageFileWriter< TImageType > WriterType;
-//        typedef Matrix3D<LabelScalarType>::ItkImageType LabelImageType;
-
-//        // original image
-//        LabelImageType::Pointer labelsImage = CCMatrix.asItkImage();
-
-//        // now copy pixel values, get an iterator for each
-//        itk::ImageRegionConstIterator<LabelImageType> labelsIterator(labelsImage, labelsImage->GetLargestPossibleRegion());
-//        itk::ImageRegionIterator<itkVolumeType> imageIterator(segmentation, segmentation->GetLargestPossibleRegion());
-
-//        // WARNING: assuming same searching order-- could be wrong!!
-//        while( (! labelsIterator.IsAtEnd()) && (!imageIterator.IsAtEnd()) )
-//        {
-//            if ((labelsIterator.Value() == 0) || ( shapeDescr[labelsIterator.Value() - 1].numVoxels() < minCCSize ) )
-//                imageIterator.Set( 0 );
-//            else
-//            {
-//                imageIterator.Set( 255 );
-//            }
-
-//            ++labelsIterator;
-//            ++imageIterator;
-//        }
-//    }
-
-//    //    qDebug("Remove small components");
-
-//    //    removeSmallComponents(outputSegmentation);
-
-//    //    if(saveIntermediateVolumes) {
-//    //        writer->SetFileName(cacheDir + "4" + "outputSegmentation-nosmallcomponents.tif");
-//    //        writer->SetInput(outputSegmentation);
-//    //        writer->Update();
-//    //    }
-
-//    //    qDebug("Removed");
-
-}
 
 void CcboostAdapter::computeAllFeatures(const ConfigData<itkVolumeType> cfgData) {
 
