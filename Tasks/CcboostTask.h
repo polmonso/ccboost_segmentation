@@ -53,6 +53,31 @@
 namespace ESPINA {
   namespace CCB {
 
+     /**
+     * @brief The CcboostTask class: a ccboost task who predicts
+     *
+     * This task preprocesses, computes the contextcue adaboost prediction and postprocesses.
+     * The preprocess involves:
+     *  1. Memory check
+     *
+     *  It will split the prediction volume into pieces if memory is insufficient
+     *  For training, only uses the annotated region, but doesn't split.
+     *
+     *  2. Ground truth check
+     *
+     * It checks that we have enough ground truth and issues a warning otherwise.
+     * //FIXME it is currently not possible to abort the underlying ccboost task
+     * and therefore messages are informative and the output is cancelled on return.
+     *
+     *  3. Apply settings
+     *
+     * The main process involves:
+     *
+     * The postprocess includes:
+     *  1. Remerge the splitted regions
+     *  2. Remove borders (which are bad predictions)
+     *
+     */
     class CcboostTask
     : public Task
     {

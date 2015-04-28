@@ -485,6 +485,12 @@ void CcboostSegmentationPlugin::finishedTask()
     if(ccboostTask->ccboostconfig.usePreview)
     {
 
+        //FIXME if a client creates a ccboost task while in a preview the former
+        // would be overwritten and the behaviour is unknown. The clear could be done
+        // at the finishedImportTask, but it's error-prone.
+        // Right now we're preventing it at the GUI level.
+        m_finishedTasks.clear();
+
         //this signal is captured by the cvlabPanel
         emit predictionChanged(QString::fromStdString(ccboostTask->ccboostconfig.cacheDir + ccboostTask->ccboostconfig.probabilisticOutputFilename));
 
