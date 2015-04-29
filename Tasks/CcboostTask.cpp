@@ -640,22 +640,10 @@ void CcboostTask::applyEspinaSettings(ConfigData<itkVolumeType> cfgdata){
     if (settings.contains("Number of Stumps"))
         cfgdata.numStumps = settings.value("Number of Stumps").toInt();
 
-    if (settings.contains("Super Voxel Seed"))
-        cfgdata.svoxSeed = settings.value("Super Voxel Seed").toInt();
-
-    if (settings.contains("Super Voxel Cubeness"))
-        cfgdata.svoxCubeness = settings.value("Super Voxel Cubeness").toInt();
-
     if (settings.contains("Features Directory")) {
         cfgdata.cacheDir = settings.value("Features Directory").toString().toStdString();
         //FIXME config data setdefault is overwritten and ignored
     }
-
-    if (settings.contains("TP Quantile"))
-        cfgdata.TPQuantile = settings.value("TP Quantile").toFloat();
-
-    if (settings.contains("FP Quantile"))
-        cfgdata.FPQuantile = settings.value("FP Quantile").toFloat();
 
     if (settings.contains("Force Recompute Features"))
         cfgdata.forceRecomputeFeatures = settings.value("Force Recompute Features").toBool();
@@ -668,9 +656,6 @@ void CcboostTask::applyEspinaSettings(ConfigData<itkVolumeType> cfgdata){
 
     if (settings.contains("Number of objects limit"))
         cfgdata.maxNumObjects = settings.value("Number of objects limit").toInt();
-
-    if (settings.contains("Automatic Computation"))
-        cfgdata.automaticComputation = settings.value("Automatic Computation").toBool();
 
 }
 

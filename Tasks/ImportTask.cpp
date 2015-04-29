@@ -156,39 +156,33 @@ void ImportTask::run()
 
           m_binarySegmentation = thresholdFilter->GetOutput();
 
-          ESPINA_SETTINGS(settings);
-          settings.beginGroup("ccboost segmentation");
 
-          if (settings.contains("Save Intermediate Volumes")) {
-
-              //warning, cache dir will be different than the one
-              //used for storing features and other data since that one uses the hash
-              std::string cacheDir = "./";
-              if (settings.contains("Features Directory"))
-                  cacheDir = settings.value("Features Directory").toString().toStdString();
-
-              typedef itk::ImageFileWriter< itkVolumeType > WriterType;
-              WriterType::Pointer writer = WriterType::New();
-              writer->SetFileName(cacheDir + "binarized.tif");
-              writer->SetInput(m_binarySegmentation);
-              writer->Update();
-          }
-
-          int minCCSize = 0;
-          if (settings.contains("Minimum synapse size (voxels)"))
-                minCCSize = settings.value("Minimum synapse size (voxels)").toInt();
-
-          if(minCCSize > 0)
-          {
-              qDebug() << "Removing components smaller than " << minCCSize << " voxels.";
-              CcboostAdapter::removeSmallComponents(m_binarySegmentation, minCCSize);
-          }
 
       }
 
-      //CcboostAdapter::splitSegmentations(m_inputSegmentation, outSegList, true, true);
+      ESPINA_SETTINGS(settings);
+      settings.beginGroup("ccboost segmentation");
+
+      if (settings.contains("Save Intermediate Volumes")) {
+
+          //warning, cache dir will be different than the one
+          //used for storing features and other data since that one uses the hash
+          std::string cacheDir = "./";
+          if (settings.contains("Features Directory"))
+              cacheDir = settings.value("Features Directory").toString().toStdString();
+
+          typedef itk::ImageFileWriter< itkVolumeType > WriterType;
+          WriterType::Pointer writer = WriterType::New();
+          writer->SetFileName(cacheDir + "binarized.tif");
+          writer->SetInput(m_binarySegmentation);
+          writer->Update();
+      }
+
+      int minCCSize = 0;
+      if (settings.contains("Minimum synapse size (voxels)"))
+            minCCSize = settings.value("Minimum synapse size (voxels)").toInt();
       LabelMapType::Pointer labelmap = LabelMapType::New();
-      CcboostAdapter::splitSegmentations(m_binarySegmentation, labelmap);
+      CcboostAdapter::splitSegmentations(m_binarySegmentation, labelmap, minCCSize);
 
       if(!canExecute())
             return;

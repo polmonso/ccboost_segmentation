@@ -157,14 +157,16 @@ void CvlabPanel::setVolume(QFileInfo volumeFile){
         imageCalculatorFilter->SetImage(m_volume);
         imageCalculatorFilter->Compute();
 
+        //we have to be sure the volume has the correct spacing, otherwise transform to physical fails and everything is wrong.
+        m_volume->SetSpacing(volumetricData(m_viewManager->activeChannel()->asInput()->output())->itkImage()->GetSpacing());
+
+        m_preview = PreviewWidgetSPtr{new PreviewWidget()};
+
+        //m_preview has to exist and be valid for this to work
         m_probabilityMaxValue = imageCalculatorFilter->GetMaximum();
         m_probabilityMinValue = imageCalculatorFilter->GetMinimum();
         this->changePreviewThreshold(50); //50%
 
-        //we have to be sure the volume has the correect spacing, otherwise transform to physical fails and everything is wrong.
-        m_volume->SetSpacing(volumetricData(m_viewManager->activeChannel()->asInput()->output())->itkImage()->GetSpacing());
-
-        m_preview = PreviewWidgetSPtr{new PreviewWidget()};
 
         //for some reason, addWidget destroys the m_volume if we set it before.
         m_viewManager->addWidget(m_preview);

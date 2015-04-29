@@ -23,6 +23,16 @@ void CcboostAdapter::removeborders(typename TImageType::Pointer& outputSegmentat
     typedef itk::ImageFileWriter< TImageType > TWriterType;
 
     qDebug("remove borders");
+    typedef itk::MinimumMaximumImageCalculator <TImageType>
+            ImageCalculatorFilterType;
+
+    typename ImageCalculatorFilterType::Pointer imageCalculatorFilter
+            = ImageCalculatorFilterType::New ();
+    imageCalculatorFilter->SetImage(outputSegmentation);
+    imageCalculatorFilter->Compute();
+    typename TImageType::PixelType minimum = imageCalculatorFilter->GetMinimum();
+    //typename TImageType::PixelType minimum = -itk::NumericTraits< typename TImageType::PixelType >::max();
+
 
     typename TImageType::SizeType outputSize = outputSegmentation->GetLargestPossibleRegion().GetSize();
 
@@ -64,7 +74,7 @@ void CcboostAdapter::removeborders(typename TImageType::Pointer& outputSegmentat
             while(!imageIterator.IsAtEnd())
             {
                 // set to minimum value
-                imageIterator.Set(itk::NumericTraits< typename TImageType::PixelType >::min());
+                imageIterator.Set(minimum);
                 ++imageIterator;
             }
         }
@@ -78,7 +88,7 @@ void CcboostAdapter::removeborders(typename TImageType::Pointer& outputSegmentat
             while(!imageIterator.IsAtEnd())
             {
                 // set to zero
-                imageIterator.Set(itk::NumericTraits< typename TImageType::PixelType >::min());
+                imageIterator.Set(minimum);
                 ++imageIterator;
             }
         }

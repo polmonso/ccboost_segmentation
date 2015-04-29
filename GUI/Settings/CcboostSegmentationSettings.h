@@ -56,14 +56,9 @@ namespace ESPINA
     void changeSaveIntermediateVolumes(bool doSave);
     void changeForceRecomputeFeatures(bool doForce);
     void changeNumStumps(int);
-    void changeSVoxSeed(int);
-    void changeSVoxCubeness(int);
-    void changeTPQuantile(double);
-    void changeFPQuantile(double);
     void changeFeaturesPath(QString path);
     void changeSynapseFeaturesPath(QString);
     void openDirectoryDialog();
-    void changeAutomaticComputation(bool);
     void changeUsePreview(bool value);
 
   private:

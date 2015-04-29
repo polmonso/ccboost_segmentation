@@ -363,6 +363,8 @@ void CcboostAdapter::splitSegmentations(const itkVolumeType::Pointer& outputSegm
     ShapeOpeningLabelMapFilterType::Pointer shapeOpeningLabelMapFilter = ShapeOpeningLabelMapFilterType::New();
     shapeOpeningLabelMapFilter->SetInput( binaryImageToShapeLabelMapFilter->GetOutput() );
     shapeOpeningLabelMapFilter->SetLambda( minCCSize );
+    qDebug() << "Removing components smaller than " << minCCSize << " voxels.";
+    shapeOpeningLabelMapFilter->ReverseOrderingOff();
     //For a list of attributes see http://www.itk.org/Doxygen/html/itkLabelMapUtilities_8h_source.html
     shapeOpeningLabelMapFilter->SetAttribute( ShapeOpeningLabelMapFilterType::LabelObjectType::PHYSICAL_SIZE);
 
@@ -379,6 +381,11 @@ void CcboostAdapter::splitSegmentations(const itkVolumeType::Pointer& outputSegm
     labelMap = shapeOpeningLabelMapFilter->GetOutput();
 
     const unsigned int numObjects = labelMap->GetNumberOfLabelObjects();
+
+    const unsigned int prevObjects = binaryImageToShapeLabelMapFilter->GetOutput()->GetNumberOfLabelObjects();
+    std::cout << "There were " << prevObjects
+              << " and only " << numObjects
+              << " were bigger than " << minCCSize << std::endl;
 
     if(numObjects == 0) {
         std::cerr << "Warning: 0 objects present." << std::endl;

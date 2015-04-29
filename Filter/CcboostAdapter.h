@@ -55,6 +55,7 @@ public:
     template< typename TImageType = itkVolumeType >
     static void removeborders(typename TImageType::Pointer& outputSegmentation, bool saveIntermediateVolumes = false, std::string cacheDir = ".");
 
+    //Note that splitSegmentations already discards small components
     //throws ItkException
     template< typename TImageType = itkVolumeType >
     static void removeSmallComponents(typename TImageType::Pointer & segmentation, int minCCSize = 1000);

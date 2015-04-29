@@ -93,9 +93,6 @@ public:
     ConfigData(){
         preset = ConfigData::SYNAPSE;
 
-        TPQuantile = 0.1;
-        FPQuantile = 0.01;
-
         gtNegativeLabel = 128;
         gtPositiveLabel = 255;
 
@@ -117,17 +114,11 @@ public:
         // Number of regions to split the volume into
         numPredictRegions = 1;
 
-        //supervoxel seed and cubeness
-        svoxSeed = 1;//3;
-        svoxCubeness = 16;//16;
-
         rawVolume = "ccboostcache";
 
         //std::string featuresPath = "/home/monso/code/data/synapse_features/";
         //FIXME architecture dependent--> add portability
         cacheDir = "./";
-
-        automaticComputation = false;
 
         structuredROIs = true;
 
@@ -147,24 +138,11 @@ public:
     };
     Preset preset;
 
-    // used for thresholding, see QuantilePostLearnFunctor class
-    float TPQuantile, FPQuantile;
-
     int gtNegativeLabel;
     int gtPositiveLabel;
 
     unsigned int numStumps;
     std::string outFileName;
-
-    /** Supervoxel seed
-      * @deprecated Supervoxels are not used since they are not useful in this case
-     **/
-    unsigned int svoxSeed;
-
-    /** Supervoxel cubeness
-      * @deprecated Supervoxels are not used since they are not useful in this case
-     **/
-    unsigned int svoxCubeness;
 
     /** Save the volumes in each processing step.
      *  Useful for debugging */
@@ -181,9 +159,6 @@ public:
      * or if it is computed within the ccboost task
      */
     bool usePreview;
-
-    /** Unsupported automatic computation flag */
-    bool automaticComputation;
 
     /** True if the ROIs are ordered
      * and constitues the full volume
@@ -211,9 +186,6 @@ public:
     void reset(){
         preset = ConfigData::SYNAPSE;
 
-        TPQuantile = 0.1;
-        FPQuantile = 0.01;
-
         gtNegativeLabel = 128;
         gtPositiveLabel = 255;
 
@@ -233,10 +205,6 @@ public:
         // Number of regions to split the volume into
         numPredictRegions = 1;
 
-        //supervoxel seed and cubeness
-        svoxSeed = 1;//3;
-        svoxCubeness = 16;//16;
-
         rawVolume = "ccboostcache";
 
         probabilisticOutputFilename = "probabilisticOutputVolume.mha";
@@ -244,8 +212,6 @@ public:
         //std::string featuresPath = "/home/monso/code/data/synapse_features/";
         //FIXME architecture dependent--> add portability
         cacheDir = "./";
-
-        automaticComputation = false;
 
         structuredROIs = true;
     }
@@ -259,8 +225,6 @@ public:
             test[i].printInfo();
         }
 
-        std::cout << "SVox seed: " << svoxSeed <<  std::endl;
-        std::cout << "SVox cubeness: " << svoxCubeness <<  std::endl;
         std::cout << "Num stumps: " << numStumps << std::endl;
         std::cout << "Outfilename: " << outFileName << std::endl;
     }
