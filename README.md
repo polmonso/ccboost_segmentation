@@ -22,6 +22,9 @@ add ```-std=c++11``` flag
 and
 - Espina (see below)
 
+Currently, version ```2.0.3``` is the latest supported version (commit ```8244e5be```)
+Checkout with git checkout ```8244e5be```
+
 * IIBoost submodule
 
 If you haven't cloned the repository with modules, namely
@@ -132,12 +135,16 @@ See "**[How to make an existing submodule track a branch][3]**" (if you had a su
 
 The instruction to install it are [here](https://bitbucket.org/espina-developers/espina)
 
-- You can also get some of the dependencies (xlslib and quazip) from [here](http://)
+Right now, only espina ```2.0.3``` is supported. Checkout SHA1 ```8244e5be4283fbce6f6f5ba6bc1dec1bd9b7f4c2``` on branch ```develop```
+
+- You can get some of the dependencies ([xlslib](http://sourceforge.net/projects/xlslib/files/) and [quazip](http://sourceforge.net/projects/quazip/))
+
+It has been tested with versions ```2.4.0``` and ```0.6.2``` respectively.
 
 - If you get a message saying 'ill-formed pair', there's a problem with boost. Check that you have boost 1.55.
-- If quazip is expecting quazip/ includes, change the include/quazip to include/ on the cmake variable 
+- If quazip is expecting ```quazip/``` includes, change the ```include/quazip``` to ```include/``` on the cmake variable
 
-This is the espina/CMakeLists.txt modified beginning:
+This is the ```espina/CMakeLists.txt``` modified beginning:
 
 ```
 include_directories("~/code/espina-project2/xlslib/src/")
@@ -169,28 +176,30 @@ include_directories ( ${Boost_INCLUDE_DIRS} )
 
 # Detailed Description of the Code Structure
 
+![A workflow diagram](https://documents.epfl.ch/groups/c/cv/cvlab-unit/public/espina/flow.png "Basic program workflow")
+![The ITK pipeline](https://documents.epfl.ch/groups/c/cv/cvlab-unit/public/espina/itkpipeline.png "Underlying ITK pipeline")
 ## CvlabPanel
 
 The code provides a Cvlab Qt Panel for espina which connects with Ccboost Segmentation Plugin, who manages everything.
 
 The plugin provides three tasks:
 
-* Import segmentation [image]
+* Import segmentation ![Icon](https://rawgit.com/quimnuss/ccboost_segmentation/master/GUI/rsc/LoadLabels.svg)
 
 This triggers the Import task which reads an image and imports its labels into Espina Segmentations.
 
-* Synapse Segmentation [image]
+* Synapse Segmentation ![Icon](https://rawgit.com/quimnuss/ccboost_segmentation/master/GUI/rsc/SynapseDetection.svg)
 
 This button triggers a Ccboost segmentation task with the element selected to Synapse, which means that will search the Espina's taxonomy tree for Synapse examples (either by Category Synapse or tag yessynapse) and negative examples by Background category or nosynapse tag.
 
 To add tags within espina look at the segmentation list panel.
 
-* Mitochondria Segmentation [image]
+* Mitochondria Segmentation ![Icon](https://rawgit.com/quimnuss/ccboost_segmentation/master/GUI/rsc/MitochondriaDetection.svg)
+
 
 Same as the Synapse Segmentation but now it searches for the Mitochondria segmentation category or yesmitochondria|nomitochondria tags.
 
 All three end up creating a preview that has to be thresholded using this same panel. Once happy, press the Extract Segmentation button [image].
-
 
 
 These tasks are created at the Ccboost Plugin, which is the manager of our algorithms. To be consequently executed as a Espina Task, a child of QThread. Once the task finishes it is captured by the plugin again. 
@@ -208,3 +217,25 @@ The other particulars of the Ccboost Plugin follow. The description of the Ccboo
 
 
 ## Ccboost Segmentation Plugin
+
+The Ccboost Segmentation Plugin creates the tasks and handles its signals. It provides an interface of communication between the tasks and the main app.
+
+It also handles the finishing of the tasks, which for the Import task involves creating the Espina segmentations and for the ```CcboostTask```, notifying the ```CvPanel```'s ```Preview```.
+
+## Ccboost Task
+
+The ccboost task prepares all the data and configuration to be fetched to the ccboost. It does the memory checks and the pre and postprocessing.
+
+When all the data is ready, it calls the ```CcboostAdapter::core```, the ```iiboost``` wrapper which formats the data as expected by iiboost.
+
+## CcboostAdapter
+
+Takes the prepared data and computes and adds its associated features if necessary.
+
+## iiboost
+
+For iiboost information, see its [github page](https://github.com/cbecker/iiboost).
+
+## Import Task
+
+The import task takes a float image and obtains the labelmap which is then converted to espina segmentations by the ```CcboostSegmentationPlugin```

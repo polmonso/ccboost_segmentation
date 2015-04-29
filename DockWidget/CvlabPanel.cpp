@@ -1,7 +1,6 @@
 
 #include "CvlabPanel.h"
 #include "ui_CvlabPanel.h"
-#include "Label.h"
 #include <Filters/SourceFilter.h>
 #include <GUI/Model/Utils/QueryAdapter.h>
 #include <GUI/Dialogs/CategorySelectorDialog.h>

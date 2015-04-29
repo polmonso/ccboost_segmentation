@@ -259,11 +259,11 @@ double zAnisotropyFactor = 2.71296798698;
 
           cfgdata.originalVolumeImage = inputVolumeITK;
 
-          std::vector<CcboostAdapter::FloatTypeImage::Pointer> probabilisticOutSegs;
+          std::vector<FloatTypeImage::Pointer> probabilisticOutSegs;
           std::vector<itkVolumeType::Pointer> outputSegmentations;
           std::vector<itkVolumeType::Pointer> outSegList;
           itkVolumeType::Pointer outputSegmentation = itkVolumeType::New();
-          CcboostAdapter::FloatTypeImage::Pointer probOutputSegmentation = CcboostAdapter::FloatTypeImage::New();
+          FloatTypeImage::Pointer probOutputSegmentation = FloatTypeImage::New();
 
           //volume spliting
           //FIXME decide whether or not to divide the volume depending on the memory available and size of it
@@ -344,7 +344,6 @@ double zAnisotropyFactor = 2.71296798698;
               //repaste
               splitter.pasteCroppedRegions(outputSegmentations, outputSegmentation);
 
-              typedef CcboostAdapter::FloatTypeImage FloatTypeImage;
               typedef itk::ImageSplitter< FloatTypeImage > FloatSplitterType;
 
               FloatTypeImage::RegionType fregion(region);
@@ -357,7 +356,7 @@ double zAnisotropyFactor = 2.71296798698;
 
           }
 
-          typedef itk::ImageFileWriter< CcboostAdapter::FloatTypeImage > fWriterType;
+          typedef itk::ImageFileWriter< FloatTypeImage > fWriterType;
           fWriterType::Pointer fwriter = fWriterType::New();
           fwriter->SetFileName(arguments.outfile);
           fwriter->SetInput(probOutputSegmentation);

@@ -22,9 +22,6 @@
 
 #include <QObject>
 
-//#include "types.h"
-#include "Label.h"
-
 #include <Core/Utils/Spatial.h>
 #include <GUI/View/View2D.h>
 

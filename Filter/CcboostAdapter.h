@@ -6,12 +6,10 @@
 #include "BoosterInputData.h"
 
 #include "ConfigData.h"
-//#include "CcboostSegmentationFilter.h"
 //ITK
 #include <itkImageFileWriter.h>
 
 // ESPINA
-//#include <Core/EspinaTypes.h>
 #include "CCBTypes.h"
 
 class CcboostAdapter : public QObject
@@ -60,8 +58,6 @@ public:
     //throws ItkException
     template< typename TImageType = itkVolumeType >
     static void removeSmallComponents(typename TImageType::Pointer & segmentation, int minCCSize = 1000);
-    template< typename TImageType = itkVolumeType >
-    static void removeSmallComponentsOld(typename TImageType::Pointer & segmentation, int minCCSize = 1000);
 
     static void computeAllFeatures(const ConfigData<itkVolumeType> cfgData);
 

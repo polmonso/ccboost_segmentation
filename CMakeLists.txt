@@ -98,7 +98,6 @@ if(BUILD_ESPINA_PLUGIN)
   qt4_wrap_ui (UI_BUILT_SOURCES
     GUI/Settings/CcboostSegmentationSettings.ui
     DockWidget/CvlabPanel.ui
-  #  GUI/FilterInspector/CcboostSegmentationFilterInspector.ui
   )
 
 #headers added so they show up on qtcreator
@@ -114,9 +113,7 @@ set(PLUGIN_HEADERS
     DockWidget/CvlabPanel.h
     Preview/PreviewSliceRepresentation.h
     Preview/PreviewWidget.h
-  #  Filter/CcboostSegmentationFilter.h
     GUI/Settings/CcboostSegmentationSettings.h
-  #  GUI/FilterInspector/CcboostSegmentationFilterInspector.h
 
     OPTIONS -DBOOST_TT_HAS_OPERATOR_HPP_INCLUDED
   )
@@ -126,7 +123,6 @@ set (PLUGIN_SOURCES
   ${RCC_BUILT_SOURCES}
   ${UI_BUILT_SOURCES}
   CcboostSegmentationPlugin.cpp
-#  Core/Extensions/CcboostSegmentationExtension.cpp
   Tasks/CcboostTask.cpp
   Tasks/ImportTask.cpp
 # templated included in header CcboostAdapter.in
@@ -134,14 +130,10 @@ set (PLUGIN_SOURCES
   DockWidget/CvlabPanel.cpp
   Preview/PreviewSliceRepresentation.cpp
   Preview/PreviewWidget.cpp
-#  Filter/CcboostSegmentationFilter.cpp
-#  GUI/CcboostSegmentationToolGroup.cpp
   GUI/Settings/CcboostSegmentationSettings.cpp
   Preview/PreviewSliceRepresentation.cpp
   Preview/PreviewWidget.cpp
   DockWidget/CvlabPanel.cpp
-#  Label.cpp
-#  GUI/FilterInspector/CcboostSegmentationFilterInspector.cpp
   ${auxItkFilters}
 )
 

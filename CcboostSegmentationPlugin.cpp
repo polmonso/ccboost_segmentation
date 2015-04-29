@@ -20,15 +20,9 @@
 
 // plugin
 #include "CcboostSegmentationPlugin.h"
-//#include <Filter/CcboostSegmentationFilter.h>
-//#include <Filter/SASFetchBehaviour.h>
-#include <GUI/Analysis/SASAnalysisDialog.h>
-//#include <GUI/CcboostSegmentationToolGroup.h>
+
 #include <GUI/Settings/CcboostSegmentationSettings.h>
-//#include <Core/Extensions/ExtensionFactory.h>
 #include <Tasks/CcboostTask.h>
-// TODO: no filter inspectors yet
-// #include <GUI/FilterInspector/CcboostSegmentationFilterInspector.h>
 
 #include <itkChangeInformationImageFilter.h>
 #include <itkImageMaskSpatialObject.h>
@@ -520,8 +514,8 @@ void CcboostSegmentationPlugin::finishedImportTask()
 
     m_executingImportTasks.remove(importTask);
 
-    Q_ASSERT(m_finishedTasks.size() == 1 && "more than one task is run");
-    Q_ASSERT(m_executingTasks.size() == 0 && "more than one task is run");
+    Q_ASSERT(m_finishedTasks.size() == 0 && "only one task is expected to run");
+    Q_ASSERT(m_executingTasks.size() == 0 && "only one task is expected to run");
 
     // maybe all tasks have been aborted.
     if(m_finishedImportTasks.empty())
