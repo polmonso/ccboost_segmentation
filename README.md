@@ -24,7 +24,7 @@ and
 - Espina (see below)
 
 Currently, version ```2.0.3``` is the latest supported version (commit ```8244e5be```)
-Checkout with git checkout ```8244e5be```
+Checkout with git checkout ```8244e5be```.
 
 * IIBoost submodule
 
@@ -42,6 +42,8 @@ you can clone the submodules after the fact with
 cd ccboost-segmentation
 git submodule update --init --recursive
 ```
+
+Remember to switch to the appropiated ```ccboost-segmentation``` branch.
 
 * build
 
