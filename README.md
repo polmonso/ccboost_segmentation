@@ -137,16 +137,22 @@ See "**[How to make an existing submodule track a branch][3]**" (if you had a su
 - Use the official [Espina](http://cajalbbp.cesvima.upm.es/espina/) or request access to the private repository to [Jorge Peña](https://bitbucket.org/jorgepenapastor) 
 
 The instruction to install it are [here](https://bitbucket.org/espina-developers/espina). Follow those instructions.
+When installing ```VTK```, you might have to turn ON the module ```Module_vtkInfovisBoostGraphAlg```, additionally to ```Module_vtkInfovisBoost```.
 
 Right now, only espina ```2.0.3``` is supported. Checkout SHA1 ```8244e5be4283fbce6f6f5ba6bc1dec1bd9b7f4c2``` on branch ```develop```
 
 - You can get some of the dependencies ([xlslib](http://sourceforge.net/projects/xlslib/files/) and [quazip](http://sourceforge.net/projects/quazip/))
 
-It has been tested with versions ```2.4.0``` and ```0.6.2``` respectively. If you don't have root privileges to install quazip, you can install it anywhere 
-with ```make DESTDIR=.``` and then move the include and lib directories wherever you like 
+It has been tested with versions ```2.4.0``` and ```0.6.2``` respectively. 
 
 - If you get a message saying 'ill-formed pair', there's a problem with boost. Check that you have boost 1.55.
+
+If you don't have the appropriate boost libraries, you can download them and put the boost's library paths directly on ccmake. 
+
 - If quazip is expecting ```quazip/``` includes, change the ```include/quazip``` to ```include/``` on the cmake variable
+
+If you don't have root privileges to install quazip, you can install it anywhere 
+with ```make DESTDIR=.``` and then move the include and lib directories wherever you like .
 
 This is the ```espina/CMakeLists.txt``` modified beginning:
 
