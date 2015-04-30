@@ -71,7 +71,7 @@ bool CcboostAdapter::core(const ConfigData<itkVolumeType>& cfgdata,
                           std::vector<FloatTypeImage::Pointer>& probabilisticOutSegs)
 {
 
-//#define WORK
+#define WORK
 #ifndef WORK
     for(int roiidx = 0; roiidx < cfgdata.test.size(); roiidx++)
     {
