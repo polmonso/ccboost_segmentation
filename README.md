@@ -2,7 +2,8 @@
 
 EspINA Neuron Analyzer ccboost synapse/mitochondria segmentation plugin and import plugin.
 
-The current version of the plugin is under development and uses the develop branch of EspINA, about to be released.
+The current version of the plugin is under development and uses the develop branch of EspINA, about to be released. 
+Currently, commit ```8244e5be``` which corresponds to espina 2.0.3 is supported.
 
 ![EspINA Screenshot](https://documents.epfl.ch/groups/c/cv/cvlab-unit/public/espina/espina1_screenshot.png "Mitochondria segmentation")
 
@@ -23,7 +24,7 @@ and
 - Espina (see below)
 
 Currently, version ```2.0.3``` is the latest supported version (commit ```8244e5be```)
-Checkout with git checkout ```8244e5be```
+Checkout with git checkout ```8244e5be```.
 
 * IIBoost submodule
 
@@ -41,6 +42,8 @@ you can clone the submodules after the fact with
 cd ccboost-segmentation
 git submodule update --init --recursive
 ```
+
+Remember to switch to the appropiated ```ccboost-segmentation``` branch.
 
 * build
 
@@ -133,25 +136,29 @@ See "**[How to make an existing submodule track a branch][3]**" (if you had a su
 
 - Use the official [Espina](http://cajalbbp.cesvima.upm.es/espina/) or request access to the private repository to [Jorge Peña](https://bitbucket.org/jorgepenapastor) 
 
-The instruction to install it are [here](https://bitbucket.org/espina-developers/espina)
+The instruction to install it are [here](https://bitbucket.org/espina-developers/espina). Follow those instructions.
+When installing ```VTK```, you might have to turn ON the module ```Module_vtkInfovisBoostGraphAlg```, additionally to ```Module_vtkInfovisBoost```.
 
 Right now, only espina ```2.0.3``` is supported. Checkout SHA1 ```8244e5be4283fbce6f6f5ba6bc1dec1bd9b7f4c2``` on branch ```develop```
 
 - You can get some of the dependencies ([xlslib](http://sourceforge.net/projects/xlslib/files/) and [quazip](http://sourceforge.net/projects/quazip/))
 
-It has been tested with versions ```2.4.0``` and ```0.6.2``` respectively.
+It has been tested with versions ```2.4.0``` and ```0.6.2``` respectively. 
 
 - If you get a message saying 'ill-formed pair', there's a problem with boost. Check that you have boost 1.55.
+
+If you don't have the appropriate boost libraries, you can download them and put the boost's library paths directly on ccmake. 
+
 - If quazip is expecting ```quazip/``` includes, change the ```include/quazip``` to ```include/``` on the cmake variable
+
+If you don't have root privileges to install quazip, you can install it anywhere 
+with ```make DESTDIR=.``` and then move the include and lib directories wherever you like .
 
 This is the ```espina/CMakeLists.txt``` modified beginning:
 
 ```
-include_directories("~/code/espina-project2/xlslib/src/")
-link_directories("~/code/espina-project2/xlslib/src/.libs/")
-
-set(XLSLIB_INCLUDE_DIR "~/code/espina-project2/xlslib/src/")
-set(XLSLIB_LIBRARY "~/code/espina-project2/xlslib/src/.libs/libxls.so")
+set(XLSLIB_INCLUDE_DIR "/home/monso/code/espina-project2/xlslib/src/" CACHE PATH "xlslib's src directory")
+set(XLSLIB_LIBRARY "/home/monso/code/espina-project2/xlslib/src/.libs/libxls.so" CACHE FILE "xlslib lib, usually at xlslib/.libs/libxls.so")
 
 link_directories("/usr/lib/x86_64-linux-gnu/")
 
